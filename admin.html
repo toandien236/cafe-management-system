@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Portal — Mocha & Miso Craft Café</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/jpeg" href="asstes/logo_icon.jpg" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Firebase SDKs (Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
+
+  <!-- GSAP CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="admin-body">
+
+  <!-- ============================================================ -->
+  <!-- 1. LOGIN SCREEN -->
+  <!-- ============================================================ -->
+  <section class="admin-login-screen" id="admin-login-section">
+    <div class="admin-login-card">
+      <div class="admin-brand-header">
+        <img src="asstes/logo_icon.jpg" alt="Mocha & Miso" class="admin-brand-logo" />
+        <h1 class="admin-brand-title">Admin Portal</h1>
+        <p class="admin-brand-sub">Mocha &amp; Miso Craft Café</p>
+      </div>
+
+      <form class="reservation-form" id="admin-login-form" novalidate>
+        <div class="form-group">
+          <input type="email" id="admin-email" class="form-input" placeholder=" " required autocomplete="username" />
+          <label for="admin-email" class="form-label form-label--up">Admin Email</label>
+          <span class="form-line"></span>
+        </div>
+
+        <div class="form-group">
+          <input type="password" id="admin-password" class="form-input" placeholder=" " required autocomplete="current-password" />
+          <label for="admin-password" class="form-label form-label--up">Password</label>
+          <span class="form-line"></span>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="admin-login-submit">
+          <span class="btn-text">Log In to Portal</span>
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 2. DASHBOARD VIEW (Hidden until Auth) -->
+  <!-- ============================================================ -->
+  <div id="admin-dashboard-section" hidden>
+    
+    <!-- Top Header Navigation -->
+    <header class="admin-header">
+      <div class="container admin-header-inner">
+        <div class="admin-logo-group">
+          <h2 class="admin-header-title">Mocha &amp; Miso</h2>
+          <span class="admin-badge">Admin Dashboard</span>
+        </div>
+        <div class="admin-user-info">
+          <span class="admin-email-text" id="logged-admin-email">rickmondal598@gmail.com</span>
+          <button type="button" class="btn-logout" id="admin-logout-btn">Log Out</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Dashboard Content -->
+    <main class="admin-main container">
+      
+      <!-- KPI Stats Grid -->
+      <div class="admin-stats-grid">
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Total Reservations</span>
+            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zM16 2v4M8 2v4M3 10h18"/></svg>
+          </div>
+          <div class="stat-num" id="stat-total">0</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Pending Approval</span>
+            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="stat-num" id="stat-pending">0</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Confirmed Bookings</span>
+            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div class="stat-num" id="stat-confirmed">0</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Total Guests Count</span>
+            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          </div>
+          <div class="stat-num" id="stat-guests">0</div>
+        </div>
+      </div>
+
+      <!-- Controls: Filter Tabs & Search -->
+      <div class="admin-controls-bar">
+        <div class="admin-filter-group" role="tablist">
+          <button type="button" class="admin-filter-tab active" data-filter="all">All Bookings</button>
+          <button type="button" class="admin-filter-tab" data-filter="pending">Pending</button>
+          <button type="button" class="admin-filter-tab" data-filter="confirmed">Confirmed</button>
+          <button type="button" class="admin-filter-tab" data-filter="cancelled">Cancelled</button>
+        </div>
+        
+        <input type="text" id="admin-search" class="admin-search-input" placeholder="Search by guest name, email or phone..." />
+      </div>
+
+      <!-- Table Container -->
+      <div class="admin-table-card">
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Guest Details</th>
+                <th>Date &amp; Time</th>
+                <th>Guests</th>
+                <th>Special Notes</th>
+                <th>Status</th>
+                <th>Email Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="bookings-tbody">
+              <tr>
+                <td colspan="7" style="text-align:center; padding: 40px; color: var(--warm-gray);">
+                  Loading reservations...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 3. EMAIL REPLY MODAL -->
+  <!-- ============================================================ -->
+  <div class="admin-modal-overlay" id="reply-modal" hidden>
+    <div class="admin-modal-card">
+      <h3 class="admin-modal-title">Reply to Guest</h3>
+      
+      <div class="form-group" style="margin-bottom: 20px;">
+        <input type="email" id="modal-guest-email" class="form-input" readonly />
+        <label for="modal-guest-email" class="form-label form-label--up">To (Guest Email)</label>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 20px;">
+        <input type="text" id="modal-subject" class="form-input" value="Your Reservation at Mocha & Miso Café" />
+        <label for="modal-subject" class="form-label form-label--up">Subject</label>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 20px;">
+        <textarea id="modal-message" class="form-input form-textarea" rows="5" placeholder="Write your message to the guest..."></textarea>
+        <label for="modal-message" class="form-label form-label--up">Message</label>
+      </div>
+
+      <div class="admin-modal-actions">
+        <button type="button" class="btn btn-outline" id="modal-cancel-btn" style="font-size: 13px; padding: 8px 18px;">Close</button>
+        <button type="button" class="btn btn-primary" id="modal-send-btn" style="font-size: 13px; padding: 8px 18px;">Send Email</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <!-- EmailJS SDK — sends status update emails (Confirmed / Cancelled) from Admin Portal -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script>
+    // EmailJS config — must match the credentials set in index.html
+    window.EMAILJS_CONFIG = {
+      publicKey:  'hqvvofNhOjbY0kgQB',
+      serviceId:  'service_x65ekfh',
+      templateId: 'template_6uavdg3'
+    };
+    if (window.EMAILJS_CONFIG.publicKey !== 'YOUR_PUBLIC_KEY') {
+      emailjs.init({ publicKey: window.EMAILJS_CONFIG.publicKey });
+    }
+  </script>
+
+  <!-- Scripts -->
+  <script src="firebase.js" defer></script>
+  <script src="main.js" defer></script>
+  <script src="admin.js" defer></script>
+</body>
+</html>

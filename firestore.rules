@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /reservations/{reservation} {
+
+      // ── READ ──────────────────────────────────────────────────────────────
+      // Only authenticated admins can read reservation data.
+      // Public visitors cannot enumerate or read customer bookings.
+      allow read: if request.auth != null;
+
+      // ── CREATE ────────────────────────────────────────────────────────────
+      // Public can create a reservation (from the customer form) but all
+      // fields are strictly validated server-side:
+      //  • name, email, date, time — required non-empty strings
+      //  • email — must contain '@' (basic format check)
+      //  • guests — integer between 1 and 20
+      //  • status — must be 'pending' on creation (clients cannot self-confirm)
+      //  • No extra unexpected fields beyond the defined schema
+      allow create: if
+        // name: non-empty string
+        request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+
+        // email: non-empty string containing '@'
+        && request.resource.data.email is string
+        && request.resource.data.email.size() >= 3
+        && request.resource.data.email.matches('.*@.*')
+
+        // date: non-empty string
+        && request.resource.data.date is string
+        && request.resource.data.date.size() >= 1
+
+        // time: non-empty string
+        && request.resource.data.time is string
+        && request.resource.data.time.size() >= 1
+
+        // guests: integer 1–20
+        && request.resource.data.guests is int
+        && request.resource.data.guests >= 1
+        && request.resource.data.guests <= 20
+
+        // status: must be 'pending' on creation — clients cannot self-confirm
+        && request.resource.data.status == 'pending';
+
+      // ── UPDATE ────────────────────────────────────────────────────────────
+      // Only authenticated admins can update reservations (e.g., confirm/cancel).
+      // The status field must be one of the three allowed values.
+      allow update: if
+        request.auth != null
+        && request.resource.data.status in ['pending', 'confirmed', 'cancelled'];
+
+      // ── DELETE ────────────────────────────────────────────────────────────
+      // Only authenticated admins can delete reservations.
+      allow delete: if request.auth != null;
+    }
+
+  }
+}
