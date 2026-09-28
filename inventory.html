@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Quản lý kho - Cafe</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+
+        body {
+            margin: 0;
+            background: #f7f3ed;
+            font-family: Arial, sans-serif;
+        }
+
+        .inventory-container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .inventory-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .inventory-header h1 {
+            margin: 0;
+            color: #4b3025;
+        }
+
+        .btn {
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-add {
+            background: #6f4e37;
+            color: white;
+        }
+
+        .btn-edit {
+            background: #d99b2b;
+            color: white;
+        }
+
+        .btn-delete {
+            background: #c94c4c;
+            color: white;
+        }
+
+        .btn-cancel {
+            background: #ddd;
+        }
+
+        .inventory-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+        }
+
+        .stat-card h3 {
+            margin-top: 0;
+            color: #777;
+        }
+
+        .stat-card p {
+            font-size: 30px;
+            font-weight: bold;
+            margin-bottom: 0;
+            color: #4b3025;
+        }
+
+        .table-container {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 14px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+
+        th {
+            background: #f3eee7;
+            color: #4b3025;
+        }
+
+        .status-good {
+            color: green;
+            font-weight: bold;
+        }
+
+        .status-low {
+            color: orange;
+            font-weight: bold;
+        }
+
+        .status-out {
+            color: red;
+            font-weight: bold;
+        }
+
+        /* MODAL */
+
+        .modal {
+            display: none;
+
+            position: fixed;
+
+            inset: 0;
+
+            background: rgba(0,0,0,0.5);
+
+            justify-content: center;
+
+            align-items: center;
+        }
+
+        .modal-content {
+            background: white;
+
+            width: 400px;
+
+            max-width: 90%;
+
+            padding: 25px;
+
+            border-radius: 12px;
+        }
+
+        .modal-content h2 {
+            margin-top: 0;
+
+            color: #4b3025;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+
+            margin-bottom: 6px;
+
+            font-weight: bold;
+        }
+
+        .form-group input,
+        .form-group select {
+
+            width: 100%;
+
+            box-sizing: border-box;
+
+            padding: 10px;
+
+            border: 1px solid #ddd;
+
+            border-radius: 7px;
+        }
+
+        .modal-buttons {
+
+            display: flex;
+
+            justify-content: flex-end;
+
+            gap: 10px;
+
+            margin-top: 20px;
+        }
+
+        @media (max-width: 700px) {
+
+            .inventory-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .inventory-header {
+                flex-direction: column;
+
+                align-items: flex-start;
+
+                gap: 15px;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="inventory-container">
+
+
+    <!-- TIÊU ĐỀ -->
+
+    <div class="inventory-header">
+
+        <div>
+
+            <h1>📦 Quản lý kho</h1>
+
+            <p>
+                Quản lý nguyên liệu và số lượng tồn kho
+            </p>
+
+        </div>
+
+
+        <button
+            class="btn btn-add"
+            id="add-item-btn">
+
+            + Thêm nguyên liệu
+
+        </button>
+
+    </div>
+
+
+    <!-- THỐNG KÊ -->
+
+    <div class="inventory-stats">
+
+
+        <div class="stat-card">
+
+            <h3>Tổng nguyên liệu</h3>
+
+            <p id="total-items">0</p>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <h3>Sắp hết</h3>
+
+            <p id="low-items">0</p>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <h3>Hết hàng</h3>
+
+            <p id="out-items">0</p>
+
+        </div>
+
+
+    </div>
+
+
+    <!-- BẢNG -->
+
+    <div class="table-container">
+
+        <table>
+
+            <thead>
+
+                <tr>
+
+                    <th>Tên nguyên liệu</th>
+
+                    <th>Danh mục</th>
+
+                    <th>Số lượng</th>
+
+                    <th>Đơn vị</th>
+
+                    <th>Mức tối thiểu</th>
+
+                    <th>Trạng thái</th>
+
+                    <th>Thao tác</th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody id="inventory-table-body">
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+<!-- MODAL -->
+
+<div
+    class="modal"
+    id="inventory-modal">
+
+
+    <div class="modal-content">
+
+
+        <h2 id="modal-title">
+            Thêm nguyên liệu
+        </h2>
+
+
+        <form id="inventory-form">
+
+
+            <input
+                type="hidden"
+                id="item-id">
+
+
+            <div class="form-group">
+
+                <label>
+                    Tên nguyên liệu
+                </label>
+
+                <input
+                    type="text"
+                    id="item-name"
+                    placeholder="Ví dụ: Cà phê"
+                    required>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Danh mục
+                </label>
+
+                <select id="item-category">
+
+                    <option value="Coffee">
+                        Coffee
+                    </option>
+
+                    <option value="Milk">
+                        Sữa
+                    </option>
+
+                    <option value="Tea">
+                        Trà
+                    </option>
+
+                    <option value="Sugar">
+                        Đường
+                    </option>
+
+                    <option value="Other">
+                        Khác
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Số lượng
+                </label>
+
+                <input
+                    type="number"
+                    id="item-quantity"
+                    min="0"
+                    required>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Đơn vị
+                </label>
+
+                <input
+                    type="text"
+                    id="item-unit"
+                    placeholder="kg, lít, hộp..."
+                    required>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Mức tồn tối thiểu
+                </label>
+
+                <input
+                    type="number"
+                    id="item-min"
+                    min="0"
+                    required>
+
+            </div>
+
+
+            <div class="modal-buttons">
+
+
+                <button
+                    type="button"
+                    class="btn btn-cancel"
+                    id="cancel-btn">
+
+                    Hủy
+
+                </button>
+
+
+                <button
+                    type="submit"
+                    class="btn btn-add">
+
+                    Lưu
+
+                </button>
+
+
+            </div>
+
+
+        </form>
+
+
+    </div>
+
+</div>
+
+
+<!-- FIREBASE -->
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+
+<!-- FILE FIREBASE CÓ SẴN -->
+
+<script src="firebase.js"></script>
+
+
+<!-- JAVASCRIPT QUẢN LÝ KHO -->
+
+<script src="inventory.js"></script>
+</body>
+</html>
