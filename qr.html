@@ -43,9 +43,7 @@
   <script>
     const urlInput = document.getElementById('order-url');
     const publicOrderUrl = 'https://project-quan-cafe.web.app/order.html';
-    urlInput.value = window.location.hostname === 'localhost'
-      ? publicOrderUrl
-      : `${window.location.origin}/order.html`;
+    urlInput.value = publicOrderUrl;
     function generateQrs() {
       const count = Math.min(99, Math.max(1, Number(document.getElementById('table-count').value) || 1));
       const baseUrl = urlInput.value.replace(/\/?$/, '');
