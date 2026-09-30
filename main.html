@@ -1,0 +1,51 @@
+<div class="admin-stats-grid admin-revenue-stats">
+              <div class="stat-card">
+                <div class="stat-label">Hôm nay</div>
+                <div class="stat-num" id="revenue-today">₹0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Tháng này</div>
+                <div class="stat-num" id="revenue-month">₹0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Tổng doanh thu</div>
+                <div class="stat-num" id="revenue-total">₹0</div>
+              </div>
+            </div>
+
+            <form class="admin-revenue-form" id="admin-revenue-form">
+              <label class="admin-revenue-field">
+                <span>Số tiền (₹)</span>
+                <input id="revenue-amount" type="number" min="1" step="1" required />
+              </label>
+              <label class="admin-revenue-field">
+                <span>Ngày bán</span>
+                <input id="revenue-date" type="date" required />
+              </label>
+              <label class="admin-revenue-field admin-revenue-description">
+                <span>Ghi chú</span>
+                <input id="revenue-description" type="text" maxlength="200" placeholder="Ví dụ: Bán tại quầy" />
+              </label>
+              <button class="btn btn-primary admin-revenue-submit" id="revenue-submit" type="submit">Ghi nhận</button>
+            </form>
+
+            <div class="admin-table-card">
+              <div class="admin-table-wrap">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Ngày bán</th>
+                      <th>Ghi chú</th>
+                      <th>Số tiền</th>
+                      <th>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody id="revenue-tbody">
+                    <tr><td colspan="4" style="text-align:center; padding:30px;">Đang tải doanh thu…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
