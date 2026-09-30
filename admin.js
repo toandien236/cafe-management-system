@@ -57,6 +57,7 @@ function initAdminAuth(authInstance) {
       dashSection.hidden = false;
       dashSection.style.display = 'block';
       loadReservations();
+      loadCustomers();
     } else {
       // Not authenticated: show login
       loginSection.hidden = false;
@@ -154,10 +155,13 @@ function showLoginError(msg) {
 let allReservations = [];
 let activeFilter    = 'all';
 let searchQuery     = '';
+let allCustomers    = [];
+let customerFilter  = 'all';
+let customerSearch  = '';
 
 function initAdminDashboard() {
   // Filter tabs
-  const tabs = document.querySelectorAll('.admin-filter-tab');
+  const tabs = document.querySelectorAll('#booking-filter-tabs .admin-filter-tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('active'));
@@ -173,6 +177,40 @@ function initAdminDashboard() {
     searchInput.addEventListener('input', (e) => {
       searchQuery = e.target.value.toLowerCase().trim();
       renderTable();
+    });
+  }
+
+  document.querySelectorAll('.customer-filter-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.customer-filter-tab').forEach(item => item.classList.remove('active'));
+      tab.classList.add('active');
+      customerFilter = tab.dataset.filter || 'all';
+      renderCustomers();
+    });
+  });
+
+  const customerSearchInput = document.getElementById('customer-search');
+  if (customerSearchInput) {
+    customerSearchInput.addEventListener('input', event => {
+      customerSearch = event.target.value.toLowerCase().trim();
+      renderCustomers();
+    });
+  }
+
+  const customersTbody = document.getElementById('customers-tbody');
+  if (customersTbody) {
+    customersTbody.addEventListener('click', event => {
+      const historyButton = event.target.closest('[data-customer-history]');
+      if (historyButton) openCustomerHistory(historyButton.dataset.customerHistory);
+    });
+  }
+
+  const historyClose = document.getElementById('customer-history-close');
+  const historyModal = document.getElementById('customer-history-modal');
+  if (historyClose && historyModal) historyClose.addEventListener('click', () => { historyModal.hidden = true; });
+  if (historyModal) {
+    historyModal.addEventListener('click', event => {
+      if (event.target === historyModal) historyModal.hidden = true;
     });
   }
 
@@ -237,17 +275,156 @@ function loadReservations() {
 
       updateStats();
       renderTable();
+      renderCustomers();
     }, (error) => {
       console.warn('Firestore snapshot notice, rendering local backup:', error);
       allReservations = localData;
       updateStats();
       renderTable();
+      renderCustomers();
     });
   } else {
     allReservations = localData;
     updateStats();
     renderTable();
+    renderCustomers();
   }
+}
+
+function loadCustomers() {
+  const tbody = document.getElementById('customers-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px;">Loading customers...</td></tr>';
+
+  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
+  if (!dbInstance || typeof dbInstance.collection !== 'function') {
+    allCustomers = [];
+    renderCustomers();
+    return;
+  }
+
+  dbInstance.collection('customers').onSnapshot(snapshot => {
+    allCustomers = [];
+    snapshot.forEach(doc => allCustomers.push({ id: doc.id, ...doc.data() }));
+    renderCustomers();
+  }, error => {
+    console.warn('Customers snapshot notice:', error);
+    allCustomers = [];
+    renderCustomers();
+  });
+}
+
+function getCustomerKey(record) {
+  const explicitKey = String(record.customerKey || '').trim().toLowerCase();
+  if (explicitKey) return explicitKey;
+  const email = String(record.email || '').trim().toLowerCase();
+  if (email) return email;
+  const phone = String(record.phone || '').replace(/\D/g, '');
+  if (phone) return phone;
+  return String(record.id || '').trim().toLowerCase();
+}
+
+function isReservationArrived(reservation) {
+  return String(reservation.arrivalStatus || '').toLowerCase() === 'arrived';
+}
+
+function getCustomerProfiles() {
+  const profiles = new Map();
+  const addProfile = record => {
+    const normalizedRecord = {
+      ...record,
+      email: record.email || record.customerEmail || '',
+      phone: record.phone || record.phoneNumber || record.customerPhone || ''
+    };
+    const key = getCustomerKey(normalizedRecord);
+    if (!key) return null;
+    if (!profiles.has(key)) profiles.set(key, { key, reservations: [], visitCount: 0, arrivedCount: 0 });
+    const profile = profiles.get(key);
+    ['customerName', 'fullName', 'name', 'email', 'phone', 'lastVisitAt', 'lastVisit', 'lastVisitDate', 'visitCount', 'visits', 'totalVisits'].forEach(field => {
+      if (normalizedRecord[field] !== undefined && normalizedRecord[field] !== null && normalizedRecord[field] !== '') profile[field] = normalizedRecord[field];
+    });
+    return profile;
+  };
+
+  allCustomers.forEach(addProfile);
+  allReservations.forEach(reservation => {
+    const profile = addProfile(reservation);
+    if (profile) {
+      profile.reservations.push(reservation);
+      if (isReservationArrived(reservation)) profile.arrivedCount += 1;
+    }
+  });
+
+  return Array.from(profiles.values()).map(profile => {
+    const arrivedReservations = profile.reservations.filter(isReservationArrived);
+    const latestArrival = arrivedReservations
+      .map(reservation => reservation.arrivedAt || reservation.date || '')
+      .sort((a, b) => customerDateValue(b).getTime() - customerDateValue(a).getTime())[0];
+    const storedVisitCount = Number(profile.visitCount || profile.visits || profile.totalVisits) || 0;
+    profile.visitCount = Math.max(profile.arrivedCount, storedVisitCount);
+    profile.lastVisitAt = latestArrival || profile.lastVisitAt || profile.lastVisit || profile.lastVisitDate || '';
+    profile.displayName = profile.customerName || profile.fullName || profile.name || 'Guest';
+    return profile;
+  });
+}
+
+function customerDateValue(value) {
+  return value && typeof value.toDate === 'function' ? value.toDate() : new Date(value);
+}
+
+function formatCustomerDate(value) {
+  if (!value) return 'Not available';
+  const date = customerDateValue(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString();
+}
+
+function renderCustomers() {
+  const tbody = document.getElementById('customers-tbody');
+  if (!tbody) return;
+
+  const profiles = getCustomerProfiles();
+  const totalElement = document.getElementById('customer-total');
+  const arrivedTotalElement = document.getElementById('stat-arrived-customers');
+  if (totalElement) totalElement.textContent = profiles.length;
+  if (arrivedTotalElement) arrivedTotalElement.textContent = profiles.filter(customer => customer.visitCount > 0).length;
+
+  const filtered = profiles.filter(customer => {
+    if (customerFilter === 'arrived' && customer.visitCount < 1) return false;
+    const searchable = [customer.displayName, customer.email, customer.phone].join(' ').toLowerCase();
+    return !customerSearch || searchable.includes(customerSearch);
+  }).sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:40px; color:var(--warm-gray);">No matching customers found.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(customer => `
+    <tr>
+      <td><strong>${escapeHtml(customer.displayName)}</strong><br><span style="font-size:12px;color:var(--warm-gray);">${escapeHtml(customer.email || '')}</span>${customer.phone ? `<br><span style="font-size:12px;color:var(--coffee-mid);">${escapeHtml(customer.phone)}</span>` : ''}</td>
+      <td>${customer.visitCount}</td>
+      <td>${escapeHtml(formatCustomerDate(customer.lastVisitAt))}</td>
+      <td><button type="button" class="btn-action btn-action--reply" data-customer-history="${escapeHtml(customer.key)}">Reservations (${customer.reservations.length})</button></td>
+    </tr>`).join('');
+}
+
+function openCustomerHistory(customerKey) {
+  const customer = getCustomerProfiles().find(profile => profile.key === customerKey);
+  const modal = document.getElementById('customer-history-modal');
+  const title = document.getElementById('customer-history-title');
+  const tbody = document.getElementById('customer-history-tbody');
+  if (!customer || !modal || !title || !tbody) return;
+
+  title.textContent = `Reservation history · ${customer.displayName}`;
+  const reservations = [...customer.reservations].sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0));
+  tbody.innerHTML = reservations.length ? reservations.map(reservation => `
+    <tr>
+      <td>${escapeHtml(reservation.date || 'Not available')}<br><span style="font-size:12px;color:var(--coffee-mid);">${escapeHtml(formatTime(reservation.time))}</span></td>
+      <td>${Number(reservation.guests) || 2}</td>
+      <td>${escapeHtml(getStatusLabel(reservation.status || 'Pending'))}</td>
+      <td>${isReservationArrived(reservation) ? 'Arrived' : 'Not arrived'}</td>
+    </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;padding:30px;">No reservation history.</td></tr>';
+  modal.hidden = false;
 }
 
 function updateStats() {
@@ -255,16 +432,19 @@ function updateStats() {
   const pendingEl   = document.getElementById('stat-pending');
   const confirmedEl = document.getElementById('stat-confirmed');
   const guestsEl    = document.getElementById('stat-guests');
+  const arrivedTotalEl = document.getElementById('stat-arrived-customers');
 
   const total     = allReservations.length;
   const pending   = allReservations.filter(r => (r.status || 'Pending').toLowerCase() === 'pending').length;
   const confirmed = allReservations.filter(r => (r.status || '').toLowerCase() === 'confirmed').length;
   const guests    = allReservations.reduce((sum, r) => sum + (parseInt(r.guests, 10) || 2), 0);
+  const arrivedCustomers = getCustomerProfiles().filter(customer => customer.visitCount > 0).length;
 
   if (totalEl) totalEl.textContent = total;
   if (pendingEl) pendingEl.textContent = pending;
   if (confirmedEl) confirmedEl.textContent = confirmed;
   if (guestsEl) guestsEl.textContent = guests;
+  if (arrivedTotalEl) arrivedTotalEl.textContent = arrivedCustomers;
 }
 
 function renderTable() {
@@ -345,6 +525,7 @@ function renderTable() {
         <td>
           <div class="action-btn-group">
             ${statusLower !== 'confirmed' ? `<button type="button" class="btn-action btn-action--approve" onclick="updateBookingStatus('${res.id}', 'Confirmed')">Confirm</button>` : ''}
+            ${statusLower !== 'cancelled' && !isReservationArrived(res) ? `<button type="button" class="btn-action btn-action--approve" onclick="markReservationArrived('${res.id}')">Arrived</button>` : (isReservationArrived(res) ? '<span class="arrival-badge">Arrived</span>' : '')}
             ${statusLower !== 'cancelled' ? `<button type="button" class="btn-action btn-action--cancel" onclick="updateBookingStatus('${res.id}', 'Cancelled')">Cancel</button>` : ''}
             <button type="button" class="btn-action btn-action--reply" onclick="openReplyModal('${res.id}')">Reply</button>
             <button type="button" class="btn-action btn-action--delete" onclick="deleteBooking('${res.id}')">✕</button>
@@ -430,6 +611,67 @@ window.updateBookingStatus = function(id, newStatus) {
 
   updateStats();
   renderTable();
+  renderCustomers();
+};
+
+window.markReservationArrived = function(id) {
+  const reservation = allReservations.find(item => item.id === id);
+  if (!reservation || isReservationArrived(reservation) || String(reservation.status || '').toLowerCase() === 'cancelled') return;
+
+  const now = new Date().toISOString();
+  const previousArrivalStatus = reservation.arrivalStatus;
+  const previousArrivedAt = reservation.arrivedAt;
+  reservation.arrivalStatus = 'arrived';
+  reservation.arrivedAt = now;
+
+  try {
+    const local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
+    local.forEach(item => {
+      const sameReservation = reservation.reservationId && item.reservationId === reservation.reservationId;
+      const sameContactAndSlot = item.email === reservation.email && item.date === reservation.date && item.time === reservation.time;
+      if (sameReservation || sameContactAndSlot) {
+        item.arrivalStatus = 'arrived';
+        item.arrivedAt = now;
+      }
+    });
+    localStorage.setItem('mocha_reservations', JSON.stringify(local));
+  } catch (error) {
+    console.warn('Local arrival status update notice:', error);
+  }
+
+  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
+  const save = dbInstance && typeof dbInstance.collection === 'function' && !reservation.isLocal
+    ? dbInstance.collection('reservations').doc(id).update({ arrivalStatus: 'arrived', arrivedAt: now, updatedAt: now })
+    : Promise.resolve();
+
+  save.then(() => {
+    showToast(`${reservation.customerName || reservation.name || 'Guest'} marked as arrived.`, 'success');
+  }).catch(error => {
+    reservation.arrivalStatus = previousArrivalStatus;
+    reservation.arrivedAt = previousArrivedAt;
+    try {
+      const local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
+      local.forEach(item => {
+        const sameReservation = reservation.reservationId && item.reservationId === reservation.reservationId;
+        const sameContactAndSlot = item.email === reservation.email && item.date === reservation.date && item.time === reservation.time;
+        if (sameReservation || sameContactAndSlot) {
+          if (previousArrivalStatus === undefined) delete item.arrivalStatus;
+          else item.arrivalStatus = previousArrivalStatus;
+          if (previousArrivedAt === undefined) delete item.arrivedAt;
+          else item.arrivedAt = previousArrivedAt;
+        }
+      });
+      localStorage.setItem('mocha_reservations', JSON.stringify(local));
+    } catch (storageError) {
+      console.warn('Local arrival rollback notice:', storageError);
+    }
+    console.warn('Firestore arrival status update notice:', error);
+    showToast('Could not save customer arrival status.', 'error');
+  }).finally(() => {
+    updateStats();
+    renderTable();
+    renderCustomers();
+  });
 };
 
 window.deleteBooking = function(id) {
@@ -457,6 +699,7 @@ window.deleteBooking = function(id) {
 
   updateStats();
   renderTable();
+  renderCustomers();
 };
 
 // Reply Modal Controls

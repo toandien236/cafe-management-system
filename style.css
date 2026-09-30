@@ -2724,3 +2724,37 @@ img, video, svg, iframe {
   border: 1px solid rgba(245, 127, 23, 0.2);
 }
 
+.admin-customers-section {
+  margin-top: 48px;
+}
+
+.customer-total {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--warm-gray);
+}
+
+.arrival-badge {
+  color: #2E7D32;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-history-modal {
+  max-width: 760px;
+  max-height: min(80vh, 720px);
+  overflow: auto;
+}
+
+@media (max-width: 767px) {
+  .admin-customers-section .admin-controls-bar {
+    align-items: stretch;
+  }
+
+  .admin-customers-section .admin-search-input {
+    width: 100%;
+    min-width: 0;
+  }
+}
+

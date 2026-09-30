@@ -128,11 +128,22 @@
           </div>
           <div class="stat-num" id="stat-guests">0</div>
         </div>
+
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Customers Visited</span>
+            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="9" cy="7" r="4" />
+              <path d="M2 21v-2a7 7 0 0114 0v2M16 11l2 2 4-4" />
+            </svg>
+          </div>
+          <div class="stat-num" id="stat-arrived-customers">0</div>
+        </div>
       </div>
 
       <!-- Controls: Filter Tabs & Search -->
       <div class="admin-controls-bar">
-        <div class="admin-filter-group" role="tablist">
+        <div class="admin-filter-group" id="booking-filter-tabs" role="tablist">
           <button type="button" class="admin-filter-tab active" data-filter="all">All Bookings</button>
           <button type="button" class="admin-filter-tab" data-filter="pending">Pending</button>
           <button type="button" class="admin-filter-tab" data-filter="confirmed">Confirmed</button>
@@ -169,7 +180,51 @@
         </div>
       </div>
 
+      <section class="admin-customers-section" aria-labelledby="customers-heading">
+        <div class="admin-section-heading">
+          <div>
+            <span class="admin-section-kicker">Customer care</span>
+            <h2 id="customers-heading">Customers <span class="customer-total">(<span id="customer-total">0</span>)</span></h2>
+          </div>
+          <span class="admin-live-indicator">Live updates</span>
+        </div>
+        <div class="admin-controls-bar">
+          <div class="admin-filter-group" id="customer-filter-tabs" role="group" aria-label="Filter customers">
+            <button type="button" class="admin-filter-tab customer-filter-tab active" data-filter="all">All customers</button>
+            <button type="button" class="admin-filter-tab customer-filter-tab" data-filter="arrived">Visited</button>
+          </div>
+          <input type="search" id="customer-search" class="admin-search-input" placeholder="Search name, email or phone..." />
+        </div>
+        <div class="admin-table-card">
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr><th>Customer</th><th>Visits</th><th>Last visit</th><th>Reservation history</th></tr>
+              </thead>
+              <tbody id="customers-tbody">
+                <tr><td colspan="4" style="text-align:center;padding:40px;color:var(--warm-gray);">Loading customers...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
     </main>
+  </div>
+
+  <div class="admin-modal-overlay" id="customer-history-modal" hidden>
+    <div class="admin-modal-card admin-history-modal" role="dialog" aria-modal="true" aria-labelledby="customer-history-title">
+      <h3 class="admin-modal-title" id="customer-history-title">Reservation history</h3>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead><tr><th>Date &amp; time</th><th>Guests</th><th>Status</th><th>Arrival</th></tr></thead>
+          <tbody id="customer-history-tbody"></tbody>
+        </table>
+      </div>
+      <div class="admin-modal-actions">
+        <button type="button" class="btn btn-outline" id="customer-history-close" style="font-size:13px;padding:8px 18px;">Close</button>
+      </div>
+    </div>
   </div>
 
   <!-- ============================================================ -->
