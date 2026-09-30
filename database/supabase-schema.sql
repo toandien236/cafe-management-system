@@ -161,7 +161,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.reservations TO authenticated;
 GRANT SELECT, INSERT ON public.orders TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.orders TO authenticated;
 
-GRANT SELECT ON public.inventory TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.inventory TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.inventory TO authenticated;
 
 GRANT SELECT, INSERT ON public.stock_imports TO anon;
@@ -206,6 +206,15 @@ CREATE POLICY "auth_all_orders"
 -- INVENTORY RLS
 CREATE POLICY "anon_can_select_inventory"
     ON public.inventory FOR SELECT TO anon USING (true);
+
+CREATE POLICY "anon_can_insert_inventory"
+    ON public.inventory FOR INSERT TO anon WITH CHECK (true);
+
+CREATE POLICY "anon_can_update_inventory"
+    ON public.inventory FOR UPDATE TO anon USING (true) WITH CHECK (true);
+
+CREATE POLICY "anon_can_delete_inventory"
+    ON public.inventory FOR DELETE TO anon USING (true);
 
 CREATE POLICY "auth_all_inventory"
     ON public.inventory FOR ALL TO authenticated USING (true) WITH CHECK (true);

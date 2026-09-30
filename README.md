@@ -142,6 +142,28 @@ Nếu bạn muốn kết nối với một Project Supabase mới của riêng m
 
 ---
 
+## 🌱 Nạp Dữ Liệu Mẫu (Seed Data)
+
+Dự án cung cấp 2 phương thức nạp dữ liệu mẫu hoàn chỉnh:
+
+### 👉 Cách 1: Chạy script Node.js (Tự động nạp qua REST API)
+```powershell
+node scripts/seed-data.js
+```
+
+### 👉 Cách 2: Chạy file SQL trực tiếp trên Supabase
+Mở SQL Editor trên Supabase Dashboard và thực thi file: [`database/seed-data.sql`](database/seed-data.sql).
+
+**Dữ liệu mẫu bao gồm:**
+* 🍱 **15 món thực đơn** (`menu_items`) đầy đủ hình ảnh, giá và mô tả.
+* 📦 **15 nguyên vật liệu kho** (`inventory`) với tồn kho và mức an toàn.
+* 📥 **5 phiếu nhập kho** (`stock_imports`) có thông tin nhà cung cấp và giá nhập.
+* 📤 **4 phiếu xuất kho** (`stock_exports`) với lý do sử dụng quầy Bar / Làm bánh.
+* 🪑 **5 lượt đặt bàn mẫu** (`reservations`) với các trạng thái Chờ duyệt / Đã xác nhận / Đã hủy.
+* 🍽️ **4 đơn gọi món mẫu tại bàn** (`orders`) với các trạng thái Mới / Đang làm / Đã mang ra / Hoàn tất.
+
+---
+
 ## ✅ Kiểm Tra Kết Nối Tự Động (Health Check)
 
 Dự án có sẵn script kiểm tra toàn diện hoạt động của Supabase và PostgreSQL. Chỉ cần chạy lệnh:
