@@ -9,14 +9,14 @@
   <meta property="og:title" content="Mocha & Miso — Hương vị cà phê thủ công" />
   <meta property="og:description" content="Ghé vào không gian ấm áp, thưởng thức cà phê và món ăn thủ công, tận hưởng những phút giây thong thả." />
   <meta property="og:type" content="website" />
-  <meta property="og:image" content="asstes/logo.jpg" />
+  <meta property="og:image" content="assets/logo.jpg" />
 
   <!-- Favicon / Website Link Logo -->
-  <link rel="icon" type="image/jpeg" href="asstes/logo_icon.jpg" />
-  <link rel="shortcut icon" href="asstes/logo_icon.jpg" type="image/jpeg" />
-  <link rel="apple-touch-icon" href="asstes/logo_icon.jpg" />
+  <link rel="icon" type="image/jpeg" href="assets/logo_icon.jpg" />
+  <link rel="shortcut icon" href="assets/logo_icon.jpg" type="image/jpeg" />
+  <link rel="apple-touch-icon" href="assets/logo_icon.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:image" content="asstes/logo.jpg" />
+  <meta name="twitter:image" content="assets/logo.jpg" />
   <!-- DNS prefetch for all external CDN domains — resolves hostnames in the
        background so CDN connections start faster, improving FCP and TTI. -->
   <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com" />
@@ -29,10 +29,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
 
-  <!-- Firebase SDKs (Compat version for global firebase object) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
+  <!-- Supabase JS Client SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js" defer></script>
 
   <!-- GSAP + ScrollTrigger + SplitType + Lenis CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
@@ -41,7 +40,7 @@
   <script src="https://unpkg.com/@studio-freight/lenis@1.0.42/dist/lenis.min.js" defer></script>
 
   <!-- Preload hero image (LCP element) so it renders as fast as possible -->
-  <link rel="preload" as="image" href="asstes/8088465-garden-7111101.jpg" fetchpriority="high" />
+  <link rel="preload" as="image" href="assets/8088465-garden-7111101.jpg" fetchpriority="high" />
 
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -76,7 +75,7 @@
     <nav class="nav-inner container" aria-label="Điều hướng chính">
       <a href="#hero" class="nav-logo" id="nav-logo-link" aria-label="Mocha & Miso — Trang chủ">
         <div class="nav-logo-img-wrap">
-          <img src="asstes/logo_icon.jpg" alt="Logo quán cà phê Mocha & Miso" class="nav-logo-img" />
+          <img src="assets/logo_icon.jpg" alt="Logo quán cà phê Mocha & Miso" class="nav-logo-img" />
         </div>
         <div class="nav-logo-words">
           <span class="nav-logo-name">Mocha &amp; Miso</span>
@@ -122,9 +121,9 @@
     <section class="hero" id="hero" aria-label="Giới thiệu">
       <!-- Parallax image container -->
       <div class="hero-image-wrap" id="hero-img-wrap">
-        <!-- IMAGE: Hero background — asstes/8088465-garden-7111101.jpg (warm garden café) -->
+        <!-- IMAGE: Hero background — assets/8088465-garden-7111101.jpg (warm garden café) -->
         <img
-          src="asstes/8088465-garden-7111101.jpg"
+          src="assets/8088465-garden-7111101.jpg"
           alt="Quán cà phê Mocha & Miso — chỗ ngồi sân vườn ngập nắng, điểm xuyết gỗ tự nhiên và cây xanh"
           class="hero-image"
           id="hero-img"
@@ -178,9 +177,9 @@
           <!-- Image side -->
           <div class="about-image-col">
             <div class="about-image-wrap clip-reveal">
-              <!-- IMAGE: About section — asstes/hoahoa111-cafe-5972490.jpg (person reading in café) -->
+              <!-- IMAGE: About section — assets/hoahoa111-cafe-5972490.jpg (person reading in café) -->
               <img
-                src="asstes/hoahoa111-cafe-5972490.jpg"
+                src="assets/hoahoa111-cafe-5972490.jpg"
                 alt="Khách đọc sách tại Mocha & Miso bên chiếc bàn gỗ ấm áp dưới nắng chiều dịu nhẹ"
                 class="about-img"
                 loading="lazy" decoding="async"
@@ -263,9 +262,9 @@
           <!-- Card 1: Espresso -->
           <article class="menu-card magnetic-card" data-category="drinks" data-index="0">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_espresso.jpg -->
-              <img src="asstes/menu_espresso.jpg" alt="Tách espresso đậm vị từ hạt cà phê tuyển chọn" class="menu-card-img" loading="lazy" decoding="async" />
-              <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
+              <!-- IMAGE: assets/menu_espresso.jpg -->
+              <img src="assets/menu_espresso.jpg" alt="Rich single-origin espresso shot" class="menu-card-img" loading="lazy" decoding="async" />
+              <div class="menu-card-overlay"><span class="menu-card-view">View</span></div>
             </div>
             <div class="menu-card-body">
               <div class="menu-card-top">
@@ -280,9 +279,9 @@
           <!-- Card 2: Cappuccino -->
           <article class="menu-card magnetic-card" data-category="drinks" data-index="1">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_cappuccino.jpg -->
-              <img src="asstes/menu_cappuccino.jpg" alt="Cappuccino rót thủ công với hình latte art hoa hồng" class="menu-card-img" loading="lazy" decoding="async" />
-              <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
+              <!-- IMAGE: assets/menu_cappuccino.jpg -->
+              <img src="assets/menu_cappuccino.jpg" alt="Hand-poured cappuccino with rosetta latte art" class="menu-card-img" loading="lazy" decoding="async" />
+              <div class="menu-card-overlay"><span class="menu-card-view">View</span></div>
             </div>
             <div class="menu-card-body">
               <div class="menu-card-top">
@@ -297,9 +296,9 @@
           <!-- Card 3: Cold Brew -->
           <article class="menu-card magnetic-card" data-category="drinks" data-index="2">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_coldbrew.jpg -->
-              <img src="asstes/menu_coldbrew.jpg" alt="Cà phê ủ lạnh nhỏ giọt chậm dùng cùng đá" class="menu-card-img" loading="lazy" decoding="async" />
-              <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
+              <!-- IMAGE: assets/menu_coldbrew.jpg -->
+              <img src="assets/menu_coldbrew.jpg" alt="Slow-drip cold brew over ice" class="menu-card-img" loading="lazy" decoding="async" />
+              <div class="menu-card-overlay"><span class="menu-card-view">View</span></div>
             </div>
             <div class="menu-card-body">
               <div class="menu-card-top">
@@ -314,9 +313,9 @@
           <!-- Card 4: Matcha Latte -->
           <article class="menu-card magnetic-card" data-category="drinks" data-index="3">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_matcha.jpg -->
-              <img src="asstes/menu_matcha.jpg" alt="Matcha latte hảo hạng dùng trong nghi thức trà" class="menu-card-img" loading="lazy" decoding="async" />
-              <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
+              <!-- IMAGE: assets/menu_matcha.jpg -->
+              <img src="assets/menu_matcha.jpg" alt="Ceremonial grade matcha latte" class="menu-card-img" loading="lazy" decoding="async" />
+              <div class="menu-card-overlay"><span class="menu-card-view">View</span></div>
             </div>
             <div class="menu-card-body">
               <div class="menu-card-top">
@@ -331,9 +330,9 @@
           <!-- Card 5: Iced Mocha -->
           <article class="menu-card magnetic-card" data-category="drinks" data-index="4">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_icedmocha.jpg -->
-              <img src="asstes/menu_icedmocha.jpg" alt="Mocha đá phủ kem tươi" class="menu-card-img" loading="lazy" decoding="async" />
-              <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
+              <!-- IMAGE: assets/menu_icedmocha.jpg -->
+              <img src="assets/menu_icedmocha.jpg" alt="Iced mocha with whipped cream" class="menu-card-img" loading="lazy" decoding="async" />
+              <div class="menu-card-overlay"><span class="menu-card-view">View</span></div>
             </div>
             <div class="menu-card-body">
               <div class="menu-card-top">
@@ -348,9 +347,9 @@
           <!-- Card 6: Croissant -->
           <article class="menu-card magnetic-card" data-category="food" data-index="5">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_croissant.jpg -->
-              <img src="asstes/menu_croissant.jpg" alt="Bánh croissant bơ mới nướng" class="menu-card-img" loading="lazy" decoding="async" />
-              <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
+              <!-- IMAGE: assets/menu_croissant.jpg -->
+              <img src="assets/menu_croissant.jpg" alt="Freshly baked butter croissant" class="menu-card-img" loading="lazy" decoding="async" />
+              <div class="menu-card-overlay"><span class="menu-card-view">View</span></div>
             </div>
             <div class="menu-card-body">
               <div class="menu-card-top">
@@ -365,8 +364,8 @@
           <!-- Card 7: Pancakes -->
           <article class="menu-card magnetic-card" data-category="food" data-index="6">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_pancakes.jpg -->
-              <img src="asstes/menu_pancakes.jpg" alt="Bánh pancake soufflé Nhật Bản mềm xốp" class="menu-card-img" loading="lazy" decoding="async" />
+              <!-- IMAGE: assets/menu_pancakes.jpg -->
+              <img src="assets/menu_pancakes.jpg" alt="Bánh pancake soufflé Nhật Bản mềm xốp" class="menu-card-img" loading="lazy" decoding="async" />
               <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
             </div>
             <div class="menu-card-body">
@@ -382,8 +381,8 @@
           <!-- Card 8: Chicken Sandwich -->
           <article class="menu-card magnetic-card" data-category="food" data-index="7">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_sandwich.jpg -->
-              <img src="asstes/menu_sandwich.jpg" alt="Bánh mì kẹp gà kiểu club đặc biệt" class="menu-card-img" loading="lazy" decoding="async" />
+              <!-- IMAGE: assets/menu_sandwich.jpg -->
+              <img src="assets/menu_sandwich.jpg" alt="Bánh mì kẹp gà kiểu club đặc biệt" class="menu-card-img" loading="lazy" decoding="async" />
               <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
             </div>
             <div class="menu-card-body">
@@ -399,9 +398,9 @@
           <!-- Card 9: Cheesecake -->
           <article class="menu-card magnetic-card" data-category="desserts" data-index="8">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_cheesecake.jpg -->
-              <img src="asstes/menu_cheesecake.jpg" alt="Miếng bánh cheesecake cháy kiểu Basque" class="menu-card-img" loading="lazy" decoding="async" />
-              <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
+              <!-- IMAGE: assets/menu_cheesecake.jpg -->
+              <img src="assets/menu_cheesecake.jpg" alt="Basque burnt cheesecake slice" class="menu-card-img" loading="lazy" decoding="async" />
+              <div class="menu-card-overlay"><span class="menu-card-view">View</span></div>
             </div>
             <div class="menu-card-body">
               <div class="menu-card-top">
@@ -416,9 +415,9 @@
           <!-- Card 10: Truffle Pasta -->
           <article class="menu-card magnetic-card" data-category="food" data-index="9">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/matteophotopro2020-mussels-5342679_1920.jpg (seafood pasta) -->
-              <img src="asstes/matteophotopro2020-mussels-5342679_1920.jpg" alt="Mì linguine hải sản với vẹm và tôm" class="menu-card-img" loading="lazy" decoding="async" />
-              <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
+              <!-- IMAGE: assets/matteophotopro2020-mussels-5342679_1920.jpg (seafood pasta) -->
+              <img src="assets/matteophotopro2020-mussels-5342679_1920.jpg" alt="Seafood linguine with mussels and prawns" class="menu-card-img" loading="lazy" decoding="async" />
+              <div class="menu-card-overlay"><span class="menu-card-view">View</span></div>
             </div>
             <div class="menu-card-body">
               <div class="menu-card-top">
@@ -433,9 +432,9 @@
           <!-- Card 11: Rose Cardamom Cold Brew -->
           <article class="menu-card magnetic-card" data-category="drinks" data-index="10">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_rosecoldbrew.png -->
-              <img src="asstes/menu_rosecoldbrew.png" alt="Cà phê ủ lạnh hoa hồng bạch đậu khấu điểm chút cam" class="menu-card-img" loading="lazy" decoding="async" />
-              <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
+              <!-- IMAGE: assets/menu_rosecoldbrew.png -->
+              <img src="assets/menu_rosecoldbrew.png" alt="Rose Cardamom Cold Brew with orange twist" class="menu-card-img" loading="lazy" decoding="async" />
+              <div class="menu-card-overlay"><span class="menu-card-view">View</span></div>
             </div>
             <div class="menu-card-body">
               <div class="menu-card-top">
@@ -450,8 +449,8 @@
           <!-- Card 12: Truffle Avocado Toast -->
           <article class="menu-card magnetic-card" data-category="food" data-index="11">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_avocadotoast.png -->
-              <img src="asstes/menu_avocadotoast.png" alt="Bánh mì sourdough nướng kèm bơ quả, truffle và trứng chần" class="menu-card-img" loading="lazy" decoding="async" />
+              <!-- IMAGE: assets/menu_avocadotoast.png -->
+              <img src="assets/menu_avocadotoast.png" alt="Bánh mì sourdough nướng kèm bơ quả, truffle và trứng chần" class="menu-card-img" loading="lazy" decoding="async" />
               <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
             </div>
             <div class="menu-card-body">
@@ -467,8 +466,8 @@
           <!-- Card 13: Chicken Katsu Sando -->
           <article class="menu-card magnetic-card" data-category="food" data-index="12">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_katsusando.png -->
-              <img src="asstes/menu_katsusando.png" alt="Bánh mì sữa Nhật kẹp gà katsu giòn rụm" class="menu-card-img" loading="lazy" decoding="async" />
+              <!-- IMAGE: assets/menu_katsusando.png -->
+              <img src="assets/menu_katsusando.png" alt="Bánh mì sữa Nhật kẹp gà katsu giòn rụm" class="menu-card-img" loading="lazy" decoding="async" />
               <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
             </div>
             <div class="menu-card-body">
@@ -484,8 +483,8 @@
           <!-- Card 14: Matcha Opera Cake -->
           <article class="menu-card magnetic-card" data-category="desserts" data-index="13">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_matchaopera.png -->
-              <img src="asstes/menu_matchaopera.png" alt="Bánh opera matcha nhiều lớp phủ lá vàng" class="menu-card-img" loading="lazy" decoding="async" />
+              <!-- IMAGE: assets/menu_matchaopera.png -->
+              <img src="assets/menu_matchaopera.png" alt="Bánh opera matcha nhiều lớp phủ lá vàng" class="menu-card-img" loading="lazy" decoding="async" />
               <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
             </div>
             <div class="menu-card-body">
@@ -501,8 +500,8 @@
           <!-- Card 15: Pistachio Raspberry Tart -->
           <article class="menu-card magnetic-card" data-category="desserts" data-index="14">
             <div class="menu-card-image-wrap">
-              <!-- IMAGE: asstes/menu_raspberrytart.png -->
-              <img src="asstes/menu_raspberrytart.png" alt="Bánh tart hồ trăn và quả mâm xôi tươi" class="menu-card-img" loading="lazy" decoding="async" />
+              <!-- IMAGE: assets/menu_raspberrytart.png -->
+              <img src="assets/menu_raspberrytart.png" alt="Bánh tart hồ trăn và quả mâm xôi tươi" class="menu-card-img" loading="lazy" decoding="async" />
               <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
             </div>
             <div class="menu-card-body">
@@ -538,8 +537,8 @@
       <!-- Signature 1: Image left, text right -->
       <div class="signature-item signature-item--normal">
         <div class="signature-image-wrap clip-reveal">
-          <!-- IMAGE: asstes/bbom100892-cafe-7454951.jpg (espresso machine) -->
-          <img src="asstes/bbom100892-cafe-7454951.jpg" alt="Quầy espresso cổ điển — trái tim của Mocha & Miso" class="signature-img" loading="lazy" decoding="async" />
+          <!-- IMAGE: assets/bbom100892-cafe-7454951.jpg (espresso machine) -->
+          <img src="assets/bbom100892-cafe-7454951.jpg" alt="Quầy espresso cổ điển — trái tim của Mocha & Miso" class="signature-img" loading="lazy" decoding="async" />
         </div>
         <div class="signature-content reveal-up">
           <span class="signature-number" aria-hidden="true">01</span>
@@ -554,8 +553,8 @@
       <!-- Signature 2: Image right, text left (reversed) -->
       <div class="signature-item signature-item--reversed">
         <div class="signature-image-wrap clip-reveal">
-          <!-- IMAGE: asstes/shixugang-coffee-563800.jpg (milk pour into coffee) -->
-          <img src="asstes/shixugang-coffee-563800.jpg" alt="Nghi thức rót sữa — nghệ thuật latte của quán" class="signature-img" loading="lazy" decoding="async" />
+          <!-- IMAGE: assets/shixugang-coffee-563800.jpg (milk pour into coffee) -->
+          <img src="assets/shixugang-coffee-563800.jpg" alt="Nghi thức rót sữa — nghệ thuật latte của quán" class="signature-img" loading="lazy" decoding="async" />
         </div>
         <div class="signature-content reveal-up">
           <span class="signature-number" aria-hidden="true">02</span>
@@ -570,8 +569,8 @@
       <!-- Signature 3: Image left, text right -->
       <div class="signature-item signature-item--normal">
         <div class="signature-image-wrap clip-reveal">
-          <!-- IMAGE: asstes/matteophotopro2020-mussels-5342679_1920.jpg (seafood pasta) -->
-          <img src="asstes/matteophotopro2020-mussels-5342679_1920.jpg" alt="Món mì linguine hải sản đặc sắc của quán" class="signature-img" loading="lazy" decoding="async" />
+          <!-- IMAGE: assets/matteophotopro2020-mussels-5342679_1920.jpg (seafood pasta) -->
+          <img src="assets/matteophotopro2020-mussels-5342679_1920.jpg" alt="Our signature coastal seafood linguine" class="signature-img" loading="lazy" decoding="async" />
         </div>
         <div class="signature-content reveal-up">
           <span class="signature-number" aria-hidden="true">03</span>
@@ -601,9 +600,9 @@
       <div class="gallery-masonry" id="gallery-masonry" role="list">
 
         <div class="gallery-item gallery-item--tall" role="listitem">
-          <!-- IMAGE: asstes/8088465-garden-7111101.jpg -->
+          <!-- IMAGE: assets/8088465-garden-7111101.jpg -->
           <div class="gallery-item-inner">
-            <img src="asstes/8088465-garden-7111101.jpg" alt="Hiên sân vườn ngập nắng tại Mocha & Miso" class="gallery-img" loading="lazy" decoding="async" />
+            <img src="assets/8088465-garden-7111101.jpg" alt="Sunlit garden terrace at Mocha & Miso" class="gallery-img" loading="lazy" decoding="async" />
             <div class="gallery-item-overlay" aria-hidden="true">
               <svg class="gallery-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             </div>
@@ -611,9 +610,9 @@
         </div>
 
         <div class="gallery-item" role="listitem">
-          <!-- IMAGE: asstes/pc500k-seoul-7106196.jpg -->
+          <!-- IMAGE: assets/pc500k-seoul-7106196.jpg -->
           <div class="gallery-item-inner">
-            <img src="asstes/pc500k-seoul-7106196.jpg" alt="Không gian hiện đại phong cách công nghiệp với bàn dài chung" class="gallery-img" loading="lazy" decoding="async" />
+            <img src="assets/pc500k-seoul-7106196.jpg" alt="Không gian hiện đại phong cách công nghiệp với bàn dài chung" class="gallery-img" loading="lazy" decoding="async" />
             <div class="gallery-item-overlay" aria-hidden="true">
               <svg class="gallery-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             </div>
@@ -621,9 +620,9 @@
         </div>
 
         <div class="gallery-item" role="listitem">
-          <!-- IMAGE: asstes/shixugang-coffee-563800.jpg -->
+          <!-- IMAGE: assets/shixugang-coffee-563800.jpg -->
           <div class="gallery-item-inner">
-            <img src="asstes/shixugang-coffee-563800.jpg" alt="Dòng sữa đang được rót vào espresso" class="gallery-img" loading="lazy" decoding="async" />
+            <img src="assets/shixugang-coffee-563800.jpg" alt="Dòng sữa đang được rót vào espresso" class="gallery-img" loading="lazy" decoding="async" />
             <div class="gallery-item-overlay" aria-hidden="true">
               <svg class="gallery-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             </div>
@@ -631,9 +630,9 @@
         </div>
 
         <div class="gallery-item gallery-item--wide" role="listitem">
-          <!-- IMAGE: asstes/hoahoa111-cafe-5972490.jpg -->
+          <!-- IMAGE: assets/hoahoa111-cafe-5972490.jpg -->
           <div class="gallery-item-inner">
-            <img src="asstes/hoahoa111-cafe-5972490.jpg" alt="Khách đọc sách bên ánh nắng chiều tại Mocha & Miso" class="gallery-img" loading="lazy" decoding="async" />
+            <img src="assets/hoahoa111-cafe-5972490.jpg" alt="Khách đọc sách bên ánh nắng chiều tại Mocha & Miso" class="gallery-img" loading="lazy" decoding="async" />
             <div class="gallery-item-overlay" aria-hidden="true">
               <svg class="gallery-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             </div>
@@ -641,9 +640,9 @@
         </div>
 
         <div class="gallery-item gallery-item--tall" role="listitem">
-          <!-- IMAGE: asstes/bbom100892-cafe-7454951.jpg -->
+          <!-- IMAGE: assets/bbom100892-cafe-7454951.jpg -->
           <div class="gallery-item-inner">
-            <img src="asstes/bbom100892-cafe-7454951.jpg" alt="Máy pha espresso La Marzocco cổ điển của quán" class="gallery-img" loading="lazy" decoding="async" />
+            <img src="assets/bbom100892-cafe-7454951.jpg" alt="Máy pha espresso La Marzocco cổ điển của quán" class="gallery-img" loading="lazy" decoding="async" />
             <div class="gallery-item-overlay" aria-hidden="true">
               <svg class="gallery-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             </div>
@@ -651,9 +650,9 @@
         </div>
 
         <div class="gallery-item" role="listitem">
-          <!-- IMAGE: asstes/pexels-brick-wall-1834784.jpg -->
+          <!-- IMAGE: assets/pexels-brick-wall-1834784.jpg -->
           <div class="gallery-item-inner">
-            <img src="asstes/pexels-brick-wall-1834784.jpg" alt="Góc ngồi ấm cúng bên tường gạch và đèn Edison" class="gallery-img" loading="lazy" decoding="async" />
+            <img src="assets/pexels-brick-wall-1834784.jpg" alt="Góc ngồi ấm cúng bên tường gạch và đèn Edison" class="gallery-img" loading="lazy" decoding="async" />
             <div class="gallery-item-overlay" aria-hidden="true">
               <svg class="gallery-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             </div>
@@ -661,9 +660,9 @@
         </div>
 
         <div class="gallery-item gallery-item--tall" role="listitem">
-          <!-- IMAGE: asstes/gallery_cozy_corner.png -->
+          <!-- IMAGE: assets/gallery_cozy_corner.png -->
           <div class="gallery-item-inner">
-            <img src="asstes/gallery_cozy_corner.png" alt="Góc ngồi ấm áp ngập nắng bên những chậu cây xanh" class="gallery-img" loading="lazy" decoding="async" />
+            <img src="assets/gallery_cozy_corner.png" alt="Góc ngồi ấm áp ngập nắng bên những chậu cây xanh" class="gallery-img" loading="lazy" decoding="async" />
             <div class="gallery-item-overlay" aria-hidden="true">
               <svg class="gallery-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             </div>
@@ -671,9 +670,9 @@
         </div>
 
         <div class="gallery-item" role="listitem">
-          <!-- IMAGE: asstes/gallery_barista_pour.png -->
+          <!-- IMAGE: assets/gallery_barista_pour.png -->
           <div class="gallery-item-inner">
-            <img src="asstes/gallery_barista_pour.png" alt="Barista khéo léo tạo hình thiên nga trên tách latte" class="gallery-img" loading="lazy" decoding="async" />
+            <img src="assets/gallery_barista_pour.png" alt="Barista khéo léo tạo hình thiên nga trên tách latte" class="gallery-img" loading="lazy" decoding="async" />
             <div class="gallery-item-overlay" aria-hidden="true">
               <svg class="gallery-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             </div>
@@ -778,8 +777,8 @@
     <!-- ============================================================ -->
     <section class="atmosphere" id="atmosphere" aria-label="Không gian quán cà phê">
       <div class="atmosphere-image-wrap parallax-image-wrap">
-        <!-- IMAGE: asstes/sklorg-french-restaurant-2506490.jpg -->
-        <img src="asstes/sklorg-french-restaurant-2506490.jpg" alt="Không gian buổi tối — mặt tiền quán cà phê thân thiện dưới ánh đèn ấm áp" class="atmosphere-img parallax-img" loading="lazy" decoding="async" />
+        <!-- IMAGE: assets/sklorg-french-restaurant-2506490.jpg -->
+        <img src="assets/sklorg-french-restaurant-2506490.jpg" alt="Không gian buổi tối — mặt tiền quán cà phê thân thiện dưới ánh đèn ấm áp" class="atmosphere-img parallax-img" loading="lazy" decoding="async" />
         <div class="atmosphere-overlay"></div>
       </div>
       <div class="atmosphere-content container">
@@ -978,7 +977,7 @@
       <div class="footer-top">
         <div class="footer-brand">
           <div class="footer-logo-img-wrap">
-            <img src="asstes/logo_icon.jpg" alt="Logo Mocha & Miso" class="footer-logo-img" />
+            <img src="assets/logo_icon.jpg" alt="Logo Mocha & Miso" class="footer-logo-img" />
           </div>
           <p class="footer-tagline">Trải nghiệm cà phê thủ công.</p>
         </div>
@@ -1064,8 +1063,7 @@
     }
   </script>
 
-  <!-- Firebase + Main JS -->
-  <script src="firebase.js?v=2" defer></script>
+  <!-- Main JS -->
   <script src="main.js" defer></script>
 
 </body>

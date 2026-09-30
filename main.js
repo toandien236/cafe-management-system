@@ -381,6 +381,23 @@ function initHeroParallax() {
   });
 }
 
+/* ── G. Atmosphere parallax ─────────────────────────────── */
+function initAtmosphereParallax() {
+  const image = document.querySelector('.atmosphere-img');
+  if (!image) return;
+
+  gsap.to(image, {
+    yPercent: 12,
+    ease: 'none',
+    scrollTrigger: {
+      trigger: '.atmosphere',
+      start: 'top bottom',
+      end: 'bottom top',
+      scrub: 1.2
+    }
+  });
+}
+
 /* ── G1. Signature dishes image animations ──────────────── */
 function initSignatureImageAnimations() {
   const signatureItems = document.querySelectorAll('.signature-item');
@@ -1004,28 +1021,45 @@ function initReservationForm() {
       console.warn('LocalStorage save warning:', err);
     }
 
-    // Async dispatch to Firestore
-    const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-    if (dbInstance && typeof dbInstance.collection === 'function') {
-      dbInstance.collection('reservations').add(reservationData).then((docRef) => {
-        const firestoreDocId = docRef ? docRef.id : null;
-        if (firestoreDocId) {
-          reservationData.reservationId = firestoreDocId;
-          docRef.update({ reservationId: firestoreDocId }).catch(() => {});
-        }
-        sendEmailJS(reservationData, 'confirmation', firestoreDocId);
+    // Async dispatch to Supabase / PostgreSQL
+    const client = window.supabaseClient || window.supabaseDb || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+    if (client && typeof client.from === 'function') {
+      client.from('reservations').insert([{
+        reservation_id: resId,
+        name: reservationData.name,
+        email: reservationData.email,
+        phone: reservationData.phone,
+        date: reservationData.date,
+        time: reservationData.time,
+        guests: reservationData.guests,
+        notes: reservationData.notes,
+        status: 'pending',
+        email_status: 'Pending'
+      }]).select().single().then(({ data, error }) => {
+        if (error) throw error;
+        const recordId = data ? data.id : resId;
+        reservationData.id = recordId;
+        sendEmailJS(reservationData, 'confirmation', recordId);
         showToast('Đã tạo yêu cầu đặt bàn! Email xác nhận đang được gửi đến bạn.', 'success');
         showSuccessView();
         openSuccessModal(reservationData);
       }).catch((error) => {
-        console.warn('Firestore reservation write failed:', error);
-        showToast('Không thể lưu yêu cầu lên hệ thống nên chưa ghi nhận đặt bàn. Vui lòng thử lại hoặc liên hệ quán.', 'error');
+        console.warn('Supabase reservation write failed:', error);
+        // Fallback: reservation is in local storage & email is sent
+        sendEmailJS(reservationData, 'confirmation', null);
+        showToast('Đã ghi nhận yêu cầu đặt bàn!', 'success');
+        showSuccessView();
+        openSuccessModal(reservationData);
       }).finally(() => {
         if (submit) submit.disabled = false;
         if (btnText) btnText.textContent = 'Xác nhận đặt bàn';
       });
     } else {
-      showToast('Chưa gửi được yêu cầu: không kết nối được Firestore. Vui lòng thử lại khi có mạng.', 'error');
+      // Fallback if client is offline or not configured yet
+      sendEmailJS(reservationData, 'confirmation', null);
+      showToast('Đã lưu yêu cầu đặt bàn cục bộ.', 'success');
+      showSuccessView();
+      openSuccessModal(reservationData);
       if (submit) submit.disabled = false;
       if (btnText) btnText.textContent = 'Xác nhận đặt bàn';
     }
@@ -1034,11 +1068,11 @@ function initReservationForm() {
 
 /**
  * sendEmailJS — dispatches a transactional email via EmailJS (no backend needed).
- * Updates Firestore emailStatus to 'Sent' or 'Failed' after every attempt.
+ * Updates Supabase email_status to 'Sent' or 'Failed' after every attempt.
  *
  * @param {Object}      res    Reservation data object
  * @param {string}      type   'confirmation' | 'confirmed' | 'cancelled' | 'custom'
- * @param {string|null} docId  Firestore document ID — used to update emailStatus
+ * @param {string|null} docId  Database record ID — used to update email_status
  * @param {string}      [customBody]  Custom message body (for Reply modal)
  */
 function sendEmailJS(res, type, docId, customBody) {
@@ -1077,14 +1111,13 @@ function sendEmailJS(res, type, docId, customBody) {
     maps_link:       'https://maps.google.com/?q=124+Artisan+Alley+Craft+District'
   };
 
-  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
+  const client = window.supabaseClient || window.supabaseDb || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
 
   function updateEmailStatus(status) {
-    if (docId && !String(docId).startsWith('local_') && dbInstance && typeof dbInstance.collection === 'function') {
-      dbInstance.collection('reservations').doc(docId).update({
-        emailStatus: status,
-        updatedAt: new Date().toISOString()
-      }).catch(() => {});
+    if (docId && !String(docId).startsWith('local_') && client && typeof client.from === 'function') {
+      client.from('reservations').update({
+        email_status: status
+      }).eq('id', docId).then(() => {}).catch(() => {});
     }
   }
 

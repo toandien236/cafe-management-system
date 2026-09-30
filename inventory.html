@@ -7,7 +7,7 @@
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0">
 
-    <title>Quản lý kho - Cafee</title>
+    <title>Quản lý kho - Mocha &amp; Miso</title>
 
     <link rel="stylesheet" href="style.css">
 
@@ -35,6 +35,12 @@
         .inventory-header h1 {
             margin: 0;
             color: #4b3025;
+        }
+
+        .inventory-login {
+            color: #604638;
+            font-weight: 600;
+            text-decoration: underline;
         }
 
         .btn {
@@ -95,6 +101,105 @@
             padding: 20px;
             border-radius: 12px;
             overflow-x: auto;
+        }
+
+        .inventory-message {
+            min-height: 1.5em;
+            margin: -15px 0 20px;
+            color: #4b3025;
+        }
+
+        .inventory-message[data-error="true"] {
+            color: #a52d2d;
+        }
+
+        .inventory-workflows {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+
+        .workflow-panel {
+            padding: 20px;
+            border: 1px solid #e2d8cf;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .workflow-panel h2 {
+            margin: 0 0 16px;
+            color: #4b3025;
+            font-size: 20px;
+        }
+
+        .workflow-form {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .workflow-form label,
+        .price-label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .workflow-form input,
+        .workflow-form select,
+        .workflow-form textarea {
+            box-sizing: border-box;
+            width: 100%;
+            min-height: 40px;
+            padding: 9px 10px;
+            border: 1px solid #d7cec6;
+            border-radius: 4px;
+            font: inherit;
+        }
+
+        .workflow-form textarea {
+            min-height: 72px;
+            resize: vertical;
+        }
+
+        .workflow-wide {
+            grid-column: 1 / -1;
+        }
+
+        .workflow-form button {
+            min-height: 42px;
+        }
+
+        .movement-table {
+            margin-top: 18px;
+            overflow-x: auto;
+        }
+
+        .movement-table table {
+            min-width: 480px;
+            font-size: 13px;
+        }
+
+        .row-low {
+            background: #fff7e6;
+        }
+
+        .row-out {
+            background: #fff0f0;
+        }
+
+        .item-search {
+            box-sizing: border-box;
+            width: 100%;
+            max-width: 360px;
+            min-height: 40px;
+            margin: 0 0 14px;
+            padding: 9px 10px;
+            border: 1px solid #d7cec6;
+            border-radius: 4px;
+            font: inherit;
         }
 
         table {
@@ -214,6 +319,18 @@
                 gap: 15px;
             }
 
+            .inventory-workflows {
+                grid-template-columns: 1fr;
+            }
+
+            .workflow-form {
+                grid-template-columns: 1fr;
+            }
+
+            .workflow-wide {
+                grid-column: auto;
+            }
+
         }
 
     </style>
@@ -243,13 +360,20 @@
 
         <button
             class="btn btn-add"
-            id="add-item-btn">
+            id="add-item-btn"
+            type="button"
+            disabled>
 
             + Thêm nguyên liệu
 
         </button>
 
+        <a class="inventory-login" href="admin.html">Đăng nhập quản trị</a>
+
     </div>
+
+
+    <p class="inventory-message" id="inventory-message" role="status" aria-live="polite"></p>
 
 
     <!-- THỐNG KÊ -->
@@ -287,7 +411,77 @@
     </div>
 
 
+    <div class="inventory-workflows">
+        <section class="workflow-panel" aria-labelledby="import-heading">
+            <h2 id="import-heading">Nhập kho</h2>
+            <form id="stock-import-form" class="workflow-form">
+                <div>
+                    <label for="import-item">Nguyên liệu</label>
+                    <select id="import-item" required></select>
+                </div>
+                <div>
+                    <label for="import-quantity">Số lượng nhập</label>
+                    <input id="import-quantity" type="number" min="1" step="any" required>
+                </div>
+                <div>
+                    <label for="import-unit-price">Giá nhập / đơn vị</label>
+                    <input id="import-unit-price" type="number" min="0" step="any" required>
+                </div>
+                <div>
+                    <label for="import-supplier">Nhà cung cấp</label>
+                    <input id="import-supplier" type="text" maxlength="120" required>
+                </div>
+                <div class="workflow-wide">
+                    <label for="import-note">Ghi chú</label>
+                    <textarea id="import-note" maxlength="500"></textarea>
+                </div>
+                <button class="btn btn-add workflow-wide" type="submit">Xác nhận nhập kho</button>
+            </form>
+            <div class="movement-table">
+                <table>
+                    <thead><tr><th>Thời gian</th><th>Nguyên liệu</th><th>Số lượng</th><th>Nhà cung cấp</th><th>Ghi chú</th></tr></thead>
+                    <tbody id="stock-imports-body"><tr><td colspan="5">Chưa có giao dịch nhập.</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="workflow-panel" aria-labelledby="export-heading">
+            <h2 id="export-heading">Xuất kho</h2>
+            <form id="stock-export-form" class="workflow-form">
+                <div>
+                    <label for="export-item">Nguyên liệu</label>
+                    <select id="export-item" required></select>
+                </div>
+                <div>
+                    <label for="export-quantity">Số lượng xuất</label>
+                    <input id="export-quantity" type="number" min="0.001" step="any" required>
+                </div>
+                <div class="workflow-wide">
+                    <label for="export-reason">Lý do</label>
+                    <select id="export-reason" required>
+                        <option value="production">Dùng pha chế</option>
+                        <option value="expired">Hỏng / hết hạn</option>
+                    </select>
+                </div>
+                <div class="workflow-wide">
+                    <label for="export-note">Ghi chú</label>
+                    <textarea id="export-note" maxlength="500"></textarea>
+                </div>
+                <button class="btn btn-delete workflow-wide" type="submit">Xác nhận xuất kho</button>
+            </form>
+            <div class="movement-table">
+                <table>
+                    <thead><tr><th>Thời gian</th><th>Nguyên liệu</th><th>Số lượng</th><th>Lý do</th><th>Ghi chú</th></tr></thead>
+                    <tbody id="stock-exports-body"><tr><td colspan="5">Chưa có giao dịch xuất.</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+
     <!-- BẢNG -->
+
+    <input class="item-search" id="item-search" type="search" placeholder="Tìm nguyên liệu..." aria-label="Tìm nguyên liệu">
 
     <div class="table-container">
 
@@ -303,6 +497,8 @@
 
                     <th>Số lượng</th>
 
+                    <th>Giá nhập</th>
+
                     <th>Đơn vị</th>
 
                     <th>Mức tối thiểu</th>
@@ -317,7 +513,7 @@
 
 
             <tbody id="inventory-table-body">
-
+                <tr><td colspan="8" style="text-align:center">Đang kết nối kho...</td></tr>
             </tbody>
 
         </table>
@@ -331,7 +527,10 @@
 
 <div
     class="modal"
-    id="inventory-modal">
+    id="inventory-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modal-title">
 
 
     <div class="modal-content">
@@ -352,7 +551,7 @@
 
             <div class="form-group">
 
-                <label>
+                <label for="item-name">
                     Tên nguyên liệu
                 </label>
 
@@ -367,7 +566,7 @@
 
             <div class="form-group">
 
-                <label>
+                <label for="item-category">
                     Danh mục
                 </label>
 
@@ -400,14 +599,31 @@
 
             <div class="form-group">
 
-                <label>
-                    Số lượng
+                <label for="item-quantity">
+                    Tồn đầu kỳ
                 </label>
 
                 <input
                     type="number"
                     id="item-quantity"
                     min="0"
+                    step="any"
+                    required>
+
+                <small>Chỉ dùng khi tạo mới; các thay đổi tồn sau này dùng phiếu nhập/xuất.</small>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="item-price">Giá nhập / đơn vị</label>
+
+                <input
+                    type="number"
+                    id="item-price"
+                    min="0"
+                    step="any"
                     required>
 
             </div>
@@ -415,7 +631,7 @@
 
             <div class="form-group">
 
-                <label>
+                <label for="item-unit">
                     Đơn vị
                 </label>
 
@@ -430,7 +646,7 @@
 
             <div class="form-group">
 
-                <label>
+                <label for="item-min">
                     Mức tồn tối thiểu
                 </label>
 
@@ -438,6 +654,7 @@
                     type="number"
                     id="item-min"
                     min="0"
+                    step="any"
                     required>
 
             </div>
@@ -476,22 +693,11 @@
 </div>
 
 
-<!-- FIREBASE -->
-
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-
-
-<!-- FILE FIREBASE CÓ SẴN -->
-
-<script src="firebase.js"></script>
-
+<!-- SUPABASE CLIENT SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase.js"></script>
 
 <!-- JAVASCRIPT QUẢN LÝ KHO -->
-
 <script src="inventory.js"></script>
 </body>
 </html>

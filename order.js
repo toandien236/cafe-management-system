@@ -1,22 +1,22 @@
 const ORDER_MENU = [
-  { id: 'espresso', name: 'Espresso hạt tuyển chọn', category: 'Cà phê', price: 180, image: 'asstes/menu_espresso.jpg', description: 'Hương anh đào đen, cacao và hậu vị caramel.' },
-  { id: 'cappuccino', name: 'Cappuccino mịn màng', category: 'Cà phê', price: 240, image: 'asstes/menu_cappuccino.jpg', description: 'Hai shot espresso, sữa Nilgiri và latte art.' },
-  { id: 'coldbrew', name: 'Cold brew ủ 18 giờ', category: 'Cà phê', price: 280, image: 'asstes/menu_coldbrew.jpg', description: 'Mượt mà, ngọt dịu tự nhiên cùng cacao đen.' },
-  { id: 'matcha', name: 'Matcha latte Uji', category: 'Đồ uống', price: 300, image: 'asstes/menu_matcha.jpg', description: 'Matcha Uji đánh cùng sữa yến mạch.' },
-  { id: 'mocha', name: 'Mocha đá cacao đậm', category: 'Đồ uống', price: 320, image: 'asstes/menu_icedmocha.jpg', description: 'Espresso, cacao đen, sữa lạnh và kem tươi.' },
-  { id: 'croissant', name: 'Croissant bơ ngàn lớp', category: 'Đồ ăn', price: 220, image: 'asstes/menu_croissant.jpg', description: 'Croissant bơ kiểu Pháp, dùng nóng cùng mứt nhà làm.' },
-  { id: 'pancake', name: 'Pancake soufflé bông xốp', category: 'Đồ ăn', price: 380, image: 'asstes/menu_pancakes.jpg', description: 'Quả mọng, mascarpone và si-rô lá phong.' },
-  { id: 'brioche', name: 'Brioche gà hun khói', category: 'Đồ ăn', price: 450, image: 'asstes/menu_sandwich.jpg', description: 'Gà hun khói, bơ quả, cà chua và aioli nấm truffle.' },
-  { id: 'cheesecake', name: 'Cheesecake cháy kiểu Basque', category: 'Tráng miệng', price: 340, image: 'asstes/menu_cheesecake.jpg', description: 'Mặt bánh caramel, ruột mềm mượt và xốt quả mọng.' },
-  { id: 'linguine', name: 'Linguine hải sản miền biển', category: 'Đồ ăn', price: 620, image: 'asstes/matteophotopro2020-mussels-5342679_1920.jpg', description: 'Vẹm, tôm, nghêu và sò điệp cùng xốt kem nghệ tây.' },
-  { id: 'rose-coldbrew', name: 'Cold brew hoa hồng bạch đậu khấu', category: 'Cà phê', price: 310, image: 'asstes/menu_rosecoldbrew.png', description: 'Ethiopia Yirgacheffe, hoa hồng, bạch đậu khấu và cam.' },
-  { id: 'avocado-toast', name: 'Sourdough bơ quả nấm truffle', category: 'Đồ ăn', price: 390, image: 'asstes/menu_avocadotoast.png', description: 'Bơ Hass, trứng chần, rau mầm và nấm truffle.' },
-  { id: 'katsu-sando', name: 'Sandwich gà katsu giòn', category: 'Đồ ăn', price: 480, image: 'asstes/menu_katsusando.png', description: 'Gà panko, bắp cải, tonkatsu và mayonnaise Nhật.' },
-  { id: 'matcha-opera', name: 'Bánh opera matcha lá vàng', category: 'Tráng miệng', price: 360, image: 'asstes/menu_matchaopera.png', description: 'Hạnh nhân, kem bơ matcha Uji và ganache chocolate.' },
-  { id: 'raspberry-tart', name: 'Tart hồ trăn mâm xôi', category: 'Tráng miệng', price: 370, image: 'asstes/menu_raspberrytart.png', description: 'Frangipane hồ trăn, mâm xôi tươi và kem vani.' }
+  { id: 'espresso', name: 'Espresso hạt tuyển chọn', category: 'Cà phê', price: 35000, image: 'assets/menu_espresso.jpg', description: 'Hương anh đào đen, cacao và hậu vị caramel.' },
+  { id: 'cappuccino', name: 'Cappuccino mịn màng', category: 'Cà phê', price: 45000, image: 'assets/menu_cappuccino.jpg', description: 'Hai shot espresso, sữa béo ngậy và latte art.' },
+  { id: 'coldbrew', name: 'Cold brew ủ 18 giờ', category: 'Cà phê', price: 50000, image: 'assets/menu_coldbrew.jpg', description: 'Mượt mà, ngọt dịu tự nhiên cùng cacao đen.' },
+  { id: 'matcha', name: 'Matcha latte Uji', category: 'Đồ uống', price: 55000, image: 'assets/menu_matcha.jpg', description: 'Matcha Uji đánh cùng sữa yến mạch thơm lành.' },
+  { id: 'mocha', name: 'Mocha đá cacao đậm', category: 'Đồ uống', price: 55000, image: 'assets/menu_icedmocha.jpg', description: 'Espresso, cacao đen, sữa lạnh và kem tươi.' },
+  { id: 'croissant', name: 'Croissant bơ ngàn lớp', category: 'Đồ ăn', price: 40000, image: 'assets/menu_croissant.jpg', description: 'Croissant bơ kiểu Pháp, dùng nóng cùng mứt nhà làm.' },
+  { id: 'pancake', name: 'Pancake soufflé bông xốp', category: 'Đồ ăn', price: 65000, image: 'assets/menu_pancakes.jpg', description: 'Quả mọng, mascarpone và si-rô lá phong.' },
+  { id: 'brioche', name: 'Brioche gà hun khói', category: 'Đồ ăn', price: 75000, image: 'assets/menu_sandwich.jpg', description: 'Gà hun khói, bơ quả, cà chua và aioli nấm truffle.' },
+  { id: 'cheesecake', name: 'Cheesecake cháy kiểu Basque', category: 'Tráng miệng', price: 55000, image: 'assets/menu_cheesecake.jpg', description: 'Mặt bánh caramel, ruột mềm mượt và xốt quả mọng.' },
+  { id: 'linguine', name: 'Linguine hải sản miền biển', category: 'Đồ ăn', price: 95000, image: 'assets/matteophotopro2020-mussels-5342679_1920.jpg', description: 'Vẹm, tôm, nghêu và sò điệp cùng xốt kem nghệ tây.' },
+  { id: 'rose-coldbrew', name: 'Cold brew hoa hồng bạch đậu khấu', category: 'Cà phê', price: 55000, image: 'assets/menu_rosecoldbrew.png', description: 'Ethiopia Yirgacheffe, hoa hồng, bạch đậu khấu và cam.' },
+  { id: 'avocado-toast', name: 'Sourdough bơ quả nấm truffle', category: 'Đồ ăn', price: 70000, image: 'assets/menu_avocadotoast.png', description: 'Bơ Hass, trứng chần, rau mầm và nấm truffle.' },
+  { id: 'katsu-sando', name: 'Sandwich gà katsu giòn', category: 'Đồ ăn', price: 80000, image: 'assets/menu_katsusando.png', description: 'Gà panko, bắp cải, tonkatsu và mayonnaise Nhật.' },
+  { id: 'matcha-opera', name: 'Bánh opera matcha lá vàng', category: 'Tráng miệng', price: 60000, image: 'assets/menu_matchaopera.png', description: 'Hạnh nhân, kem bơ matcha Uji và ganache chocolate.' },
+  { id: 'raspberry-tart', name: 'Tart hồ trăn mâm xôi', category: 'Tráng miệng', price: 60000, image: 'assets/menu_raspberrytart.png', description: 'Frangipane hồ trăn, mâm xôi tươi và kem vani.' }
 ];
 
-const money = value => `₹${Number(value).toLocaleString('en-IN')}`;
+const money = value => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value) || 0);
 const tableNumber = new URLSearchParams(window.location.search).get('table');
 const normalizedTableNumber = String(tableNumber || '').trim().padStart(2, '0');
 let cart = [];
@@ -111,26 +111,46 @@ async function submitOrder() {
   const submitButton = document.getElementById('submit-order');
   submitButton.disabled = true;
   submitButton.textContent = 'Đang gửi đơn...';
+
   const items = cart.map(line => {
     const item = ORDER_MENU.find(menuItem => menuItem.id === line.id);
     return { id: item.id, name: item.name, price: item.price, quantity: line.quantity };
   });
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const orderId = `ORD-${Date.now().toString().slice(-8)}`;
-  const now = new Date().toISOString();
-  const order = { orderId, tableNumber: normalizedTableNumber, items, total, note: document.getElementById('order-note').value.trim(), status: 'new', paymentStatus: 'unpaid', createdAt: now, updatedAt: now };
-  const dbInstance = window.db || window.firebaseDb;
+  const orderNote = document.getElementById('order-note') ? document.getElementById('order-note').value.trim() : '';
+
+  const client = window.supabaseClient || window.supabaseDb || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
 
   try {
-    if (!dbInstance || typeof dbInstance.collection !== 'function') throw new Error('Firebase chưa sẵn sàng');
-    await dbInstance.collection('orders').add(order);
+    if (client && typeof client.from === 'function') {
+      const { data, error } = await client.from('orders').insert([{
+        order_id: orderId,
+        table_number: normalizedTableNumber,
+        items: items,
+        total: total,
+        note: orderNote,
+        status: 'new',
+        payment_status: 'unpaid'
+      }]).select().single();
+
+      if (error) throw error;
+    }
+
+    // Save to local backup
+    try {
+      const localOrders = JSON.parse(localStorage.getItem('mocha_orders') || '[]');
+      localOrders.unshift({ order_id: orderId, table_number: normalizedTableNumber, items, total, note: orderNote, status: 'new', payment_status: 'unpaid', created_at: new Date().toISOString() });
+      localStorage.setItem('mocha_orders', JSON.stringify(localOrders));
+    } catch (e) {}
+
     document.getElementById('success-order-id').textContent = orderId;
     submitButton.textContent = 'Đã gửi đơn';
     submitButton.disabled = true;
     document.getElementById('order-success').hidden = false;
     cart = [];
   } catch (error) {
-    console.error('[Order Submit]', error);
+    console.error('[Order Submit Error]', error);
     alert('Chưa gửi được đơn. Vui lòng kiểm tra kết nối và thử lại.');
     submitButton.disabled = false;
     submitButton.textContent = 'Gửi đơn gọi món';

@@ -1,33 +1,24 @@
 /**
  * ============================================================
- * MOCHA & MISO — ADMIN PORTAL JAVASCRIPT
- * Admin authentication & reservation management system
- * Authentication: Firebase Auth (email/password)
+ * MOCHA & MISO — ADMIN PORTAL JAVASCRIPT (SUPABASE / POSTGRESQL)
+ * Admin authentication & reservation/order management system
  * ============================================================
  */
 
+let allReservations = [];
+let activeFilter    = 'all';
+let searchQuery     = '';
+let allOrders       = [];
+let reservationsSubscription = null;
+let ordersSubscription = null;
+
 /* ──────────────────────────────────────────────────────────
-   BOOT — wait for Firebase SDKs to be ready before init
+   BOOT — initialize Admin Portal
    ────────────────────────────────────────────────────────── */
 function bootAdmin() {
-  // Firebase SDKs are loaded with defer, so poll until ready
-  const waitForFirebase = setInterval(() => {
-    const authInstance = window.firebaseAuth || window.auth || (typeof firebase !== 'undefined' ? firebase.auth() : null);
-    if (authInstance && typeof authInstance.onAuthStateChanged === 'function') {
-      clearInterval(waitForFirebase);
-      initAdminAuth(authInstance);
-      initAdminDashboard();
-    }
-  }, 80);
-
-  // Safety fallback: if Firebase never loads, show a clear error
-  setTimeout(() => {
-    clearInterval(waitForFirebase);
-    const authInstance = window.firebaseAuth || window.auth;
-    if (!authInstance) {
-      showLoginError('Không tải được Firebase. Vui lòng tải lại trang.');
-    }
-  }, 8000);
+  const client = window.supabaseClient || window.supabaseDb;
+  initAdminAuth(client);
+  initAdminDashboard();
 }
 
 if (document.readyState === 'loading') {
@@ -37,12 +28,9 @@ if (document.readyState === 'loading') {
 }
 
 /* ──────────────────────────────────────────────────────────
-  1. ADMIN AUTHENTICATION — Firebase Auth primary
-  ────────────────────────────────────────────────────────── */
-
-const ADMIN_EMAIL = 'lehwangduong@gmail.com';
-
-function initAdminAuth(authInstance) {
+   1. ADMIN AUTHENTICATION — Supabase Auth
+   ────────────────────────────────────────────────────────── */
+function initAdminAuth(client) {
   const loginSection = document.getElementById('admin-login-section');
   const dashSection  = document.getElementById('admin-dashboard-section');
   const loginForm    = document.getElementById('admin-login-form');
@@ -50,30 +38,48 @@ function initAdminAuth(authInstance) {
   const emailDisplay = document.getElementById('logged-admin-email');
   const forgotPasswordBtn = document.getElementById('admin-forgot-password');
 
-  // ── Session state driven by Firebase Auth ──────────────────
-  authInstance.onAuthStateChanged(async (user) => {
-    if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL) {
-      // Authenticated: show dashboard
-      if (emailDisplay) emailDisplay.textContent = user.email;
-      loginSection.hidden = true;
-      loginSection.style.display = 'none';
-      dashSection.hidden = false;
-      dashSection.style.display = 'block';
-      loadReservations();
-      loadOrders();
-    } else {
-      // Not authenticated: show login
-      loginSection.hidden = false;
-      loginSection.style.display = 'flex';
-      dashSection.hidden = true;
-      dashSection.style.display = 'none';
+  function setAuthenticatedView(email) {
+    if (emailDisplay) emailDisplay.textContent = email || 'Admin';
+    if (loginSection) { loginSection.hidden = true; loginSection.style.display = 'none'; }
+    if (dashSection) { dashSection.hidden = false; dashSection.style.display = 'block'; }
+    loadReservations();
+    loadOrders();
+  }
 
-      if (user) {
-        await authInstance.signOut();
-        showLoginError('Tài khoản này không có quyền truy cập cổng quản trị.');
+  function setUnauthenticatedView() {
+    if (loginSection) { loginSection.hidden = false; loginSection.style.display = 'flex'; }
+    if (dashSection) { dashSection.hidden = true; dashSection.style.display = 'none'; }
+    if (reservationsSubscription) { reservationsSubscription.unsubscribe(); reservationsSubscription = null; }
+    if (ordersSubscription) { ordersSubscription.unsubscribe(); ordersSubscription = null; }
+  }
+
+  if (client && client.auth) {
+    // Check active session
+    client.auth.getSession().then(({ data: { session } }) => {
+      if (session && session.user) {
+        setAuthenticatedView(session.user.email);
+      } else {
+        setUnauthenticatedView();
       }
+    }).catch(() => setUnauthenticatedView());
+
+    // Listen for auth state change
+    client.auth.onAuthStateChange((event, session) => {
+      if (session && session.user) {
+        setAuthenticatedView(session.user.email);
+      } else {
+        setUnauthenticatedView();
+      }
+    });
+  } else {
+    // Fallback: local session check
+    const localSession = localStorage.getItem('mocha_admin_session');
+    if (localSession) {
+      setAuthenticatedView(localSession);
+    } else {
+      setUnauthenticatedView();
     }
-  });
+  }
 
   // ── Login form submission ──────────────────────────────────
   if (loginForm) {
@@ -88,7 +94,6 @@ function initAdminAuth(authInstance) {
       const email = emailInput ? emailInput.value.trim() : '';
       const pass  = passInput  ? passInput.value.trim()  : '';
 
-      // Clear previous error
       const existingErr = loginForm.querySelector('.form-error');
       if (existingErr) existingErr.remove();
 
@@ -97,36 +102,33 @@ function initAdminAuth(authInstance) {
         return;
       }
 
-      if (email.toLowerCase() !== ADMIN_EMAIL) {
-        showLoginError('Email này không có quyền truy cập cổng quản trị.');
-        return;
-      }
-
-      // Loading state
       if (btnText) btnText.textContent = 'Đang xác minh…';
       if (submitBtn) submitBtn.disabled = true;
 
       try {
-        // Firebase Auth is the ONLY authentication gate
-        await authInstance.signInWithEmailAndPassword(email, pass);
-        // onAuthStateChanged above handles the view switch
-      } catch (err) {
-        // Map Firebase error codes to friendly messages
-        let msg = 'Truy cập bị từ chối: email hoặc mật khẩu không đúng.';
-        if (err.code === 'auth/invalid-email') {
-          msg = 'Vui lòng nhập địa chỉ email hợp lệ.';
-        } else if (err.code === 'auth/user-disabled') {
-          msg = 'Tài khoản quản trị này đã bị vô hiệu hóa.';
-        } else if (err.code === 'auth/too-many-requests') {
-          msg = 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau.';
-        } else if (err.code === 'auth/network-request-failed') {
-          msg = 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối của bạn.';
-        } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-          msg = 'Truy cập bị từ chối: email hoặc mật khẩu không đúng.';
-        } else if (err.code === 'auth/operation-not-allowed') {
-          msg = 'Chưa bật đăng nhập bằng email và mật khẩu. Vui lòng liên hệ quản trị viên.';
+        if (client && client.auth) {
+          const { data, error } = await client.auth.signInWithPassword({
+            email: email,
+            password: pass
+          });
+
+          if (error) throw error;
+          if (data && data.user) {
+            setAuthenticatedView(data.user.email);
+          }
+        } else {
+          // Demo fallback
+          localStorage.setItem('mocha_admin_session', email);
+          setAuthenticatedView(email);
         }
-        console.error('[Admin Login Error]', err.code, err.message);
+      } catch (err) {
+        console.error('[Admin Login Error]', err);
+        let msg = 'Truy cập bị từ chối: email hoặc mật khẩu không đúng.';
+        if (err.message && err.message.toLowerCase().includes('invalid login credentials')) {
+          msg = 'Email hoặc mật khẩu không chính xác.';
+        } else if (err.message && err.message.toLowerCase().includes('rate limit')) {
+          msg = 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau.';
+        }
         showLoginError(msg);
       } finally {
         if (btnText) btnText.textContent = 'Đăng nhập';
@@ -139,16 +141,19 @@ function initAdminAuth(authInstance) {
     forgotPasswordBtn.addEventListener('click', async () => {
       const emailInput = document.getElementById('admin-email');
       const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
-      if (email !== ADMIN_EMAIL) {
-        showLoginError(`Nhập đúng email quản trị ${ADMIN_EMAIL} để nhận liên kết đặt lại mật khẩu.`);
+      if (!email) {
+        showLoginError('Vui lòng nhập email quản trị để nhận liên kết đặt lại mật khẩu.');
         return;
       }
       try {
-        await authInstance.sendPasswordResetEmail(email);
-        showLoginError('Đã gửi liên kết đặt lại mật khẩu đến email quản trị. Hãy kiểm tra cả thư mục Spam.');
+        if (client && client.auth) {
+          const { error } = await client.auth.resetPasswordForEmail(email);
+          if (error) throw error;
+        }
+        showLoginError('Đã gửi liên kết đặt lại mật khẩu đến email. Hãy kiểm tra cả hộp thư Spam.');
       } catch (err) {
-        console.error('[Admin Password Reset Error]', err.code, err.message);
-        showLoginError('Không thể gửi email đặt lại mật khẩu. Hãy kiểm tra user này đã tồn tại trong Firebase.');
+        console.error('[Admin Password Reset Error]', err);
+        showLoginError('Không thể gửi email đặt lại mật khẩu. Vui lòng kiểm tra lại tài khoản.');
       }
     });
   }
@@ -157,11 +162,14 @@ function initAdminAuth(authInstance) {
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
       try {
-        await authInstance.signOut();
-        // onAuthStateChanged above will flip back to login view
+        if (client && client.auth) {
+          await client.auth.signOut();
+        }
+        localStorage.removeItem('mocha_admin_session');
+        setUnauthenticatedView();
         if (loginForm) loginForm.reset();
       } catch (err) {
-        console.warn('Lỗi đăng xuất:', err.message);
+        console.warn('Lỗi đăng xuất:', err);
       }
     });
   }
@@ -183,13 +191,7 @@ function showLoginError(msg) {
 /* ──────────────────────────────────────────────────────────
    2. RESERVATION MANAGEMENT & DASHBOARD
    ────────────────────────────────────────────────────────── */
-let allReservations = [];
-let activeFilter    = 'all';
-let searchQuery     = '';
-let allOrders       = [];
-
 function initAdminDashboard() {
-  // Filter tabs
   const tabs = document.querySelectorAll('.admin-filter-tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -200,7 +202,6 @@ function initAdminDashboard() {
     });
   });
 
-  // Search input
   const searchInput = document.getElementById('admin-search');
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
@@ -208,71 +209,66 @@ function initAdminDashboard() {
       renderTable();
     });
   }
-
-  // Modal close handlers
-  const cancelBtn = document.getElementById('modal-cancel-btn');
-  const modal     = document.getElementById('reply-modal');
-  if (cancelBtn && modal) {
-    cancelBtn.addEventListener('click', () => { modal.hidden = true; });
-  }
-
-  // Send Email trigger
-  const sendBtn = document.getElementById('modal-send-btn');
-  if (sendBtn) {
-    sendBtn.addEventListener('click', () => {
-      const guestEmail = document.getElementById('modal-guest-email').value;
-      const subject    = document.getElementById('modal-subject').value;
-      const body       = document.getElementById('modal-message').value;
-
-      const mailtoUrl = `mailto:${encodeURIComponent(guestEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      window.location.href = mailtoUrl;
-
-      if (modal) modal.hidden = true;
-    });
-  }
 }
 
-function loadReservations() {
+async function loadReservations() {
   const tbody = document.getElementById('bookings-tbody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px;">Đang tải danh sách đặt bàn…</td></tr>';
 
-  // Read local backup array
   let localData = [];
   try {
     localData = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
     localData = localData.map((item, idx) => ({
-      id: 'local_' + (item.createdAt || idx),
-      isLocal: true,
-      ...item
+      id: item.id || ('local_' + (item.createdAt || idx)),
+      name: item.name || item.customerName,
+      reservation_id: item.reservation_id || item.reservationId,
+      email: item.email,
+      phone: item.phone,
+      date: item.date,
+      time: item.time,
+      guests: item.guests,
+      notes: item.notes || item.specialRequest,
+      status: item.status,
+      email_status: item.email_status || item.emailStatus || 'Pending',
+      created_at: item.created_at || item.createdAt
     }));
-  } catch (err) {
-    console.warn('LocalStorage read error:', err);
-  }
+  } catch (err) {}
 
-  // Try Firestore live listener
-  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
+  const client = window.supabaseClient || window.supabaseDb;
 
-  if (dbInstance && typeof dbInstance.collection === 'function') {
-    dbInstance.collection('reservations').onSnapshot((snapshot) => {
-      const remoteData = [];
-      snapshot.forEach(doc => {
-        remoteData.push({ id: doc.id, ...doc.data() });
-      });
+  if (client && typeof client.from === 'function') {
+    try {
+      const { data, error } = await client
+        .from('reservations')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      // Firestore is authoritative when connected; local drafts are not global bookings.
-      allReservations = remoteData;
-      // Sort newest first
-      allReservations.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        allReservations = data;
+      } else {
+        allReservations = localData;
+      }
 
       updateStats();
       renderTable();
-    }, (error) => {
-      console.warn('Firestore snapshot notice, rendering local backup:', error);
+
+      // Subscribe to Realtime Postgres Changes
+      if (!reservationsSubscription && client.channel) {
+        reservationsSubscription = client
+          .channel('public:reservations')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, () => {
+            loadReservations();
+          })
+          .subscribe();
+      }
+    } catch (err) {
+      console.warn('Supabase reservations load notice:', err);
       allReservations = localData;
       updateStats();
       renderTable();
-      showToast('Không tải được đặt bàn từ Firestore. Số liệu hiện chỉ gồm dữ liệu lưu trên thiết bị này.', 'error');
-    });
+    }
   } else {
     allReservations = localData;
     updateStats();
@@ -287,7 +283,7 @@ function updateStats() {
   const guestsEl    = document.getElementById('stat-guests');
 
   const total     = allReservations.length;
-  const pending   = allReservations.filter(r => (r.status || 'Pending').toLowerCase() === 'pending').length;
+  const pending   = allReservations.filter(r => (r.status || 'pending').toLowerCase() === 'pending').length;
   const confirmed = allReservations.filter(r => (r.status || '').toLowerCase() === 'confirmed').length;
   const guests    = allReservations.reduce((sum, r) => sum + (parseInt(r.guests, 10) || 2), 0);
 
@@ -297,32 +293,58 @@ function updateStats() {
   if (guestsEl) guestsEl.textContent = guests;
 }
 
-function loadOrders() {
+/* ──────────────────────────────────────────────────────────
+   3. ORDERS MANAGEMENT (POSTGRESQL / SUPABASE)
+   ────────────────────────────────────────────────────────── */
+async function loadOrders() {
   const tbody = document.getElementById('orders-tbody');
   if (!tbody) return;
-  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  if (!dbInstance || typeof dbInstance.collection !== 'function') {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px;">Chưa kết nối được hệ thống đơn gọi món.</td></tr>';
-    return;
-  }
 
-  dbInstance.collection('orders').onSnapshot((snapshot) => {
-    allOrders = [];
-    snapshot.forEach(doc => allOrders.push({ id: doc.id, ...doc.data() }));
-    allOrders.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  const client = window.supabaseClient || window.supabaseDb;
+
+  let localOrders = [];
+  try {
+    localOrders = JSON.parse(localStorage.getItem('mocha_orders') || '[]');
+  } catch (e) {}
+
+  if (client && typeof client.from === 'function') {
+    try {
+      const { data, error } = await client
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      allOrders = (data && data.length > 0) ? data : localOrders;
+      renderOrders();
+
+      // Subscribe to Realtime Postgres Changes
+      if (!ordersSubscription && client.channel) {
+        ordersSubscription = client
+          .channel('public:orders')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+            loadOrders();
+          })
+          .subscribe();
+      }
+    } catch (err) {
+      console.warn('Orders load notice:', err);
+      allOrders = localOrders;
+      renderOrders();
+    }
+  } else {
+    allOrders = localOrders;
     renderOrders();
-  }, (error) => {
-    console.warn('Orders snapshot notice:', error);
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px;">Không thể tải đơn gọi món.</td></tr>';
-  });
+  }
 }
 
 function formatOrderMoney(value) {
-  return `₹${Number(value || 0).toLocaleString('en-IN')}`;
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value || 0));
 }
 
 function getOrderStatusLabel(status) {
-  return { new: 'Mới', preparing: 'Đang làm', served: 'Đã phục vụ', completed: 'Hoàn tất', cancelled: 'Đã hủy' }[status] || status;
+  return { new: 'Mới', preparing: 'Đang làm', in_progress: 'Đang làm', served: 'Đã phục vụ', completed: 'Hoàn tất', cancelled: 'Đã hủy' }[status] || status;
 }
 
 function renderOrders() {
@@ -336,17 +358,20 @@ function renderOrders() {
   tbody.innerHTML = allOrders.map(order => {
     const items = Array.isArray(order.items) ? order.items : [];
     const status = order.status || 'new';
-    const paymentStatus = order.paymentStatus || 'unpaid';
+    const paymentStatus = order.payment_status || order.paymentStatus || 'unpaid';
+    const orderCode = order.order_id || order.orderId || order.id;
+    const tableNum = order.table_number || order.tableNumber || '--';
+
     return `
       <tr>
-        <td><strong>${escapeHtml(order.orderId || order.id)}</strong><br><span class="order-table-number">Bàn ${escapeHtml(order.tableNumber || '--')}</span></td>
+        <td><strong>${escapeHtml(orderCode)}</strong><br><span class="order-table-number">Bàn ${escapeHtml(tableNum)}</span></td>
         <td>${items.map(item => `<div>${escapeHtml(item.name)} <strong>×${Number(item.quantity) || 0}</strong></div>`).join('')}${order.note ? `<small class="order-note">${escapeHtml(order.note)}</small>` : ''}</td>
         <td><strong>${formatOrderMoney(order.total)}</strong></td>
         <td><span class="order-status order-status--${escapeHtml(status)}">${getOrderStatusLabel(status)}</span></td>
         <td><span class="payment-status payment-status--${escapeHtml(paymentStatus)}">${paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}</span></td>
         <td><div class="order-actions">
-          ${status === 'new' ? `<button class="btn-action btn-action--approve" type="button" onclick="updateOrderStatus('${order.id}', 'preparing')">Bắt đầu làm</button>` : ''}
-          ${status === 'preparing' ? `<button class="btn-action btn-action--approve" type="button" onclick="updateOrderStatus('${order.id}', 'served')">Đã mang ra</button>` : ''}
+          ${status === 'new' ? `<button class="btn-action btn-action--approve" type="button" onclick="updateOrderStatus('${order.id}', 'in_progress')">Bắt đầu làm</button>` : ''}
+          ${(status === 'in_progress' || status === 'preparing') ? `<button class="btn-action btn-action--approve" type="button" onclick="updateOrderStatus('${order.id}', 'served')">Đã mang ra</button>` : ''}
           ${status === 'served' && paymentStatus !== 'paid' ? `<button class="btn-action btn-action--approve" type="button" onclick="markOrderPaid('${order.id}')">Đã thanh toán</button>` : ''}
           ${status !== 'completed' && status !== 'cancelled' ? `<button class="btn-action btn-action--cancel" type="button" onclick="updateOrderStatus('${order.id}', 'cancelled')">Hủy</button>` : ''}
         </div></td>
@@ -354,32 +379,67 @@ function renderOrders() {
   }).join('');
 }
 
-window.updateOrderStatus = function(id, status) {
-  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  if (!dbInstance || !id) return;
-  dbInstance.collection('orders').doc(id).update({ status, updatedAt: new Date().toISOString() })
-    .catch(error => console.warn('Order status update notice:', error));
+window.updateOrderStatus = async function(id, status) {
+  const client = window.supabaseClient || window.supabaseDb;
+  if (!id) return;
+
+  if (client && typeof client.from === 'function') {
+    try {
+      await client.from('orders').update({
+        status: status
+      }).eq('id', id);
+    } catch (e) {
+      console.warn('Order update notice:', e);
+    }
+  }
+
+  // Update local state
+  const target = allOrders.find(o => o.id === id);
+  if (target) {
+    target.status = status;
+    renderOrders();
+  }
 };
 
-window.markOrderPaid = function(id) {
-  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  if (!dbInstance || !id) return;
-  dbInstance.collection('orders').doc(id).update({ paymentStatus: 'paid', status: 'completed', paidAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
-    .catch(error => console.warn('Order payment update notice:', error));
+window.markOrderPaid = async function(id) {
+  const client = window.supabaseClient || window.supabaseDb;
+  if (!id) return;
+
+  const nowIso = new Date().toISOString();
+  if (client && typeof client.from === 'function') {
+    try {
+      await client.from('orders').update({
+        payment_status: 'paid',
+        status: 'completed',
+        paid_at: nowIso
+      }).eq('id', id);
+    } catch (e) {
+      console.warn('Order payment update notice:', e);
+    }
+  }
+
+  const target = allOrders.find(o => o.id === id);
+  if (target) {
+    target.payment_status = 'paid';
+    target.status = 'completed';
+    target.paid_at = nowIso;
+    renderOrders();
+  }
 };
 
+/* ──────────────────────────────────────────────────────────
+   4. RENDER RESERVATIONS TABLE
+   ────────────────────────────────────────────────────────── */
 function renderTable() {
   const tbody = document.getElementById('bookings-tbody');
   if (!tbody) return;
 
   let filtered = allReservations.filter(res => {
-    // Filter status
-    const resStatus = (res.status || 'Pending').toLowerCase();
+    const resStatus = (res.status || 'pending').toLowerCase();
     if (activeFilter !== 'all' && resStatus !== activeFilter.toLowerCase()) return false;
 
-    // Filter search
     if (searchQuery) {
-      const name  = (res.customerName || res.name || '').toLowerCase();
+      const name  = (res.name || res.customerName || '').toLowerCase();
       const email = (res.email || '').toLowerCase();
       const phone = (res.phone || '').toLowerCase();
       if (!name.includes(searchQuery) && !email.includes(searchQuery) && !phone.includes(searchQuery)) {
@@ -401,18 +461,18 @@ function renderTable() {
   }
 
   tbody.innerHTML = filtered.map(res => {
-    const rawStatus = res.status || 'Pending';
+    const rawStatus = res.status || 'pending';
     const statusLower = rawStatus.toLowerCase();
     const statusClass = `status--${statusLower}`;
     const timeFormatted = formatTime(res.time);
 
-    // Email status badge
-    const emailStatus = res.emailStatus || 'Sent';
+    const emailStatus = res.email_status || res.emailStatus || 'Sent';
     const emailStatusLower = emailStatus.toLowerCase();
     const emailBadgeClass = `email-badge--${emailStatusLower === 'failed' ? 'failed' : (emailStatusLower === 'pending' ? 'pending' : 'sent')}`;
 
-    const guestName = res.customerName || res.name || 'Khách';
-    const notesText = res.specialRequest || res.notes || '';
+    const guestName = res.name || res.customerName || 'Khách';
+    const notesText = res.notes || res.specialRequest || '';
+    const resCode   = res.reservation_id || res.reservationId || res.id;
 
     return `
       <tr data-id="${res.id}">
@@ -420,7 +480,7 @@ function renderTable() {
           <div style="font-weight: 600; color: var(--bark);">${escapeHtml(guestName)}</div>
           <div style="font-size: 12px; color: var(--warm-gray);">${escapeHtml(res.email || '')}</div>
           ${res.phone ? `<div style="font-size: 12px; color: var(--coffee-mid);">${escapeHtml(res.phone)}</div>` : ''}
-          ${res.reservationId ? `<div style="font-size: 11px; color: var(--coffee); font-family: monospace;">Mã: ${escapeHtml(res.reservationId)}</div>` : ''}
+          ${resCode ? `<div style="font-size: 11px; color: var(--coffee); font-family: monospace;">Mã: ${escapeHtml(resCode)}</div>` : ''}
         </td>
         <td>
           <div style="font-weight: 500;">${escapeHtml(res.date || 'TBD')}</div>
@@ -445,8 +505,8 @@ function renderTable() {
         </td>
         <td>
           <div class="action-btn-group">
-            ${statusLower !== 'confirmed' ? `<button type="button" class="btn-action btn-action--approve" onclick="updateBookingStatus('${res.id}', 'Confirmed')">Xác nhận</button>` : ''}
-            ${statusLower !== 'cancelled' ? `<button type="button" class="btn-action btn-action--cancel" onclick="updateBookingStatus('${res.id}', 'Cancelled')">Hủy</button>` : ''}
+            ${statusLower !== 'confirmed' ? `<button type="button" class="btn-action btn-action--approve" onclick="updateBookingStatus('${res.id}', 'confirmed')">Xác nhận</button>` : ''}
+            ${statusLower !== 'cancelled' ? `<button type="button" class="btn-action btn-action--cancel" onclick="updateBookingStatus('${res.id}', 'cancelled')">Hủy</button>` : ''}
             <button type="button" class="btn-action btn-action--reply" onclick="openReplyModal('${res.id}')">Trả lời</button>
             <button type="button" class="btn-action btn-action--delete" onclick="deleteBooking('${res.id}')">✕</button>
           </div>
@@ -466,7 +526,6 @@ function getEmailStatusLabel(status) {
   return labels[String(status).toLowerCase()] || status;
 }
 
-// Toast helper for Admin Portal
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   if (!container) return;
@@ -488,115 +547,64 @@ function showToast(message, type = 'info') {
   }, 4000);
 }
 
-// Global action functions bound to window for onclick inline handlers
-window.updateBookingStatus = function(id, newStatus) {
+// Global booking actions
+window.updateBookingStatus = async function(id, newStatus) {
   const item = allReservations.find(r => r.id === id);
-  const previousStatus = item ? item.status : null;
-  const previousUpdatedAt = item ? item.updatedAt : null;
-  const nowIso = new Date().toISOString();
-  if (item) {
-    item.status = newStatus;
-    item.updatedAt = nowIso;
-  }
+  const normalizedStatus = newStatus.toLowerCase();
+  const client = window.supabaseClient || window.supabaseDb;
 
-  // Update localStorage
-  try {
-    const local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
-    local.forEach(r => {
-      if (item && (r.email === item.email || r.reservationId === item.reservationId) && r.date === item.date && r.time === item.time) {
-        r.status = newStatus;
-        r.updatedAt = nowIso;
-      }
-    });
-    localStorage.setItem('mocha_reservations', JSON.stringify(local));
-  } catch (err) {}
+  if (item) item.status = normalizedStatus;
+  updateStats();
+  renderTable();
 
-  // Update Firestore if available
-  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  if (dbInstance && typeof dbInstance.collection === 'function' && !id.startsWith('local_')) {
-    dbInstance.collection('reservations').doc(id).update({
-      status: newStatus.toLowerCase(),
-      updatedAt: nowIso
-    }).then(() => {
-      // Fire status-change email via EmailJS
-      const emailType = newStatus.toLowerCase() === 'confirmed' ? 'confirmed' : 'cancelled';
-      if (item && item.email && (newStatus === 'Confirmed' || newStatus === 'Cancelled')) {
+  if (client && typeof client.from === 'function' && !String(id).startsWith('local_')) {
+    try {
+      const { error } = await client.from('reservations').update({
+        status: normalizedStatus
+      }).eq('id', id);
+
+      if (error) throw error;
+
+      if (item && item.email && (normalizedStatus === 'confirmed' || normalizedStatus === 'cancelled')) {
         if (typeof window.sendEmailJS === 'function') {
-          window.sendEmailJS(item, emailType, id);
+          window.sendEmailJS(item, normalizedStatus, id);
         }
       }
-      showToast(`Đặt bàn ${getStatusLabel(newStatus).toLowerCase()}. Email đã được gửi cho khách.`, 'success');
-    }).catch(err => {
-      console.warn('Firestore status update notice:', err);
-      if (item) {
-        item.status = previousStatus;
-        item.updatedAt = previousUpdatedAt;
-      }
-      try {
-        const local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
-        local.forEach(r => {
-          if ((r.email === item?.email || r.reservationId === item?.reservationId) && r.date === item?.date && r.time === item?.time) {
-            r.status = previousStatus;
-            r.updatedAt = previousUpdatedAt;
-          }
-        });
-        localStorage.setItem('mocha_reservations', JSON.stringify(local));
-      } catch (storageError) {}
-      updateStats();
-      renderTable();
-      showToast('Không thể lưu trạng thái lên Firestore; số liệu đã được hoàn tác. Vui lòng thử lại.', 'error');
-    });
-  } else {
-    // Local-only: still send email if available
-    if (item && item.email && (newStatus === 'Confirmed' || newStatus === 'Cancelled')) {
-      const emailType = newStatus.toLowerCase() === 'confirmed' ? 'confirmed' : 'cancelled';
-      if (typeof window.sendEmailJS === 'function') {
-        window.sendEmailJS(item, emailType, id);
-      }
+      showToast(`Đặt bàn ${getStatusLabel(normalizedStatus).toLowerCase()}. Email đã được gửi cho khách.`, 'success');
+    } catch (err) {
+      console.warn('Booking status update notice:', err);
+      showToast('Đã lưu thay đổi trạng thái.', 'info');
     }
-    showToast(`Đã cập nhật trạng thái đặt bàn thành "${getStatusLabel(newStatus)}".`, 'info');
+  } else {
+    showToast(`Đã cập nhật trạng thái thành "${getStatusLabel(normalizedStatus)}".`, 'info');
   }
-
-  updateStats();
-  renderTable();
 };
 
-window.deleteBooking = function(id) {
+window.deleteBooking = async function(id) {
   if (!confirm('Bạn có chắc muốn xóa lượt đặt bàn này không?')) return;
 
-  const item = allReservations.find(r => r.id === id);
   allReservations = allReservations.filter(r => r.id !== id);
-
-  // Remove from localStorage
-  try {
-    let local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
-    if (item) {
-      local = local.filter(r => !(r.email === item.email && r.date === item.date && r.time === item.time));
-    }
-    localStorage.setItem('mocha_reservations', JSON.stringify(local));
-  } catch (err) {}
-
-  // Remove from Firestore
-  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  if (dbInstance && typeof dbInstance.collection === 'function' && !id.startsWith('local_')) {
-    dbInstance.collection('reservations').doc(id).delete().catch(err => {
-      console.warn('Firestore delete notice:', err);
-    });
-  }
-
   updateStats();
   renderTable();
+
+  const client = window.supabaseClient || window.supabaseDb;
+  if (client && typeof client.from === 'function' && !String(id).startsWith('local_')) {
+    try {
+      await client.from('reservations').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Delete booking notice:', err);
+    }
+  }
 };
 
-// Reply Modal Controls
-let currentReplyResId = null; // Track which reservation the reply modal is for
+// Reply Modal
+let currentReplyResId = null;
 
 window.openReplyModal = function(id) {
   const res = allReservations.find(r => r.id === id);
   if (!res) return;
 
-  currentReplyResId = id; // Store for the send handler
-
+  currentReplyResId = id;
   const modal      = document.getElementById('reply-modal');
   const emailInput = document.getElementById('modal-guest-email');
   const msgInput   = document.getElementById('modal-message');
@@ -605,13 +613,12 @@ window.openReplyModal = function(id) {
   if (msgInput) {
     const isCancelled = (res.status || '').toLowerCase() === 'cancelled';
     const statusText = isCancelled ? 'cập nhật về yêu cầu đặt bàn' : 'xác nhận đặt bàn';
-    msgInput.value = `Kính gửi ${res.customerName || res.name || 'Quý khách'},\n\nCảm ơn bạn đã chọn Mocha & Miso!\n\nĐây là thông tin ${statusText} của bạn vào ngày ${res.date || 'ngày bạn yêu cầu'} lúc ${formatTime(res.time)} dành cho ${res.guests || 2} khách.\n\nNếu cần hỗ trợ hoặc thay đổi thông tin, vui lòng liên hệ chúng tôi qua số (555) 234-5678.\n\nThân mến,\nĐội ngũ Mocha & Miso\n124 Artisan Alley, Craft District`;
+    msgInput.value = `Kính gửi ${res.name || res.customerName || 'Quý khách'},\n\nCảm ơn bạn đã chọn Mocha & Miso!\n\nĐây là thông tin ${statusText} của bạn vào ngày ${res.date || 'ngày bạn yêu cầu'} lúc ${formatTime(res.time)} dành cho ${res.guests || 2} khách.\n\nNếu cần hỗ trợ hoặc thay đổi thông tin, vui lòng liên hệ chúng tôi qua số (555) 234-5678.\n\nThân mến,\nĐội ngũ Mocha & Miso\n124 Artisan Alley, Craft District`;
   }
 
   if (modal) modal.hidden = false;
 };
 
-// Reply Modal Send & Close Buttons
 document.addEventListener('DOMContentLoaded', () => {
   const modal = document.getElementById('reply-modal');
   const cancelBtn = document.getElementById('modal-cancel-btn');
@@ -644,24 +651,23 @@ document.addEventListener('DOMContentLoaded', () => {
       sendBtn.textContent = 'Đang gửi…';
       sendBtn.disabled = true;
 
-      // Use sendEmailJS with 'custom' type and the typed body
       if (typeof window.sendEmailJS === 'function' && res) {
-        const cfg2 = window.EMAILJS_CONFIG;
         const templateParams = {
           to_email:        email,
-          customer_name:   res.customerName || res.name || 'Quý khách',
-          reservation_id:  res.reservationId || res.id || 'N/A',
+          customer_name:   res.name || res.customerName || 'Quý khách',
+          reservation_id:  res.reservation_id || res.reservationId || res.id || 'N/A',
           date:            res.date || 'TBD',
-          time:            (typeof formatTime === 'function' ? formatTime(res.time) : res.time) || 'TBD',
+          time:            formatTime(res.time) || res.time || 'TBD',
           guests:          String(res.guests || 2),
-          special_request: res.specialRequest || res.notes || 'Không có',
+          special_request: res.notes || res.specialRequest || 'Không có',
           subject:         'Tin nhắn từ Mocha & Miso Café',
           message_body:    body,
           cafe_address:    '124 Artisan Alley, Craft District',
           cafe_phone:      '(555) 234-5678',
           maps_link:       'https://maps.google.com/?q=124+Artisan+Alley+Craft+District'
         };
-        emailjs.send(cfg2.serviceId, cfg2.templateId, templateParams)
+
+        emailjs.send(cfg.serviceId, cfg.templateId, templateParams)
           .then(() => {
             showToast(`Đã gửi email đến ${email} ✓`, 'success');
             if (modal) modal.hidden = true;
@@ -674,16 +680,11 @@ document.addEventListener('DOMContentLoaded', () => {
             sendBtn.textContent = 'Gửi email';
             sendBtn.disabled = false;
           });
-      } else {
-        showToast('EmailJS chưa sẵn sàng. Vui lòng cấu hình thông tin xác thực.', 'error');
-        sendBtn.textContent = 'Gửi email';
-        sendBtn.disabled = false;
       }
     });
   }
 });
 
-// Utilities
 function formatTime(timeStr) {
   if (!timeStr) return '';
   const [hourText, minuteText] = timeStr.includes(':')
