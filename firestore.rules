@@ -60,6 +60,10 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /customers/{customerKey} {
+      allow read, write: if isAdmin();
+    }
+
     match /orders/{order} {
       // Guests may submit a new order from a table QR code, but cannot read
       // other orders or change an order after submission.

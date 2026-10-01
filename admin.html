@@ -129,6 +129,17 @@
           </div>
           <div class="stat-num" id="stat-guests">0</div>
         </div>
+
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Khách đã đến</span>
+            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 6L9 17l-5-5" />
+              <circle cx="12" cy="12" r="10" />
+            </svg>
+          </div>
+          <div class="stat-num" id="stat-arrived-customers">0</div>
+        </div>
       </div>
 
       <!-- Controls: Filter Tabs & Search -->
@@ -153,15 +164,17 @@
                 <th>Thông tin khách</th>
                 <th>Ngày và giờ</th>
                 <th>Số khách</th>
+                <th>Số bàn</th>
                 <th>Ghi chú</th>
                 <th>Trạng thái</th>
+                <th>Khách đến</th>
                 <th>Tình trạng email</th>
                 <th>Thao tác</th>
               </tr>
             </thead>
             <tbody id="bookings-tbody">
               <tr>
-                <td colspan="7" style="text-align:center; padding: 40px; color: var(--warm-gray);">
+                <td colspan="9" style="text-align:center; padding: 40px; color: var(--warm-gray);">
                   Đang tải danh sách đặt bàn...
                 </td>
               </tr>
@@ -169,6 +182,38 @@
           </table>
         </div>
       </div>
+
+      <section class="admin-customers-section" aria-labelledby="customers-heading">
+        <div class="admin-section-heading">
+          <div>
+            <span class="admin-section-kicker">Hồ sơ và lượt ghé</span>
+            <h2 id="customers-heading">Khách hàng <span class="customer-total" id="customer-total">0 khách</span></h2>
+          </div>
+          <span class="admin-live-indicator">Đang cập nhật trực tiếp</span>
+        </div>
+        <div class="customer-controls-bar">
+          <input type="search" id="customer-search" class="admin-search-input"
+            placeholder="Tìm theo tên, email hoặc số điện thoại..." aria-label="Tìm khách hàng" />
+        </div>
+        <div class="admin-table-card">
+          <div class="admin-table-wrap">
+            <table class="admin-table customer-table">
+              <thead>
+                <tr>
+                  <th>Khách hàng</th>
+                  <th>Liên hệ</th>
+                  <th>Lượt ghé</th>
+                  <th>Lần ghé gần nhất</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="customers-tbody">
+                <tr><td colspan="5" class="table-empty-cell">Đang tải danh sách khách hàng...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
       <section class="admin-orders-section" aria-labelledby="orders-heading">
         <div class="admin-section-heading">
@@ -203,6 +248,27 @@
       </section>
 
     </main>
+  </div>
+
+  <div class="admin-modal-overlay" id="customer-history-modal" hidden>
+    <div class="admin-modal-card customer-history-card" role="dialog" aria-modal="true" aria-labelledby="customer-history-title">
+      <div class="customer-history-heading">
+        <div>
+          <span class="admin-section-kicker">Hồ sơ khách hàng</span>
+          <h3 class="admin-modal-title" id="customer-history-title">Lịch sử đặt bàn</h3>
+          <p class="customer-history-contact" id="customer-history-contact"></p>
+        </div>
+        <button type="button" class="btn-action btn-action--reply" id="customer-history-close" aria-label="Đóng lịch sử">Đóng</button>
+      </div>
+      <div class="admin-table-card customer-history-table-card">
+        <div class="admin-table-wrap">
+          <table class="admin-table customer-history-table">
+            <thead><tr><th>Ngày và giờ</th><th>Số khách</th><th>Trạng thái đặt bàn</th></tr></thead>
+            <tbody id="customer-history-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ============================================================ -->
