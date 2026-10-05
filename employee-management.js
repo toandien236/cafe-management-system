@@ -268,7 +268,7 @@
   }
 
   function initialize() {
-    const orders = document.getElementById('admin-orders-section');
+    const orders = document.querySelector('.admin-orders-section');
     if (!orders || document.getElementById('admin-employees-section')) return;
     const section = document.createElement('section');
     section.id = 'admin-employees-section';
