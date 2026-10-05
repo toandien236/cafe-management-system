@@ -1,745 +1,296 @@
-/**
- * ============================================================
- * MOCHA & MISO — ADMIN PORTAL JAVASCRIPT
- * Admin authentication & reservation management system
- * Authentication: Firebase Auth (email/password)
- * ============================================================
- */
+<!DOCTYPE html>
+<html lang="vi">
 
-/* ──────────────────────────────────────────────────────────
-   BOOT — wait for Firebase SDKs to be ready before init
-   ────────────────────────────────────────────────────────── */
-function bootAdmin() {
-  // Firebase SDKs are loaded with defer, so poll until ready
-  const waitForFirebase = setInterval(() => {
-    const authInstance = window.firebaseAuth || window.auth || (typeof firebase !== 'undefined' ? firebase.auth() : null);
-    if (authInstance && typeof authInstance.onAuthStateChanged === 'function') {
-      clearInterval(waitForFirebase);
-      initAdminAuth(authInstance);
-      initAdminDashboard();
-    }
-  }, 80);
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cổng quản trị — Mocha & Miso</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/jpeg" href="asstes/logo_icon.jpg" />
 
-  // Safety fallback: if Firebase never loads, show a clear error
-  setTimeout(() => {
-    clearInterval(waitForFirebase);
-    const authInstance = window.firebaseAuth || window.auth;
-    if (!authInstance) {
-      showLoginError('Không tải được Firebase. Vui lòng làm mới trang.');
-    }
-  }, 8000);
-}
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap"
+    rel="stylesheet" />
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', bootAdmin);
-} else {
-  bootAdmin();
-}
+  <!-- Firebase SDKs (Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
 
-/* ──────────────────────────────────────────────────────────
-   1. ADMIN AUTHENTICATION — Firebase Auth primary
-   ────────────────────────────────────────────────────────── */
+  <!-- GSAP CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
 
-function initAdminAuth(authInstance) {
-  const loginSection = document.getElementById('admin-login-section');
-  const dashSection  = document.getElementById('admin-dashboard-section');
-  const loginForm    = document.getElementById('admin-login-form');
-  const logoutBtn    = document.getElementById('admin-logout-btn');
-  const emailDisplay = document.getElementById('logged-admin-email');
+  <link rel="stylesheet" href="style.css" />
+</head>
 
-  // ── Session state driven by Firebase Auth ──────────────────
-  authInstance.onAuthStateChanged((user) => {
-    if (user) {
-      // Authenticated: show dashboard
-      if (emailDisplay) emailDisplay.textContent = user.email;
-      loginSection.hidden = true;
-      loginSection.style.display = 'none';
-      dashSection.hidden = false;
-      dashSection.style.display = 'block';
-      loadReservations();
-      loadRevenue();
-    } else {
-      // Not authenticated: show login
-      loginSection.hidden = false;
-      loginSection.style.display = 'flex';
-      dashSection.hidden = true;
-      dashSection.style.display = 'none';
-      if (unsubscribeSales) {
-        unsubscribeSales();
-        unsubscribeSales = null;
-      }
-    }
-  });
+<body class="admin-body">
 
-  // ── Login form submission ──────────────────────────────────
-  if (loginForm) {
-    loginForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
+  <!-- ============================================================ -->
+  <!-- 1. LOGIN SCREEN -->
+  <!-- ============================================================ -->
+  <section class="admin-login-screen" id="admin-login-section">
+    <div class="admin-login-card">
+      <div class="admin-brand-header">
+        <img src="asstes/logo_icon.jpg" alt="Mocha & Miso" class="admin-brand-logo" />
+        <h1 class="admin-brand-title">Cổng quản trị</h1>
+        <p class="admin-brand-sub">Mocha &amp; Miso · Cà phê thủ công</p>
+      </div>
 
-      const emailInput = document.getElementById('admin-email');
-      const passInput  = document.getElementById('admin-password');
-      const submitBtn  = document.getElementById('admin-login-submit');
-      const btnText    = submitBtn ? submitBtn.querySelector('.btn-text') : null;
+      <form class="reservation-form" id="admin-login-form" novalidate>
+        <div class="form-group">
+          <input type="email" id="admin-email" class="form-input" placeholder=" " required autocomplete="username" />
+          <label for="admin-email" class="form-label form-label--up">Email quản trị</label>
+          <span class="form-line"></span>
+        </div>
 
-      const email = emailInput ? emailInput.value.trim() : '';
-      const pass  = passInput  ? passInput.value.trim()  : '';
+        <div class="form-group">
+          <input type="password" id="admin-password" class="form-input" placeholder=" " required
+            autocomplete="current-password" />
+          <label for="admin-password" class="form-label form-label--up">Mật khẩu</label>
+          <span class="form-line"></span>
+        </div>
 
-      // Clear previous error
-      const existingErr = loginForm.querySelector('.form-error');
-      if (existingErr) existingErr.remove();
+        <button type="submit" class="btn btn-primary btn-full" id="admin-login-submit">
+          <span class="btn-text">Đăng nhập</span>
+        </button>
 
-      if (!email || !pass) {
-        showLoginError('Vui lòng nhập email quản trị và mật khẩu.');
-        return;
-      }
+      </form>
+    </div>
+  </section>
 
-      // Loading state
-      if (btnText) btnText.textContent = 'Đang xác minh…';
-      if (submitBtn) submitBtn.disabled = true;
+  <!-- ============================================================ -->
+  <!-- 2. DASHBOARD VIEW (Hidden until Auth) -->
+  <!-- ============================================================ -->
+  <div id="admin-dashboard-section" hidden>
 
-      try {
-        // Firebase Auth is the ONLY authentication gate
-        await authInstance.signInWithEmailAndPassword(email, pass);
-        // onAuthStateChanged above handles the view switch
-      } catch (err) {
-        // Map Firebase error codes to friendly messages
-        let msg = 'Truy cập bị từ chối: email hoặc mật khẩu không chính xác.';
-        if (err.code === 'auth/invalid-email') {
-          msg = 'Vui lòng nhập địa chỉ email hợp lệ.';
-        } else if (err.code === 'auth/user-disabled') {
-          msg = 'Tài khoản quản trị này đã bị vô hiệu hóa.';
-        } else if (err.code === 'auth/too-many-requests') {
-          msg = 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau.';
-        } else if (err.code === 'auth/network-request-failed') {
-          msg = 'Lỗi kết nối mạng. Vui lòng kiểm tra đường truyền.';
-        } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-          msg = 'Truy cập bị từ chối: email hoặc mật khẩu không chính xác.';
-        } else if (err.code === 'auth/operation-not-allowed') {
-          msg = 'Chưa bật đăng nhập bằng email và mật khẩu. Vui lòng liên hệ quản trị viên.';
-        }
-        console.error('[Admin Login Error]', err.code, err.message);
-        showLoginError(msg);
-      } finally {
-        if (btnText) btnText.textContent = 'Đăng nhập';
-        if (submitBtn) submitBtn.disabled = false;
-      }
-    });
-  }
+    <!-- Top Header Navigation -->
+    <header class="admin-header">
+      <div class="container admin-header-inner">
+        <div class="admin-logo-group">
+          <h2 class="admin-header-title">Mocha &amp; Miso</h2>
+          <span class="admin-badge">Bảng điều khiển</span>
+        </div>
+        <div class="admin-user-info">
+          <a href="revenue.html" class="btn btn-outline admin-top-link">Trang doanh thu</a>
+          <span class="admin-email-text" id="logged-admin-email">rickmondal598@gmail.com</span>
+          <button type="button" class="btn-logout" id="admin-logout-btn">Đăng xuất</button>
+        </div>
+      </div>
+    </header>
 
-  // ── Logout ─────────────────────────────────────────────────
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', async () => {
-      try {
-        await authInstance.signOut();
-        // onAuthStateChanged above will flip back to login view
-        if (loginForm) loginForm.reset();
-      } catch (err) {
-        console.warn('Sign-out error:', err.message);
-      }
-    });
-  }
-}
+    <!-- Main Dashboard Content -->
+    <main class="admin-main container">
 
-function showLoginError(msg) {
-  const loginForm = document.getElementById('admin-login-form');
-  if (!loginForm) return;
-  const existingErr = loginForm.querySelector('.form-error');
-  if (existingErr) existingErr.remove();
-
-  const errEl = document.createElement('div');
-  errEl.className = 'form-error';
-  errEl.setAttribute('role', 'alert');
-  errEl.textContent = msg;
-  loginForm.appendChild(errEl);
-}
-
-/* ──────────────────────────────────────────────────────────
-   2. RESERVATION MANAGEMENT & DASHBOARD
-   ────────────────────────────────────────────────────────── */
-let allReservations = [];
-let activeFilter    = 'all';
-let searchQuery     = '';
-let allSales        = [];
-let unsubscribeSales = null;
-
-function initAdminDashboard() {
-  const revenueDate = document.getElementById('revenue-date');
-  const { minDate, maxDate } = getRevenueLookupBounds(new Date());
-  if (revenueDate) {
-    revenueDate.value = maxDate;
-    revenueDate.min = minDate;
-    revenueDate.max = maxDate;
-  }
-
-  const revenueForm = document.getElementById('admin-revenue-form');
-  if (revenueForm) {
-    revenueForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const amountInput = document.getElementById('revenue-amount');
-      const dateInput = document.getElementById('revenue-date');
-      const descriptionInput = document.getElementById('revenue-description');
-      const submitButton = document.getElementById('revenue-submit');
-      const amount = Number(amountInput.value);
-      const dbInstance = window.db || window.firebaseDb;
-      const selectedDate = dateInput.value;
-      const { minDate: minLookupDate, maxDate: maxLookupDate } = getRevenueLookupBounds(new Date());
-
-      if (!Number.isFinite(amount) || amount <= 0 || !selectedDate) {
-        showToast('Vui lòng nhập số tiền và ngày bán hợp lệ.', 'error');
-        return;
-      }
-      if (selectedDate < minLookupDate || selectedDate > maxLookupDate) {
-        showToast('Chỉ cho phép tra cứu và ghi nhận doanh thu trong vòng 1 năm gần nhất.', 'error');
-        return;
-      }
-      if (!dbInstance || typeof dbInstance.collection !== 'function') {
-        showToast('Firestore chưa sẵn sàng để lưu doanh thu.', 'error');
-        return;
-      }
-
-      submitButton.disabled = true;
-      try {
-        await dbInstance.collection('sales').add({
-          amount,
-          date: selectedDate,
-          description: descriptionInput.value.trim(),
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          createdBy: window.firebaseAuth.currentUser.email || ''
-        });
-        revenueForm.reset();
-        dateInput.value = maxLookupDate;
-        showToast('Đã ghi nhận doanh thu.', 'success');
-      } catch (error) {
-        console.error('Revenue save error:', error);
-        showToast('Không lưu được doanh thu. Hãy kiểm tra quyền Firestore.', 'error');
-      } finally {
-        submitButton.disabled = false;
-      }
-    });
-  }
-
-  // Filter tabs
-  const tabs = document.querySelectorAll('.admin-filter-tab');
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      activeFilter = tab.getAttribute('data-filter') || 'all';
-      renderTable();
-    });
-  });
-
-  // Search input
-  const searchInput = document.getElementById('admin-search');
-  if (searchInput) {
-    searchInput.addEventListener('input', (e) => {
-      searchQuery = e.target.value.toLowerCase().trim();
-      renderTable();
-    });
-  }
-
-  // Modal close handlers
-  const cancelBtn = document.getElementById('modal-cancel-btn');
-  const modal     = document.getElementById('reply-modal');
-  if (cancelBtn && modal) {
-    cancelBtn.addEventListener('click', () => { modal.hidden = true; });
-  }
-
-  // Send Email trigger
-  const sendBtn = document.getElementById('modal-send-btn');
-  if (sendBtn) {
-    sendBtn.addEventListener('click', () => {
-      const guestEmail = document.getElementById('modal-guest-email').value;
-      const subject    = document.getElementById('modal-subject').value;
-      const body       = document.getElementById('modal-message').value;
-
-      const mailtoUrl = `mailto:${encodeURIComponent(guestEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      window.location.href = mailtoUrl;
-
-      if (modal) modal.hidden = true;
-    });
-  }
-}
-
-function loadRevenue() {
-  const tbody = document.getElementById('revenue-tbody');
-  const dbInstance = window.db || window.firebaseDb;
-  if (!dbInstance || typeof dbInstance.collection !== 'function') {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px;">Không kết nối được Firestore.</td></tr>';
-    return;
-  }
-
-  if (unsubscribeSales) unsubscribeSales();
-  unsubscribeSales = dbInstance.collection('sales').onSnapshot((snapshot) => {
-    allSales = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    renderRevenue();
-  }, (error) => {
-    console.error('Revenue load error:', error);
-    if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px;">Không tải được dữ liệu doanh thu.</td></tr>';
-  });
-}
-
-function renderRevenue() {
-  const today = localDateKey(new Date());
-  const currentMonth = today.slice(0, 7);
-  const windowSales = getRevenueWindowSales(allSales, new Date());
-  const todayTotal = windowSales.filter(sale => sale.date === today).reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
-  const monthTotal = windowSales.filter(sale => String(sale.date || '').startsWith(currentMonth)).reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
-  const total = windowSales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
-
-  document.getElementById('revenue-today').textContent = window.formatMoney(todayTotal);
-  document.getElementById('revenue-month').textContent = window.formatMoney(monthTotal);
-  document.getElementById('revenue-total').textContent = window.formatMoney(total);
-
-  const tbody = document.getElementById('revenue-tbody');
-  if (!tbody) return;
-  if (windowSales.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px;">Chưa có khoản doanh thu nào trong 1 năm qua.</td></tr>';
-    return;
-  }
-
-  const sortedSales = [...windowSales].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
-  tbody.innerHTML = sortedSales.map(sale => `
-    <tr>
-      <td>${escapeHtml(formatRevenueDate(sale.date))}</td>
-      <td>${escapeHtml(sale.description || 'Bán tại quầy')}</td>
-      <td style="font-weight:600;">${escapeHtml(window.formatMoney(Number(sale.amount) || 0))}</td>
-      <td><button type="button" class="btn-action btn-action--delete" aria-label="Xóa khoản doanh thu" onclick="deleteSale('${sale.id}')">Xóa</button></td>
-    </tr>
-  `).join('');
-}
-
-window.deleteSale = async function(id) {
-  if (!confirm('Bạn có chắc muốn xóa khoản doanh thu này không?')) return;
-  try {
-    await (window.db || window.firebaseDb).collection('sales').doc(id).delete();
-    showToast('Đã xóa khoản doanh thu.', 'success');
-  } catch (error) {
-    console.error('Revenue delete error:', error);
-    showToast('Không xóa được khoản doanh thu.', 'error');
-  }
-};
-
-const MAX_REVENUE_LOOKUP_DAYS = 365;
-
-function addDays(date, days) {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
-function getRevenueLookupBounds(referenceDate = new Date()) {
-  const maxDate = localDateKey(referenceDate);
-  const minDate = localDateKey(addDays(referenceDate, -MAX_REVENUE_LOOKUP_DAYS + 1));
-  return { minDate, maxDate };
-}
-
-function getRevenueWindowSales(sales = [], referenceDate = new Date()) {
-  const { minDate, maxDate } = getRevenueLookupBounds(referenceDate);
-  return sales.filter((sale) => {
-    const dateValue = String(sale.date || '');
-    return dateValue >= minDate && dateValue <= maxDate;
-  });
-}
-
-function localDateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function formatRevenueDate(date) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return 'Không rõ ngày';
-  return date.split('-').reverse().join('/');
-}
-
-function loadReservations() {
-  const tbody = document.getElementById('bookings-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;">Đang tải danh sách đặt bàn…</td></tr>';
-
-  // Read local backup array
-  let localData = [];
-  try {
-    localData = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
-    localData = localData.map((item, idx) => ({
-      id: 'local_' + (item.createdAt || idx),
-      isLocal: true,
-      ...item
-    }));
-  } catch (err) {
-    console.warn('LocalStorage read error:', err);
-  }
-
-  // Try Firestore live listener
-  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-
-  if (dbInstance && typeof dbInstance.collection === 'function') {
-    dbInstance.collection('reservations').onSnapshot((snapshot) => {
-      const remoteData = [];
-      snapshot.forEach(doc => {
-        remoteData.push({ id: doc.id, ...doc.data() });
-      });
-
-      // Merge remote and local (avoid duplicates)
-      const mergedMap = new Map();
-      localData.forEach(item => mergedMap.set(item.email + '_' + item.date + '_' + item.time, item));
-      remoteData.forEach(item => mergedMap.set(item.email + '_' + item.date + '_' + item.time, item));
-
-      allReservations = Array.from(mergedMap.values());
-      // Sort newest first
-      allReservations.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-
-      updateStats();
-      renderTable();
-    }, (error) => {
-      console.warn('Firestore snapshot notice, rendering local backup:', error);
-      allReservations = localData;
-      updateStats();
-      renderTable();
-    });
-  } else {
-    allReservations = localData;
-    updateStats();
-    renderTable();
-  }
-}
-
-function updateStats() {
-  const totalEl     = document.getElementById('stat-total');
-  const pendingEl   = document.getElementById('stat-pending');
-  const confirmedEl = document.getElementById('stat-confirmed');
-  const guestsEl    = document.getElementById('stat-guests');
-
-  const total     = allReservations.length;
-  const pending   = allReservations.filter(r => (r.status || 'Pending').toLowerCase() === 'pending').length;
-  const confirmed = allReservations.filter(r => (r.status || '').toLowerCase() === 'confirmed').length;
-  const guests    = allReservations.reduce((sum, r) => sum + (parseInt(r.guests, 10) || 2), 0);
-
-  if (totalEl) totalEl.textContent = total;
-  if (pendingEl) pendingEl.textContent = pending;
-  if (confirmedEl) confirmedEl.textContent = confirmed;
-  if (guestsEl) guestsEl.textContent = guests;
-}
-
-function translateBookingStatus(status) {
-  const labels = {
-    pending: 'Chờ xác nhận',
-    confirmed: 'Đã xác nhận',
-    cancelled: 'Đã hủy'
-  };
-  return labels[String(status || '').toLowerCase()] || status;
-}
-
-function translateEmailStatus(status) {
-  const labels = { sent: 'Đã gửi', pending: 'Đang chờ', failed: 'Gửi thất bại' };
-  return labels[String(status || '').toLowerCase()] || status;
-}
-
-function renderTable() {
-  const tbody = document.getElementById('bookings-tbody');
-  if (!tbody) return;
-
-  let filtered = allReservations.filter(res => {
-    // Filter status
-    const resStatus = (res.status || 'Pending').toLowerCase();
-    if (activeFilter !== 'all' && resStatus !== activeFilter.toLowerCase()) return false;
-
-    // Filter search
-    if (searchQuery) {
-      const name  = (res.customerName || res.name || '').toLowerCase();
-      const email = (res.email || '').toLowerCase();
-      const phone = (res.phone || '').toLowerCase();
-      if (!name.includes(searchQuery) && !email.includes(searchQuery) && !phone.includes(searchQuery)) {
-        return false;
-      }
-    }
-    return true;
-  });
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="7" style="text-align:center; padding: 48px; color: var(--warm-gray);">
-          Không tìm thấy lượt đặt bàn phù hợp.
-        </td>
-      </tr>
-    `;
-    return;
-  }
-
-  tbody.innerHTML = filtered.map(res => {
-    const rawStatus = res.status || 'Pending';
-    const statusLower = rawStatus.toLowerCase();
-    const statusClass = `status--${statusLower}`;
-    const timeFormatted = formatTime(res.time);
-
-    // Email status badge
-    const emailStatus = res.emailStatus || 'Sent';
-    const emailStatusLower = emailStatus.toLowerCase();
-    const emailBadgeClass = `email-badge--${emailStatusLower === 'failed' ? 'failed' : (emailStatusLower === 'pending' ? 'pending' : 'sent')}`;
-
-    const guestName = res.customerName || res.name || 'Khách hàng';
-    const notesText = res.specialRequest || res.notes || '';
-
-    return `
-      <tr data-id="${res.id}">
-        <td>
-          <div style="font-weight: 600; color: var(--bark);">${escapeHtml(guestName)}</div>
-          <div style="font-size: 12px; color: var(--warm-gray);">${escapeHtml(res.email || '')}</div>
-          ${res.phone ? `<div style="font-size: 12px; color: var(--coffee-mid);">${escapeHtml(res.phone)}</div>` : ''}
-          ${res.reservationId ? `<div style="font-size: 11px; color: var(--coffee); font-family: monospace;">ID: ${escapeHtml(res.reservationId)}</div>` : ''}
-        </td>
-        <td>
-          <div style="font-weight: 500;">${escapeHtml(res.date || 'Chưa xác định')}</div>
-          <div style="font-size: 12px; color: var(--coffee-mid);">${timeFormatted}</div>
-        </td>
-        <td style="font-weight: 600; text-align: center;">
-          ${res.guests || 2}
-        </td>
-        <td style="max-width: 180px; font-size: 13px; color: var(--coffee-mid);">
-          ${notesText ? escapeHtml(notesText) : '<span style="color:#A08070; font-style:italic;">Không có</span>'}
-        </td>
-        <td>
-          <span class="status-badge ${statusClass}">
-            <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:currentColor;"></span>
-            ${translateBookingStatus(rawStatus)}
-          </span>
-        </td>
-        <td>
-          <span class="email-badge ${emailBadgeClass}">
-            ${translateEmailStatus(emailStatus)}
-          </span>
-        </td>
-        <td>
-          <div class="action-btn-group">
-            ${statusLower !== 'confirmed' ? `<button type="button" class="btn-action btn-action--approve" onclick="updateBookingStatus('${res.id}', 'Confirmed')">Xác nhận</button>` : ''}
-            ${statusLower !== 'cancelled' ? `<button type="button" class="btn-action btn-action--cancel" onclick="updateBookingStatus('${res.id}', 'Cancelled')">Hủy</button>` : ''}
-            <button type="button" class="btn-action btn-action--reply" onclick="openReplyModal('${res.id}')">Trả lời</button>
-            <button type="button" class="btn-action btn-action--delete" onclick="deleteBooking('${res.id}')">✕</button>
+      <!-- KPI Stats Grid -->
+      <div class="admin-stats-grid">
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Tổng lượt đặt bàn</span>
+            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zM16 2v4M8 2v4M3 10h18" />
+            </svg>
           </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
-}
+          <div class="stat-num" id="stat-total">0</div>
+        </div>
 
-// Toast helper for Admin Portal
-function showToast(message, type = 'info') {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Chờ xác nhận</span>
+            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </div>
+          <div class="stat-num" id="stat-pending">0</div>
+        </div>
 
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  const iconMap = { success: '✓', error: '✕', info: 'ℹ' };
-  toast.innerHTML = `
-    <span style="font-weight: bold;">${iconMap[type] || 'ℹ'}</span>
-    <span>${escapeHtml(message)}</span>
-  `;
-  container.appendChild(toast);
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Đặt bàn đã xác nhận</span>
+            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          </div>
+          <div class="stat-num" id="stat-confirmed">0</div>
+        </div>
 
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateY(10px)';
-    toast.style.transition = 'opacity 0.3s, transform 0.3s';
-    setTimeout(() => toast.remove(), 300);
-  }, 4000);
-}
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Tổng số khách</span>
+            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 00-3-3.87" />
+              <path d="M16 3.13a4 4 0 010 7.75" />
+            </svg>
+          </div>
+          <div class="stat-num" id="stat-guests">0</div>
+        </div>
+      </div>
 
-// Global action functions bound to window for onclick inline handlers
-window.updateBookingStatus = function(id, newStatus) {
-  const item = allReservations.find(r => r.id === id);
-  const nowIso = new Date().toISOString();
-  const statusLabel = translateBookingStatus(newStatus);
-  if (item) {
-    item.status = newStatus;
-    item.updatedAt = nowIso;
-  }
+      <div class="admin-content-grid">
+        <div class="admin-main-column">
+          <!-- Controls: Filter Tabs & Search -->
+          <div class="admin-controls-bar">
+            <div class="admin-filter-group" role="tablist">
+              <button type="button" class="admin-filter-tab active" data-filter="all">Tất cả</button>
+              <button type="button" class="admin-filter-tab" data-filter="pending">Chờ xác nhận</button>
+              <button type="button" class="admin-filter-tab" data-filter="confirmed">Đã xác nhận</button>
+              <button type="button" class="admin-filter-tab" data-filter="cancelled">Đã hủy</button>
+            </div>
 
-  // Update localStorage
-  try {
-    const local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
-    local.forEach(r => {
-      if (item && (r.email === item.email || r.reservationId === item.reservationId) && r.date === item.date && r.time === item.time) {
-        r.status = newStatus;
-        r.updatedAt = nowIso;
-      }
-    });
-    localStorage.setItem('mocha_reservations', JSON.stringify(local));
-  } catch (err) {}
+            <input type="text" id="admin-search" class="admin-search-input"
+              placeholder="Tìm theo tên, email hoặc số điện thoại..." />
+          </div>
 
-  // Update Firestore if available
-  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  if (dbInstance && typeof dbInstance.collection === 'function' && !id.startsWith('local_')) {
-    dbInstance.collection('reservations').doc(id).update({
-      status: newStatus,
-      updatedAt: nowIso
-    }).then(() => {
-      // Fire status-change email via EmailJS
-      const emailType = newStatus.toLowerCase() === 'confirmed' ? 'confirmed' : 'cancelled';
-      if (item && item.email && (newStatus === 'Confirmed' || newStatus === 'Cancelled')) {
-        if (typeof window.sendEmailJS === 'function') {
-          window.sendEmailJS(item, emailType, id);
-        }
-      }
-      showToast(`Đã cập nhật trạng thái: ${statusLabel}. Email thông báo đã được gửi.`, 'success');
-    }).catch(err => {
-      console.warn('Firestore status update notice:', err);
-      showToast(`Đã cập nhật trạng thái trên thiết bị này: ${statusLabel}.`, 'info');
-    });
-  } else {
-    // Local-only: still send email if available
-    if (item && item.email && (newStatus === 'Confirmed' || newStatus === 'Cancelled')) {
-      const emailType = newStatus.toLowerCase() === 'confirmed' ? 'confirmed' : 'cancelled';
-      if (typeof window.sendEmailJS === 'function') {
-        window.sendEmailJS(item, emailType, id);
-      }
+          <!-- Table Container -->
+          <div class="admin-table-card">
+            <div class="admin-table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Thông tin khách</th>
+                    <th>Ngày và giờ</th>
+                    <th>Số khách</th>
+                    <th>Ghi chú đặc biệt</th>
+                    <th>Trạng thái</th>
+                    <th>Tình trạng email</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="bookings-tbody">
+                  <tr>
+                    <td colspan="7" style="text-align:center; padding: 40px; color: var(--warm-gray);">
+                      Đang tải danh sách đặt bàn...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <aside class="admin-sidebar-column">
+          <section class="admin-revenue-section" aria-labelledby="admin-revenue-title">
+            <div class="admin-revenue-heading">
+              <div>
+                <p class="admin-section-eyebrow">Bán hàng</p>
+                <h3 class="admin-section-title" id="admin-revenue-title">Doanh thu</h3>
+              </div>
+            </div>
+
+            <div class="admin-stats-grid admin-revenue-stats">
+              <div class="stat-card">
+                <div class="stat-label">Hôm nay</div>
+                <div class="stat-num" id="revenue-today">₹0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Tháng này</div>
+                <div class="stat-num" id="revenue-month">₹0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Tổng doanh thu</div>
+                <div class="stat-num" id="revenue-total">₹0</div>
+              </div>
+            </div>
+
+            <form class="admin-revenue-form" id="admin-revenue-form">
+              <label class="admin-revenue-field">
+                <span>Số tiền (₹)</span>
+                <input id="revenue-amount" type="number" min="1" step="1" required />
+              </label>
+              <label class="admin-revenue-field">
+                <span>Ngày bán</span>
+                <input id="revenue-date" type="date" required />
+              </label>
+              <label class="admin-revenue-field admin-revenue-description">
+                <span>Ghi chú</span>
+                <input id="revenue-description" type="text" maxlength="200" placeholder="Ví dụ: Bán tại quầy" />
+              </label>
+              <button class="btn btn-primary admin-revenue-submit" id="revenue-submit" type="submit">Ghi nhận</button>
+            </form>
+
+            <div class="admin-table-card">
+              <div class="admin-table-wrap">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Ngày bán</th>
+                      <th>Ghi chú</th>
+                      <th>Số tiền</th>
+                      <th>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody id="revenue-tbody">
+                    <tr><td colspan="4" style="text-align:center; padding:30px;">Đang tải doanh thu…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 3. EMAIL REPLY MODAL -->
+  <!-- ============================================================ -->
+  <div class="admin-modal-overlay" id="reply-modal" hidden>
+    <div class="admin-modal-card">
+      <h3 class="admin-modal-title">Trả lời khách hàng</h3>
+
+      <div class="form-group" style="margin-bottom: 20px;">
+        <input type="email" id="modal-guest-email" class="form-input" readonly />
+        <label for="modal-guest-email" class="form-label form-label--up">Người nhận (email khách)</label>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 20px;">
+        <input type="text" id="modal-subject" class="form-input" value="Thông tin đặt bàn tại Mocha & Miso" />
+        <label for="modal-subject" class="form-label form-label--up">Tiêu đề</label>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 20px;">
+        <textarea id="modal-message" class="form-input form-textarea" rows="5"
+          placeholder="Viết lời nhắn gửi khách hàng..."></textarea>
+        <label for="modal-message" class="form-label form-label--up">Nội dung</label>
+      </div>
+
+      <div class="admin-modal-actions">
+        <button type="button" class="btn btn-outline" id="modal-cancel-btn"
+          style="font-size: 13px; padding: 8px 18px;">Đóng</button>
+        <button type="button" class="btn btn-primary" id="modal-send-btn"
+          style="font-size: 13px; padding: 8px 18px;">Gửi email</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <!-- EmailJS SDK — sends status update emails (Confirmed / Cancelled) from Admin Portal -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script>
+    // EmailJS config — must match the credentials set in index.html
+    window.EMAILJS_CONFIG = {
+      publicKey: '7jzJ419nvCmAxeJLX',
+      serviceId: 'service_x65ekfh',
+      templateId: 'template_6uavdg3'
+    };
+    if (window.EMAILJS_CONFIG.publicKey !== 'YOUR_PUBLIC_KEY') {
+      emailjs.init({ publicKey: window.EMAILJS_CONFIG.publicKey });
     }
-    showToast(`Đã cập nhật trạng thái: ${statusLabel}.`, 'info');
-  }
+  </script>
 
-  updateStats();
-  renderTable();
-};
+  <!-- Scripts -->
+  <script src="firebase.js" defer></script>
+  <script src="main.js" defer></script>
+  <script src="admin.js" defer></script>
+</body>
 
-window.deleteBooking = function(id) {
-  if (!confirm('Bạn có chắc muốn xóa lượt đặt bàn này không?')) return;
-
-  const item = allReservations.find(r => r.id === id);
-  allReservations = allReservations.filter(r => r.id !== id);
-
-  // Remove from localStorage
-  try {
-    let local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
-    if (item) {
-      local = local.filter(r => !(r.email === item.email && r.date === item.date && r.time === item.time));
-    }
-    localStorage.setItem('mocha_reservations', JSON.stringify(local));
-  } catch (err) {}
-
-  // Remove from Firestore
-  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  if (dbInstance && typeof dbInstance.collection === 'function' && !id.startsWith('local_')) {
-    dbInstance.collection('reservations').doc(id).delete().catch(err => {
-      console.warn('Firestore delete notice:', err);
-    });
-  }
-
-  updateStats();
-  renderTable();
-};
-
-// Reply Modal Controls
-let currentReplyResId = null; // Track which reservation the reply modal is for
-
-window.openReplyModal = function(id) {
-  const res = allReservations.find(r => r.id === id);
-  if (!res) return;
-
-  currentReplyResId = id; // Store for the send handler
-
-  const modal      = document.getElementById('reply-modal');
-  const emailInput = document.getElementById('modal-guest-email');
-  const msgInput   = document.getElementById('modal-message');
-
-  if (emailInput) emailInput.value = res.email || '';
-  if (msgInput) {
-    const isCancelled = (res.status || '').toLowerCase() === 'cancelled';
-    const statusText = isCancelled ? 'cập nhật về yêu cầu đặt bàn' : 'xác nhận đặt bàn';
-    msgInput.value = `Kính gửi ${res.customerName || res.name || 'Quý khách'},\n\nCảm ơn bạn đã lựa chọn Mocha & Miso!\n\nĐây là thông tin ${statusText} vào ngày ${res.date || 'bạn đã yêu cầu'}, lúc ${formatTime(res.time)}, dành cho ${res.guests || 2} khách.\n\nNếu cần hỗ trợ hoặc thay đổi thông tin, vui lòng liên hệ với chúng tôi.\n\nThân mến,\nĐội ngũ Mocha & Miso\n42, đường Lavelle, Ashok Nagar, Bangalore`;
-  }
-
-  if (modal) modal.hidden = false;
-};
-
-// Reply Modal Send & Close Buttons
-document.addEventListener('DOMContentLoaded', () => {
-  const modal = document.getElementById('reply-modal');
-  const cancelBtn = document.getElementById('modal-cancel-btn');
-  const sendBtn = document.getElementById('modal-send-btn');
-
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', () => {
-      if (modal) modal.hidden = true;
-    });
-  }
-
-  if (sendBtn) {
-    sendBtn.addEventListener('click', () => {
-      const email = document.getElementById('modal-guest-email')?.value?.trim() || '';
-      const body  = document.getElementById('modal-message')?.value?.trim() || '';
-
-      if (!email) {
-        showToast('Không tìm thấy email người nhận.', 'error');
-        return;
-      }
-
-      const cfg = window.EMAILJS_CONFIG;
-      if (!cfg || cfg.publicKey === 'YOUR_PUBLIC_KEY' || typeof emailjs === 'undefined') {
-        showToast('EmailJS chưa được cấu hình. Vui lòng thiết lập thông tin xác thực.', 'error');
-        return;
-      }
-
-      const res = currentReplyResId ? allReservations.find(r => r.id === currentReplyResId) : null;
-
-      sendBtn.textContent = 'Đang gửi…';
-      sendBtn.disabled = true;
-
-      // Use sendEmailJS with 'custom' type and the typed body
-      if (typeof window.sendEmailJS === 'function' && res) {
-        const cfg2 = window.EMAILJS_CONFIG;
-        const templateParams = {
-          to_email:        email,
-          customer_name:   res.customerName || res.name || 'Quý khách',
-          reservation_id:  res.reservationId || res.id || 'Không có',
-          date:            res.date || 'Chưa xác định',
-          time:            (typeof formatTime === 'function' ? formatTime(res.time) : res.time) || 'Chưa xác định',
-          guests:          String(res.guests || 2),
-          special_request: res.specialRequest || res.notes || 'Không có',
-          subject:         'Lời nhắn từ Mocha & Miso',
-          message_body:    body,
-          cafe_address:    '42, Lavelle Road, Ashok Nagar, Bangalore',
-          cafe_phone:      '+91 80 1234 5678',
-          maps_link:       'https://maps.google.com/?q=42+Lavelle+Road+Bangalore'
-        };
-        emailjs.send(cfg2.serviceId, cfg2.templateId, templateParams)
-          .then(() => {
-            showToast(`Đã gửi email đến ${email} ✓`, 'success');
-            if (modal) modal.hidden = true;
-          })
-          .catch(err => {
-            console.warn('[EmailJS Reply Error]', err);
-            showToast('Gửi email thất bại. Vui lòng kiểm tra cấu hình EmailJS.', 'error');
-          })
-          .finally(() => {
-            sendBtn.textContent = 'Gửi email';
-            sendBtn.disabled = false;
-          });
-      } else {
-        showToast('EmailJS chưa sẵn sàng. Vui lòng cấu hình thông tin xác thực.', 'error');
-        sendBtn.textContent = 'Gửi email';
-        sendBtn.disabled = false;
-      }
-    });
-  }
-});
-
-// Utilities
-function formatTime(timeStr) {
-  if (!timeStr) return '';
-  if (timeStr.length === 4) {
-    const hrs = parseInt(timeStr.slice(0, 2), 10);
-    const mins = timeStr.slice(2);
-    return `${String(hrs).padStart(2, '0')}:${mins}`;
-  }
-  return timeStr;
-}
-
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+</html>
