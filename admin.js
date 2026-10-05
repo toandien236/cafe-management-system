@@ -318,7 +318,11 @@ function loadOrders() {
 }
 
 function formatOrderMoney(value) {
-  return `₹${Number(value || 0).toLocaleString('en-IN')}`;
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0
+  }).format(Number(value || 0) * 1000);
 }
 
 function getOrderStatusLabel(status) {

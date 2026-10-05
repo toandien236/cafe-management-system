@@ -16,7 +16,11 @@ const ORDER_MENU = [
   { id: 'raspberry-tart', name: 'Tart hồ trăn mâm xôi', category: 'Tráng miệng', price: 370, image: 'asstes/menu_raspberrytart.png', description: 'Frangipane hồ trăn, mâm xôi tươi và kem vani.' }
 ];
 
-const money = value => `₹${Number(value).toLocaleString('en-IN')}`;
+const money = value => new Intl.NumberFormat('vi-VN', {
+  style: 'currency',
+  currency: 'VND',
+  maximumFractionDigits: 0
+}).format(Number(value) * 1000);
 const tableNumber = new URLSearchParams(window.location.search).get('table');
 const normalizedTableNumber = String(tableNumber || '').trim().padStart(2, '0');
 let cart = [];
