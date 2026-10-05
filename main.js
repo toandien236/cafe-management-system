@@ -949,12 +949,14 @@ function initReservationForm() {
     const email = document.getElementById('res-email');
     const date  = document.getElementById('res-date');
     const time  = document.getElementById('res-time');
+    const tableNumber = document.getElementById('res-table-number');
 
     const fields = [
       { el: name, label: 'Họ và tên' },
       { el: email, label: 'Địa chỉ email' },
       { el: date, label: 'Ngày' },
-      { el: time, label: 'Giờ' }
+      { el: time, label: 'Giờ' },
+      { el: tableNumber, label: 'Số bàn' }
     ];
 
     const missingLabels = [];
@@ -977,15 +979,20 @@ function initReservationForm() {
 
     const resId = 'RES-' + Math.floor(100000 + Math.random() * 900000);
     const nowIso = new Date().toISOString();
+    const customerEmail = email.value.trim();
 
     const reservationData = {
       reservationId: resId,
       customerName: name.value.trim(),
       name: name.value.trim(),
-      email: email.value.trim(),
+      email: customerEmail,
       phone: document.getElementById('res-phone') ? document.getElementById('res-phone').value.trim() : '',
+      customerKey: customerEmail.toLowerCase(),
+      arrivalStatus: 'not_arrived',
+      arrivedAt: null,
       date: date.value,
       time: time.value,
+      tableNumber: tableNumber.value,
       guests: parseInt(document.getElementById('res-guests') ? document.getElementById('res-guests').value : '2', 10) || 2,
       specialRequest: document.getElementById('res-notes') ? document.getElementById('res-notes').value.trim() : '',
       notes: document.getElementById('res-notes') ? document.getElementById('res-notes').value.trim() : '',
@@ -1159,12 +1166,14 @@ function openSuccessModal(res) {
   const dateEl = document.getElementById('modal-res-date');
   const timeEl = document.getElementById('modal-res-time');
   const guestsEl = document.getElementById('modal-res-guests');
+  const tableNumberEl = document.getElementById('modal-res-table-number');
 
   if (resIdEl) resIdEl.textContent = res.reservationId || res.id || 'CONFIRMED';
   if (nameEl) nameEl.textContent = res.customerName || res.name || 'Quý khách';
   if (dateEl) dateEl.textContent = res.date || 'Hôm nay';
   if (timeEl) timeEl.textContent = formatTime(res.time) || res.time || '';
   if (guestsEl) guestsEl.textContent = `${res.guests || 2} khách`;
+  if (tableNumberEl) tableNumberEl.textContent = res.tableNumber ? `Bàn ${res.tableNumber}` : 'Chưa chọn';
 
   modal.hidden = false;
   modal.setAttribute('aria-hidden', 'false');

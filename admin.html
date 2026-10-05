@@ -152,6 +152,7 @@
               <tr>
                 <th>Thông tin khách</th>
                 <th>Ngày và giờ</th>
+                <th>Số bàn</th>
                 <th>Số khách</th>
                 <th>Ghi chú</th>
                 <th>Trạng thái</th>
@@ -161,7 +162,7 @@
             </thead>
             <tbody id="bookings-tbody">
               <tr>
-                <td colspan="7" style="text-align:center; padding: 40px; color: var(--warm-gray);">
+                <td colspan="8" style="text-align:center; padding: 40px; color: var(--warm-gray);">
                   Đang tải danh sách đặt bàn...
                 </td>
               </tr>
@@ -169,6 +170,44 @@
           </table>
         </div>
       </div>
+
+      <section class="admin-customers-section" aria-labelledby="customers-heading">
+        <div class="admin-section-heading">
+          <div>
+            <span class="admin-section-kicker">Hồ sơ khách hàng</span>
+            <h2 id="customers-heading">Khách hàng</h2>
+          </div>
+          <div class="admin-customers-stats">
+            <div class="admin-customers-total">Tổng số khách <strong id="customers-total-count">0</strong></div>
+            <div class="admin-customers-total">Khách đã đến <strong id="customers-arrived-count">0</strong></div>
+          </div>
+        </div>
+        <div class="admin-controls-bar">
+          <div class="admin-filter-group" role="group" aria-label="Lọc khách hàng">
+            <button type="button" class="admin-filter-tab customer-filter-tab active" data-customer-filter="all">Tất cả</button>
+            <button type="button" class="admin-filter-tab customer-filter-tab" data-customer-filter="arrived">Đã đến quán</button>
+          </div>
+          <input type="search" id="customer-search" class="admin-search-input"
+            placeholder="Tìm theo tên, email hoặc số điện thoại..." aria-label="Tìm khách hàng" />
+        </div>
+        <div class="admin-table-card">
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Khách hàng</th>
+                  <th>Số lượt ghé</th>
+                  <th>Lần ghé gần nhất</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="customers-tbody">
+                <tr><td colspan="4" style="text-align:center; padding:40px; color:var(--warm-gray);">Đang tải khách hàng...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
       <section class="admin-orders-section" aria-labelledby="orders-heading">
         <div class="admin-section-heading">
@@ -203,6 +242,35 @@
       </section>
 
     </main>
+  </div>
+
+  <div class="admin-modal-overlay" id="customer-history-modal" hidden>
+    <div class="admin-modal-card admin-customer-history-card" role="dialog" aria-modal="true" aria-labelledby="customer-history-title">
+      <div class="admin-section-heading">
+        <div>
+          <span class="admin-section-kicker">Khách hàng</span>
+          <h2 id="customer-history-title">Lịch sử đặt bàn</h2>
+          <p id="customer-history-contact"></p>
+        </div>
+        <button type="button" class="btn-action btn-action--reply" id="customer-history-close">Đóng</button>
+      </div>
+      <div class="admin-table-card">
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Ngày và giờ</th>
+                <th>Bàn</th>
+                <th>Số khách</th>
+                <th>Trạng thái</th>
+                <th>Check-in</th>
+              </tr>
+            </thead>
+            <tbody id="customer-history-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ============================================================ -->
