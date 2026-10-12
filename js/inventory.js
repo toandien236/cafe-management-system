@@ -221,6 +221,11 @@ function closeModal() {
 async function handleSaveItem(e) {
     e.preventDefault();
     const client = getSupabase();
+    if (!client || typeof client.from !== "function") {
+        showMessage("Không thể kết nối cơ sở dữ liệu. Vui lòng tải lại trang và kiểm tra cấu hình Supabase.", true);
+        return;
+    }
+
     const name = itemName.value.trim();
     const category = itemCategory.value;
     const unit = itemUnit.value.trim();
@@ -234,33 +239,49 @@ async function handleSaveItem(e) {
         return;
     }
 
+    if (!isEditing && (!/^[0-9]+$/.test(itemQuantity.value.trim()) || !Number.isSafeInteger(quantity))) {
+        showMessage("Tồn đầu kỳ chỉ được nhập chữ số nguyên, không dùng dấu phẩy hoặc dấu chấm.", true);
+        itemQuantity.focus();
+        return;
+    }
+
+    if (!/^[0-9]+$/.test(itemMin.value.trim()) || !Number.isSafeInteger(minStock)) {
+        showMessage("Mức tồn tối thiểu chỉ được nhập chữ số nguyên, không dùng dấu phẩy hoặc dấu chấm.", true);
+        itemMin.focus();
+        return;
+    }
+
+    if (!Number.isInteger(price) || price < 0) {
+        showMessage("Giá nhập phải là số nguyên VND không âm.", true);
+        itemPrice.focus();
+        return;
+    }
+
     const submitBtn = form.querySelector('[type="submit"]');
     if (submitBtn) submitBtn.disabled = true;
 
     try {
-        if (client && typeof client.from === "function") {
-            if (isEditing) {
-                const { error } = await client.from("inventory").update({
-                    name,
-                    category,
-                    unit,
-                    min_stock: minStock,
-                    price: price
-                }).eq("id", itemId.value);
+        if (isEditing) {
+            const { error } = await client.from("inventory").update({
+                name,
+                category,
+                unit,
+                min_stock: minStock,
+                price: price
+            }).eq("id", itemId.value);
 
-                if (error) throw error;
-            } else {
-                const { error } = await client.from("inventory").insert([{
-                    name,
-                    category,
-                    quantity,
-                    unit,
-                    min_stock: minStock,
-                    price: price
-                }]);
+            if (error) throw error;
+        } else {
+            const { error } = await client.from("inventory").insert([{
+                name,
+                category,
+                quantity,
+                unit,
+                min_stock: minStock,
+                price: price
+            }]);
 
-                if (error) throw error;
-            }
+            if (error) throw error;
         }
 
         closeModal();
@@ -387,6 +408,12 @@ async function recordStockImport(event) {
         return;
     }
 
+    if (!Number.isInteger(unitPrice) || unitPrice < 0) {
+        showMessage("Giá nhập phải là số nguyên VND không âm.", true);
+        document.getElementById("import-unit-price").focus();
+        return;
+    }
+
     if (submitBtn) submitBtn.disabled = true;
     const client = getSupabase();
 
@@ -491,6 +518,16 @@ function initInventory() {
     if (addItemBtn) addItemBtn.addEventListener("click", openAddModal);
     if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
     if (form) form.addEventListener("submit", handleSaveItem);
+    if (itemQuantity) {
+        itemQuantity.addEventListener("input", function () {
+            itemQuantity.value = itemQuantity.value.replace(/[^0-9]/g, "");
+        });
+    }
+    if (itemMin) {
+        itemMin.addEventListener("input", function () {
+            itemMin.value = itemMin.value.replace(/[^0-9]/g, "");
+        });
+    }
     if (importForm) importForm.addEventListener("submit", recordStockImport);
     if (exportForm) exportForm.addEventListener("submit", recordStockExport);
 
