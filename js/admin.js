@@ -11,6 +11,7 @@ let searchQuery     = '';
 let allOrders       = [];
 let reservationsSubscription = null;
 let ordersSubscription = null;
+let customerSearchQuery = '';
 
 /* ──────────────────────────────────────────────────────────
    BOOT — initialize Admin Portal
@@ -209,6 +210,34 @@ function initAdminDashboard() {
       renderTable();
     });
   }
+
+  const customerSearch = document.getElementById('customer-search');
+  if (customerSearch) {
+    customerSearch.addEventListener('input', (event) => {
+      customerSearchQuery = event.target.value.trim().toLocaleLowerCase('vi');
+      renderCustomers();
+    });
+  }
+
+  const customersBody = document.getElementById('customers-tbody');
+  if (customersBody) {
+    customersBody.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-customer-history]');
+      if (button) openCustomerHistory(button.dataset.customerHistory);
+    });
+  }
+
+  const historyModal = document.getElementById('customer-history-modal');
+  const historyClose = document.getElementById('customer-history-close');
+  if (historyClose && historyModal) historyClose.addEventListener('click', () => { historyModal.hidden = true; });
+  if (historyModal) {
+    historyModal.addEventListener('click', (event) => {
+      if (event.target === historyModal) historyModal.hidden = true;
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !historyModal.hidden) historyModal.hidden = true;
+    });
+  }
 }
 
 async function loadReservations() {
@@ -253,6 +282,7 @@ async function loadReservations() {
 
       updateStats();
       renderTable();
+      renderCustomers();
 
       // Subscribe to Realtime Postgres Changes
       if (!reservationsSubscription && client.channel) {
@@ -268,12 +298,133 @@ async function loadReservations() {
       allReservations = localData;
       updateStats();
       renderTable();
+      renderCustomers();
     }
   } else {
     allReservations = localData;
     updateStats();
     renderTable();
+    renderCustomers();
   }
+}
+
+function customerIdentity(reservation, fallbackIndex) {
+  const email = String(reservation.email || '').trim().toLowerCase();
+  if (email) return `email:${email}`;
+
+  const phone = String(reservation.phone || '').replace(/\D/g, '');
+  if (phone) return `phone:${phone}`;
+
+  return `reservation:${reservation.id || reservation.reservation_id || fallbackIndex}`;
+}
+
+function buildCustomerProfiles(reservations) {
+  const profiles = new Map();
+  reservations.forEach((reservation, index) => {
+    const id = customerIdentity(reservation, index);
+    let profile = profiles.get(id);
+    if (!profile) {
+      profile = {
+        id,
+        name: reservation.name || reservation.customerName || 'Khách',
+        email: reservation.email || '',
+        phone: reservation.phone || '',
+        reservations: []
+      };
+      profiles.set(id, profile);
+    }
+    profile.reservations.push(reservation);
+    if (!profile.email && reservation.email) profile.email = reservation.email;
+    if (!profile.phone && reservation.phone) profile.phone = reservation.phone;
+    if ((!profile.name || profile.name === 'Khách') && (reservation.name || reservation.customerName)) {
+      profile.name = reservation.name || reservation.customerName;
+    }
+  });
+
+  return Array.from(profiles.values()).map(profile => {
+    profile.reservations.sort((first, second) => {
+      const firstDate = Date.parse(first.created_at || first.createdAt || '') || 0;
+      const secondDate = Date.parse(second.created_at || second.createdAt || '') || 0;
+      return secondDate - firstDate;
+    });
+    profile.latestReservation = profile.reservations[0];
+    return profile;
+  }).sort((first, second) => {
+    const firstDate = Date.parse(first.latestReservation?.created_at || first.latestReservation?.createdAt || '') || 0;
+    const secondDate = Date.parse(second.latestReservation?.created_at || second.latestReservation?.createdAt || '') || 0;
+    return secondDate - firstDate || first.name.localeCompare(second.name, 'vi');
+  });
+}
+
+function customerReservationDate(reservation) {
+  if (reservation.date) return `${reservation.date}${reservation.time ? ` · ${formatTime(reservation.time)}` : ''}`;
+  const createdAt = reservation.created_at || reservation.createdAt;
+  if (!createdAt) return 'Chưa có ngày';
+  const date = new Date(createdAt);
+  return Number.isNaN(date.getTime()) ? 'Chưa có ngày' : date.toLocaleString('vi-VN');
+}
+
+function renderCustomers() {
+  const tbody = document.getElementById('customers-tbody');
+  if (!tbody) return;
+
+  const profiles = buildCustomerProfiles(allReservations);
+  const reservationCount = document.getElementById('care-reservation-count');
+  const customerCount = document.getElementById('care-customer-count');
+  const latestReservation = profiles
+    .map(profile => profile.latestReservation)
+    .filter(Boolean)
+    .sort((first, second) => (Date.parse(second.created_at || second.createdAt || '') || 0)
+      - (Date.parse(first.created_at || first.createdAt || '') || 0))[0];
+
+  if (customerCount) customerCount.textContent = String(profiles.length);
+  if (reservationCount) reservationCount.textContent = String(allReservations.length);
+  const lastReservation = document.getElementById('care-last-reservation');
+  if (lastReservation) lastReservation.textContent = latestReservation ? customerReservationDate(latestReservation) : 'Chưa có';
+
+  const filtered = profiles.filter(profile => [profile.name, profile.email, profile.phone]
+    .some(value => String(value || '').toLocaleLowerCase('vi').includes(customerSearchQuery)));
+
+  if (!filtered.length) {
+    const message = customerSearchQuery ? 'Không tìm thấy khách phù hợp.' : 'Chưa có dữ liệu đặt bàn.';
+    tbody.innerHTML = `<tr><td colspan="6" class="customer-care-empty">${escapeHtml(message)}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(profile => `
+    <tr>
+      <td><strong>${escapeHtml(profile.name)}</strong></td>
+      <td>${profile.email ? escapeHtml(profile.email) : '—'}</td>
+      <td>${profile.phone ? escapeHtml(profile.phone) : '—'}</td>
+      <td>${profile.reservations.length}</td>
+      <td>${escapeHtml(customerReservationDate(profile.latestReservation))}</td>
+      <td><button type="button" class="btn-action btn-action--reply" data-customer-history="${escapeHtml(profile.id)}">Xem lịch sử</button></td>
+    </tr>`).join('');
+}
+
+function openCustomerHistory(customerId) {
+  const profile = buildCustomerProfiles(allReservations).find(item => item.id === customerId);
+  const modal = document.getElementById('customer-history-modal');
+  const content = document.getElementById('customer-history-content');
+  if (!profile || !modal || !content) return;
+
+  const title = document.getElementById('customer-history-title');
+  if (title) title.textContent = `Lịch sử đặt bàn · ${profile.name}`;
+  content.innerHTML = `
+    <div class="customer-history-contact">
+      ${profile.email ? `<span>${escapeHtml(profile.email)}</span>` : ''}
+      ${profile.phone ? `<span>${escapeHtml(profile.phone)}</span>` : ''}
+    </div>
+    <div class="customer-history-list">${profile.reservations.map(reservation => `
+      <article class="customer-history-item">
+        <div>
+          <strong>${escapeHtml(customerReservationDate(reservation))}</strong>
+          <span>${Number(reservation.guests) || 2} khách · ${escapeHtml(getStatusLabel(reservation.status || 'pending'))}</span>
+        </div>
+        ${reservation.notes ? `<p>${escapeHtml(reservation.notes)}</p>` : ''}
+        ${reservation.reservation_id ? `<small>Mã đặt bàn: ${escapeHtml(reservation.reservation_id)}</small>` : ''}
+      </article>`).join('')}</div>`;
+  modal.hidden = false;
 }
 
 function updateStats() {

@@ -15,15 +15,10 @@
     href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap"
     rel="stylesheet" />
 
-  <!-- Firebase SDKs (Compat) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
-
   <!-- GSAP CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
 
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 
 <body class="admin-body">
@@ -172,6 +167,45 @@
               </table>
             </div>
           </div>
+
+          <section class="customer-care-section" aria-labelledby="customer-care-heading">
+            <div class="admin-section-heading">
+              <div>
+                <p class="admin-section-eyebrow">Chăm sóc khách hàng</p>
+                <h2 class="admin-section-title" id="customer-care-heading">Hồ sơ khách</h2>
+              </div>
+              <label class="customer-search-label" for="customer-search">Tìm khách
+                <input type="search" id="customer-search" class="admin-search-input"
+                  placeholder="Tên, email hoặc số điện thoại" autocomplete="off" />
+              </label>
+            </div>
+
+            <div class="customer-care-stats" aria-live="polite">
+              <div class="stat-card"><span class="stat-label">Khách duy nhất</span><strong id="care-customer-count">0</strong></div>
+              <div class="stat-card"><span class="stat-label">Lượt đặt bàn</span><strong id="care-reservation-count">0</strong></div>
+              <div class="stat-card"><span class="stat-label">Đặt bàn gần nhất</span><strong id="care-last-reservation">Chưa có</strong></div>
+            </div>
+
+            <div class="admin-table-card">
+              <div class="admin-table-wrap">
+                <table class="admin-table customer-care-table">
+                  <thead>
+                    <tr>
+                      <th>Khách hàng</th>
+                      <th>Email</th>
+                      <th>Điện thoại</th>
+                      <th>Số lượt đặt</th>
+                      <th>Lần đặt gần nhất</th>
+                      <th>Lịch sử</th>
+                    </tr>
+                  </thead>
+                  <tbody id="customers-tbody">
+                    <tr><td colspan="6" class="customer-care-empty">Đang tải hồ sơ khách…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
         </div>
 
         <aside class="admin-sidebar-column">
@@ -238,6 +272,17 @@
     </main>
   </div>
 
+  <div class="admin-modal-overlay" id="customer-history-modal" hidden>
+    <div class="admin-modal-card customer-history-card" role="dialog" aria-modal="true"
+      aria-labelledby="customer-history-title">
+      <h3 class="admin-modal-title" id="customer-history-title">Lịch sử đặt bàn</h3>
+      <div id="customer-history-content"></div>
+      <div class="admin-modal-actions">
+        <button type="button" class="btn btn-outline" id="customer-history-close">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============================================================ -->
   <!-- 3. EMAIL REPLY MODAL -->
   <!-- ============================================================ -->
@@ -288,9 +333,9 @@
   </script>
 
   <!-- Scripts -->
-  <script src="firebase.js" defer></script>
-  <script src="main.js" defer></script>
-  <script src="admin.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="js/supabase.js" defer></script>
+  <script src="js/admin.js" defer></script>
 </body>
 
 </html>
