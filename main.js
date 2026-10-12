@@ -971,7 +971,16 @@ function initReservationForm() {
       showValidationError(`Vui lòng điền đầy đủ các trường bắt buộc: ${missingLabels.join(', ')}.`);
       return;
     }
+    if (dateInput) {
+      const today = getTodayDateValue();
+      dateInput.min = today;
 
+      if (dateInput.value < today) {
+        shakeField(dateInput);
+        showValidationError('Ngày đặt bàn phải từ hôm nay trở đi.');
+        return;
+      }
+    }
     // Submit state UI (prevent duplicate submission)
     const btnText = submit ? submit.querySelector('.btn-text') : null;
     if (btnText) btnText.textContent = 'Đang xử lý…';
