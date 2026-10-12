@@ -2679,6 +2679,114 @@ img, video, svg, iframe {
   text-underline-offset: 3px;
 }
 
+.customer-care-section {
+  margin-top: 42px;
+}
+
+.customer-care-section .admin-section-heading {
+  align-items: center;
+}
+
+.customer-care-section .admin-section-eyebrow {
+  margin: 0 0 6px;
+}
+
+.customer-search-label {
+  display: grid;
+  gap: 6px;
+  color: var(--coffee-mid);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.customer-search-label .admin-search-input {
+  min-width: min(320px, 70vw);
+}
+
+.customer-care-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.customer-care-stats .stat-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+}
+
+.customer-care-stats strong {
+  color: var(--bark);
+  font-family: var(--font-serif);
+  font-size: 23px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.customer-care-table {
+  min-width: 680px;
+}
+
+.customer-care-empty {
+  padding: 28px !important;
+  color: var(--warm-gray) !important;
+  text-align: center;
+}
+
+.customer-history-card {
+  max-height: min(82vh, 760px);
+  overflow-y: auto;
+}
+
+.customer-history-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: -8px 0 18px;
+  color: var(--coffee-mid);
+  font-size: 13px;
+}
+
+.customer-history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.customer-history-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--warm-white);
+}
+
+.customer-history-item div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.customer-history-item span,
+.customer-history-item small {
+  color: var(--coffee-mid);
+  font-size: 12px;
+}
+
+.customer-history-item p {
+  margin: 2px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .customer-care-stats { grid-template-columns: 1fr; }
+  .customer-care-section .admin-section-heading { align-items: stretch; flex-direction: column; }
+  .customer-search-label .admin-search-input { width: 100%; min-width: 0; }
+}
+
 .admin-orders-table td {
   min-width: 120px;
 }
