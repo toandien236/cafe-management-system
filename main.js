@@ -861,9 +861,15 @@ function initReservationForm() {
 
   // Set min date to today
   const dateInput = document.getElementById('res-date');
+  const getMinimumReservationDate = () => {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const today = `${now.getFullYear()}-${month}-${day}`;
+    return today;
+  };
   if (dateInput) {
-    const today = new Date().toISOString().split('T')[0];
-    dateInput.min = today;
+    dateInput.min = getMinimumReservationDate();
   }
 
   // Clear existing error message
@@ -972,10 +978,10 @@ function initReservationForm() {
       return;
     }
     if (dateInput) {
-      const today = getTodayDateValue();
-      dateInput.min = today;
+      const minimumDate = getMinimumReservationDate();
+      dateInput.min = minimumDate;
 
-      if (dateInput.value < today) {
+      if (dateInput.value < minimumDate) {
         shakeField(dateInput);
         showValidationError('Ngày đặt bàn phải từ hôm nay trở đi.');
         return;
