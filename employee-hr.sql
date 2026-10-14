@@ -1,4 +1,19 @@
 -- Apply this migration in the Supabase SQL Editor for the project before using HR operations.
+CREATE TABLE IF NOT EXISTS public.employees (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    employee_code VARCHAR(30),
+    name VARCHAR(255) NOT NULL CHECK (length(trim(name)) > 0),
+    birth_date DATE,
+    gender VARCHAR(20),
+    email VARCHAR(255),
+    phone VARCHAR(50),
+    address VARCHAR(255),
+    position VARCHAR(120) NOT NULL CHECK (length(trim(position)) > 0),
+    status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 ALTER TABLE public.employees
     ADD COLUMN IF NOT EXISTS employee_code VARCHAR(30),
     ADD COLUMN IF NOT EXISTS birth_date DATE,
@@ -8,6 +23,12 @@ ALTER TABLE public.employees
 CREATE UNIQUE INDEX IF NOT EXISTS employees_employee_code_unique
     ON public.employees (employee_code)
     WHERE employee_code IS NOT NULL;
+
+ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS authenticated_employees_all ON public.employees;
+CREATE POLICY authenticated_employees_all ON public.employees
+    FOR ALL TO authenticated USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.employees TO authenticated;
 
 CREATE TABLE IF NOT EXISTS public.employee_shifts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
