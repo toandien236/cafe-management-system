@@ -152,6 +152,7 @@
               <tr>
                 <th>Thông tin khách</th>
                 <th>Ngày và giờ</th>
+                <th>Số bàn</th>
                 <th>Số khách</th>
                 <th>Ghi chú</th>
                 <th>Trạng thái</th>
@@ -161,7 +162,7 @@
             </thead>
             <tbody id="bookings-tbody">
               <tr>
-                <td colspan="7" style="text-align:center; padding: 40px; color: var(--warm-gray);">
+                <td colspan="8" style="text-align:center; padding: 40px; color: var(--warm-gray);">
                   Đang tải danh sách đặt bàn...
                 </td>
               </tr>
@@ -169,6 +170,43 @@
           </table>
         </div>
       </div>
+
+      <section class="admin-customers-section" aria-labelledby="customers-heading">
+        <div class="admin-section-heading">
+          <div>
+            <span class="admin-section-kicker">Chăm sóc khách hàng</span>
+            <h2 id="customers-heading">Hồ sơ khách hàng</h2>
+          </div>
+          <span class="admin-live-indicator" id="customer-count">Đang tải...</span>
+        </div>
+        <p class="customer-section-note">Hồ sơ được tổng hợp từ email hoặc số điện thoại đã chuẩn hóa. Tên trùng nhau không làm gộp hồ sơ.</p>
+        <p class="customer-load-notice" id="customer-load-notice" role="status" aria-live="polite" hidden></p>
+        <div class="admin-controls-bar customer-controls-bar">
+          <input type="search" id="customer-search" class="admin-search-input"
+            placeholder="Tìm khách theo tên, email hoặc số điện thoại..."
+            aria-label="Tìm hồ sơ khách hàng theo tên, email hoặc số điện thoại" />
+        </div>
+        <div class="admin-table-card">
+          <div class="admin-table-wrap">
+            <table class="admin-table customer-table">
+              <thead>
+                <tr>
+                  <th>Khách hàng</th>
+                  <th>Email</th>
+                  <th>Số điện thoại</th>
+                  <th>Lượt đặt bàn</th>
+                  <th>Lượt ghé</th>
+                  <th>Lần ghé gần nhất</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="customers-tbody">
+                <tr><td colspan="7" class="customer-empty-state">Đang tải hồ sơ khách hàng...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
       <section class="admin-orders-section" aria-labelledby="orders-heading">
         <div class="admin-section-heading">
@@ -203,6 +241,21 @@
       </section>
 
     </main>
+  </div>
+
+  <div class="admin-modal-overlay customer-profile-overlay" id="customer-profile-modal" hidden>
+    <section class="admin-modal-card customer-profile-card" role="dialog" aria-modal="true"
+      aria-labelledby="customer-profile-title" aria-describedby="customer-profile-description">
+      <div class="customer-profile-heading">
+        <div>
+          <span class="admin-section-kicker">Hồ sơ khách hàng</span>
+          <h2 class="admin-modal-title" id="customer-profile-title">Chi tiết khách hàng</h2>
+        </div>
+        <button type="button" class="customer-profile-close" id="customer-profile-close" aria-label="Đóng hồ sơ">&times;</button>
+      </div>
+      <p id="customer-profile-description" class="customer-profile-note"></p>
+      <div id="customer-profile-body"></div>
+    </section>
   </div>
 
   <!-- ============================================================ -->
@@ -255,9 +308,9 @@
   </script>
 
   <!-- Scripts -->
-  <script src="firebase.js?v=2" defer></script>
-  <script src="main.js" defer></script>
-  <script src="admin.js" defer></script>
+  <script src="firebase.js?v=4" defer></script>
+  <script src="main.js?v=7" defer></script>
+  <script src="admin.js?v=8" defer></script>
 </body>
 
 </html>

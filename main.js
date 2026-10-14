@@ -845,6 +845,11 @@ function initGuestsSelector() {
     }
   };
 
+  window.resetReservationGuests = () => {
+    guests = 2;
+    update();
+  };
+
   minusBtn.addEventListener('click', (e) => { e.preventDefault(); if (guests > MIN) { guests--; update(); } });
   plusBtn.addEventListener('click',  (e) => { e.preventDefault(); if (guests < MAX) { guests++; update(); } });
 }
@@ -852,18 +857,210 @@ function initGuestsSelector() {
 /* ──────────────────────────────────────────────────────────
    9. RESERVATION FORM
    ────────────────────────────────────────────────────────── */
+const VALID_RESERVATION_TIMES = new Set([
+  '0730', '0800', '0830', '0900', '0930', '1000', '1030', '1200',
+  '1230', '1300', '1330', '1400', '1830', '1900', '1930', '2000'
+]);
+
+function getVietnamDateString(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+function formatAssignedTableNumber(value) {
+  const number = String(value || '').trim().replace(/^B/i, '');
+  return /^\d{1,2}$/.test(number) ? `B${number.padStart(2, '0')}` : 'Sẽ được xác nhận sau';
+}
+
+const RESERVATION_REQUEST_STORAGE_KEY = 'mocha_reservation_request_id';
+const RESERVATION_REQUEST_HASH_STORAGE_KEY = 'mocha_reservation_request_hash';
+const RESERVATION_REQUEST_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const RESERVATION_REQUEST_HASH_PATTERN = /^[0-9a-f]{64}$/i;
+
+function createReservationRequestId() {
+  const cryptoApi = window.crypto;
+  if (!cryptoApi || typeof cryptoApi.getRandomValues !== 'function') {
+    throw Object.assign(new Error('Secure request IDs are unavailable'), { code: 'request-id-unavailable' });
+  }
+
+  const bytes = new Uint8Array(16);
+  cryptoApi.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function getStoredReservationRequestId() {
+  try {
+    const value = window.sessionStorage && window.sessionStorage.getItem(RESERVATION_REQUEST_STORAGE_KEY);
+    return typeof value === 'string' && RESERVATION_REQUEST_ID_PATTERN.test(value) ? value : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function getStoredReservationRequestHash() {
+  try {
+    const value = window.sessionStorage && window.sessionStorage.getItem(RESERVATION_REQUEST_HASH_STORAGE_KEY);
+    return typeof value === 'string' && RESERVATION_REQUEST_HASH_PATTERN.test(value) ? value : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function storeReservationRequest(requestId, payloadHash) {
+  try {
+    if (!window.sessionStorage) return false;
+    window.sessionStorage.setItem(RESERVATION_REQUEST_STORAGE_KEY, requestId);
+    window.sessionStorage.setItem(RESERVATION_REQUEST_HASH_STORAGE_KEY, payloadHash);
+    return window.sessionStorage.getItem(RESERVATION_REQUEST_STORAGE_KEY) === requestId
+      && window.sessionStorage.getItem(RESERVATION_REQUEST_HASH_STORAGE_KEY) === payloadHash;
+  } catch (_) {
+    return false;
+  }
+}
+
+function clearStoredReservationRequestId() {
+  try {
+    if (window.sessionStorage) {
+      window.sessionStorage.removeItem(RESERVATION_REQUEST_STORAGE_KEY);
+      window.sessionStorage.removeItem(RESERVATION_REQUEST_HASH_STORAGE_KEY);
+    }
+  } catch (_) {
+    // Storage may be disabled; the current page state is still cleared.
+  }
+}
+
+async function reservationPayloadHash(reservationData) {
+  const canonicalPayload = JSON.stringify({
+    customerName: reservationData.customerName,
+    email: reservationData.email,
+    phone: reservationData.phone,
+    date: reservationData.date,
+    time: reservationData.time,
+    guests: reservationData.guests,
+    specialRequest: reservationData.specialRequest,
+    requestedTableNumber: reservationData.requestedTableNumber || ''
+  });
+  if (!window.crypto || !window.crypto.subtle || typeof TextEncoder !== 'function') {
+    throw Object.assign(new Error('Secure request hashing is unavailable'), { code: 'request-id-unavailable' });
+  }
+  const digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPayload));
+  return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
+}
+
+function reservationCreationErrorCode(error) {
+  return String(error && error.code || 'unknown').replace(/^firestore\//, '');
+}
+
+function logReservationCreationError(error, { requestId = null } = {}) {
+  console.warn('[Reservation] Firestore write failed', {
+    code: reservationCreationErrorCode(error),
+    projectId: window.firebaseProjectId || 'unknown',
+    requestId
+  });
+}
+
+function reservationCreationErrorMessage(error) {
+  const code = reservationCreationErrorCode(error);
+  if (code === 'permission-denied') return 'Firestore chưa cho phép lưu đặt bàn. Yêu cầu chưa được xác nhận; hãy kiểm tra Rules của /reservations và /reservationRequests.';
+  if (code === 'already-exists') return 'Mã yêu cầu đã được dùng cho thông tin khác. Chưa tạo đặt bàn mới; hãy kiểm tra với quán trước khi gửi lại.';
+  if (code === 'request-id-unavailable') return 'Trình duyệt không tạo được mã xử lý an toàn. Hãy mở trang qua HTTPS trên trình duyệt hiện đại rồi thử lại.';
+  if (code === 'request-storage-unavailable') return 'Trình duyệt không lưu được mã yêu cầu để chống đặt trùng. Yêu cầu chưa được gửi; hãy cho phép sessionStorage rồi thử lại.';
+  if (['unavailable', 'deadline-exceeded', 'network-request-failed', 'aborted', 'cancelled'].includes(code)) return 'Không nhận được xác nhận từ Firestore do kết nối bị gián đoạn. Dữ liệu vẫn được giữ; hãy gửi lại cùng thông tin để đối chiếu và tránh tạo trùng.';
+  if (code === 'invalid-argument') return 'Thông tin đặt bàn không hợp lệ. Vui lòng kiểm tra lại các trường.';
+  return 'Firestore chưa xác nhận lưu đặt bàn. Dữ liệu biểu mẫu vẫn được giữ; vui lòng thử lại hoặc liên hệ quán.';
+}
+
+async function saveReservationWithRequestId(dbInstance, reservationData, requestId, payloadHash) {
+  const firebaseApi = window.firebase || (typeof firebase !== 'undefined' ? firebase : null);
+  const firestoreApi = firebaseApi && firebaseApi.firestore;
+  if (!dbInstance || typeof dbInstance.collection !== 'function' || typeof dbInstance.batch !== 'function'
+      || !firestoreApi || !firestoreApi.FieldValue || typeof firestoreApi.FieldValue.serverTimestamp !== 'function') {
+    throw Object.assign(new Error('Firestore client is unavailable'), { code: 'unavailable' });
+  }
+
+  const reservationRef = dbInstance.collection('reservations').doc(requestId);
+  const requestRef = dbInstance.collection('reservationRequests').doc(requestId);
+  const resolveExistingRequest = async () => {
+    const snapshot = await requestRef.get({ source: 'server' });
+    if (!snapshot.exists) return null;
+    const savedRequest = snapshot.data() || {};
+    if (savedRequest.requestId !== requestId || savedRequest.reservationId !== requestId
+        || savedRequest.payloadHash !== payloadHash) {
+      throw Object.assign(new Error('Request ID already belongs to another payload'), { code: 'already-exists' });
+    }
+    return { reservationId: requestId };
+  };
+
+  const existing = await resolveExistingRequest();
+  if (existing) return existing;
+
+  const createdAt = firestoreApi.FieldValue.serverTimestamp();
+  const reservationRecord = {
+    reservationId: requestId,
+    requestId,
+    customerName: reservationData.customerName,
+    name: reservationData.name,
+    email: reservationData.email,
+    phone: reservationData.phone,
+    date: reservationData.date,
+    time: reservationData.time,
+    guests: reservationData.guests,
+    specialRequest: reservationData.specialRequest,
+    notes: reservationData.notes,
+    status: 'pending',
+    emailStatus: 'Pending',
+    createdAt
+  };
+  if (reservationData.requestedTableNumber) {
+    reservationRecord.requestedTableNumber = reservationData.requestedTableNumber;
+  }
+  const requestRecord = { requestId, reservationId: requestId, payloadHash, createdAt };
+  const batch = dbInstance.batch();
+  batch.set(reservationRef, reservationRecord);
+  batch.set(requestRef, requestRecord);
+
+  try {
+    await batch.commit();
+    return { reservationId: requestId };
+  } catch (writeError) {
+    // A lost commit response can follow a successful atomic write. Confirm the
+    // minimal public request marker before reporting success on a retry.
+    try {
+      const saved = await resolveExistingRequest();
+      if (saved) return saved;
+    } catch (lookupError) {
+      if (reservationCreationErrorCode(lookupError) === 'already-exists') throw lookupError;
+    }
+    throw writeError;
+  }
+}
+
 function initReservationForm() {
   const form    = document.getElementById('reservation-form');
   const success = document.getElementById('form-success');
   const submit  = document.getElementById('res-submit');
+  const successMessage = document.getElementById('form-success-message');
+  const successTable = document.getElementById('form-success-table');
+  const defaultSuccessMessage = 'Yêu cầu đặt bàn đã được lưu thành công.';
 
   if (!form || !success) return;
+  let isSubmitting = false;
+  let submissionRequestId = null;
+  let submissionPayloadHash = null;
 
   // Set min date to today
   const dateInput = document.getElementById('res-date');
   if (dateInput) {
-    const today = new Date().toISOString().split('T')[0];
-    dateInput.min = today;
+    dateInput.min = getVietnamDateString();
   }
 
   // Clear existing error message
@@ -922,6 +1119,14 @@ function initReservationForm() {
   // "Book Another Table" button reset logic
   const resetFormView = () => {
     form.reset();
+    isSubmitting = false;
+    submissionRequestId = null;
+    submissionPayloadHash = null;
+    clearStoredReservationRequestId();
+    if (typeof window.resetReservationGuests === 'function') window.resetReservationGuests();
+    if (dateInput) dateInput.min = getVietnamDateString();
+    if (successMessage) successMessage.textContent = defaultSuccessMessage;
+    if (successTable) successTable.textContent = 'Số bàn sẽ được xác nhận sau.';
     clearFormError();
     form.hidden = false;
     form.style.display = 'flex';
@@ -942,6 +1147,7 @@ function initReservationForm() {
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     clearFormError();
 
     // Field validation
@@ -949,6 +1155,7 @@ function initReservationForm() {
     const email = document.getElementById('res-email');
     const date  = document.getElementById('res-date');
     const time  = document.getElementById('res-time');
+    const guestInput = document.getElementById('res-guests');
 
     const fields = [
       { el: name, label: 'Họ và tên' },
@@ -957,78 +1164,113 @@ function initReservationForm() {
       { el: time, label: 'Giờ' }
     ];
 
-    const missingLabels = [];
+    const validationErrors = [];
     fields.forEach(({ el, label }) => {
       if (!el || !el.value || !el.value.trim()) {
-        missingLabels.push(label);
+        validationErrors.push(`${label} là bắt buộc`);
         if (el) shakeField(el);
       }
     });
 
-    if (missingLabels.length > 0) {
-      showValidationError(`Vui lòng điền đầy đủ các trường bắt buộc: ${missingLabels.join(', ')}.`);
+    const emailValue = email ? email.value.trim() : '';
+    if (emailValue && (!email.checkValidity() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue))) {
+      validationErrors.push('Địa chỉ email chưa đúng định dạng');
+      shakeField(email);
+    }
+
+    const todayInVietnam = getVietnamDateString();
+    if (dateInput) dateInput.min = todayInVietnam;
+    if (date && date.value && (!/^\d{4}-\d{2}-\d{2}$/.test(date.value) || date.value < todayInVietnam)) {
+      validationErrors.push('Ngày đặt bàn không được nằm trong quá khứ theo giờ Việt Nam');
+      shakeField(date);
+    }
+
+    if (time && time.value && !VALID_RESERVATION_TIMES.has(time.value)) {
+      validationErrors.push('Vui lòng chọn giờ trong danh sách giờ đặt bàn');
+      shakeField(time);
+    }
+
+    const guestValue = guestInput ? guestInput.value : '';
+    const guestCount = /^\d+$/.test(guestValue) ? Number(guestValue) : NaN;
+    if (!Number.isInteger(guestCount) || guestCount < 1 || guestCount > 12) {
+      validationErrors.push('Số khách phải là số nguyên từ 1 đến 12');
+      if (guestInput) shakeField(guestInput);
+    }
+
+    if (validationErrors.length > 0) {
+      showValidationError(`${validationErrors.join('. ')}.`);
       return;
     }
 
     // Submit state UI (prevent duplicate submission)
+    isSubmitting = true;
     const btnText = submit ? submit.querySelector('.btn-text') : null;
     if (btnText) btnText.textContent = 'Đang xử lý…';
     if (submit) submit.disabled = true;
 
-    const resId = 'RES-' + Math.floor(100000 + Math.random() * 900000);
-    const nowIso = new Date().toISOString();
-
     const reservationData = {
-      reservationId: resId,
       customerName: name.value.trim(),
       name: name.value.trim(),
-      email: email.value.trim(),
+      email: emailValue.toLowerCase(),
       phone: document.getElementById('res-phone') ? document.getElementById('res-phone').value.trim() : '',
       date: date.value,
       time: time.value,
-      guests: parseInt(document.getElementById('res-guests') ? document.getElementById('res-guests').value : '2', 10) || 2,
+      guests: guestCount,
+      requestedTableNumber: (document.getElementById('res-requested-table-number') || {}).value || '',
       specialRequest: document.getElementById('res-notes') ? document.getElementById('res-notes').value.trim() : '',
-      notes: document.getElementById('res-notes') ? document.getElementById('res-notes').value.trim() : '',
-      status: 'pending',
-      emailStatus: 'Pending',
-      createdAt: nowIso,
-      updatedAt: nowIso
+      notes: document.getElementById('res-notes') ? document.getElementById('res-notes').value.trim() : ''
     };
 
-    // Save to local backup array
-    try {
-      const existing = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
-      existing.push(reservationData);
-      localStorage.setItem('mocha_reservations', JSON.stringify(existing));
-    } catch (err) {
-      console.warn('LocalStorage save warning:', err);
-    }
-
-    // Async dispatch to Firestore
-    const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-    if (dbInstance && typeof dbInstance.collection === 'function') {
-      dbInstance.collection('reservations').add(reservationData).then((docRef) => {
-        const firestoreDocId = docRef ? docRef.id : null;
-        if (firestoreDocId) {
-          reservationData.reservationId = firestoreDocId;
-          docRef.update({ reservationId: firestoreDocId }).catch(() => {});
+    (async () => {
+      try {
+        const payloadHash = await reservationPayloadHash(reservationData);
+        const storedRequestId = getStoredReservationRequestId();
+        const storedPayloadHash = getStoredReservationRequestHash();
+        if (submissionRequestId && submissionPayloadHash !== payloadHash) submissionRequestId = null;
+        if (!submissionRequestId && storedRequestId
+            && (!storedPayloadHash || storedPayloadHash === payloadHash)) submissionRequestId = storedRequestId;
+        submissionRequestId = submissionRequestId || createReservationRequestId();
+        submissionPayloadHash = payloadHash;
+        if (!storeReservationRequest(submissionRequestId, payloadHash)) {
+          throw Object.assign(new Error('Request ID could not be persisted'), { code: 'request-storage-unavailable' });
         }
-        sendEmailJS(reservationData, 'confirmation', firestoreDocId);
-        showToast('Đã tạo yêu cầu đặt bàn! Email xác nhận đang được gửi đến bạn.', 'success');
+
+        const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
+        const saved = await saveReservationWithRequestId(dbInstance, reservationData, submissionRequestId, payloadHash);
+        reservationData.reservationId = saved.reservationId;
+
+        // Keep the local fallback only after Firestore confirms or verifies the write.
+        try {
+          const existing = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
+          const localRecord = { ...reservationData, id: saved.reservationId, createdAt: new Date().toISOString() };
+          const priorIndex = existing.findIndex(item => item.reservationId === saved.reservationId);
+          if (priorIndex >= 0) existing[priorIndex] = { ...existing[priorIndex], ...localRecord };
+          else existing.push(localRecord);
+          localStorage.setItem('mocha_reservations', JSON.stringify(existing));
+        } catch (storageError) {
+          console.warn('Reservation local backup unavailable:', storageError && storageError.name || 'storage-error');
+        }
+
+        if (successMessage) successMessage.textContent = 'Đặt bàn đã được lưu thành công.';
+        const requestedTableMessage = reservationData.requestedTableNumber
+          ? `Đã ghi nhận mong muốn bàn B${reservationData.requestedTableNumber}; số bàn sẽ được xác nhận sau.`
+          : 'Số bàn sẽ được xác nhận sau.';
+        if (successTable) successTable.textContent = requestedTableMessage;
+        showToast(`Đã lưu yêu cầu đặt bàn. ${requestedTableMessage}`, 'success');
         showSuccessView();
         openSuccessModal(reservationData);
-      }).catch((error) => {
-        console.warn('Firestore reservation write failed:', error);
-        showToast('Không thể lưu yêu cầu lên hệ thống nên chưa ghi nhận đặt bàn. Vui lòng thử lại hoặc liên hệ quán.', 'error');
-      }).finally(() => {
+        submissionRequestId = null;
+        submissionPayloadHash = null;
+        clearStoredReservationRequestId();
+      } catch (error) {
+        logReservationCreationError(error, { requestId: submissionRequestId });
+        showToast(reservationCreationErrorMessage(error), 'error');
+      } finally {
+        isSubmitting = false;
         if (submit) submit.disabled = false;
         if (btnText) btnText.textContent = 'Xác nhận đặt bàn';
-      });
-    } else {
-      showToast('Chưa gửi được yêu cầu: không kết nối được Firestore. Vui lòng thử lại khi có mạng.', 'error');
-      if (submit) submit.disabled = false;
-      if (btnText) btnText.textContent = 'Xác nhận đặt bàn';
-    }
+      }
+    })();
   });
 }
 
@@ -1159,12 +1401,19 @@ function openSuccessModal(res) {
   const dateEl = document.getElementById('modal-res-date');
   const timeEl = document.getElementById('modal-res-time');
   const guestsEl = document.getElementById('modal-res-guests');
+  const tableEl = document.getElementById('modal-res-table');
 
   if (resIdEl) resIdEl.textContent = res.reservationId || res.id || 'CONFIRMED';
   if (nameEl) nameEl.textContent = res.customerName || res.name || 'Quý khách';
   if (dateEl) dateEl.textContent = res.date || 'Hôm nay';
   if (timeEl) timeEl.textContent = formatTime(res.time) || res.time || '';
   if (guestsEl) guestsEl.textContent = `${res.guests || 2} khách`;
+  if (tableEl) {
+    const requestedTable = /^(0[1-9]|1[0-9]|20)$/.test(String(res.requestedTableNumber || ''))
+      ? `Mong muốn B${res.requestedTableNumber}; sẽ được xác nhận sau`
+      : 'Sẽ được xác nhận sau';
+    tableEl.textContent = res.tableNumber ? formatAssignedTableNumber(res.tableNumber) : requestedTable;
+  }
 
   modal.hidden = false;
   modal.setAttribute('aria-hidden', 'false');

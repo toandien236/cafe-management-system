@@ -32,7 +32,7 @@
 - **Thực đơn tương tác** — Lọc theo nhóm đồ uống, món ăn và món tráng miệng; hơn 14 món
 - **Món đặc sắc** — Giới thiệu các món và đồ uống nổi bật
 - **Thư viện ảnh** — Bộ sưu tập hình ảnh quán cà phê dạng khảm
-- **Biểu mẫu đặt bàn** — Lưu đặt chỗ theo thời gian thực trên Firestore và gửi email xác nhận
+- **Biểu mẫu đặt bàn** — Ghi yêu cầu trực tiếp lên Firestore với mã chống trùng; số bàn được quản trị viên xác nhận sau
 - **Liên hệ và địa điểm** — Giờ mở cửa, địa chỉ và biểu mẫu liên hệ
 - **Con trỏ tùy chỉnh** — Hiệu ứng con trỏ hút theo nút khi rê chuột
 - **Cuộn mượt** — Sử dụng thư viện Lenis
@@ -42,8 +42,9 @@
 - **Xác thực Firebase** — Đăng nhập an toàn bằng email và mật khẩu
 - **Bảng đặt bàn trực tiếp** — Cập nhật theo thời gian thực từ Firestore
 - **Thống kê tổng quan** — Tổng lượt đặt, lượt đang chờ, lượt đã xác nhận và số khách
-- **Quản lý đặt bàn** — Xác nhận, hủy hoặc xóa lượt đặt
+- **Quản lý đặt bàn** — Gán bàn thủ công sau khi kiểm tra khung giờ, xác nhận, hủy hoặc xóa lượt đặt
 - **Tìm kiếm và lọc** — Lọc theo trạng thái hoặc tìm theo tên, email, số điện thoại
+- **Hồ sơ chăm sóc khách hàng** — Tổng hợp lịch sử đặt bàn theo email/số điện thoại đã chuẩn hóa, xem lần ghé gần nhất và ghi nhận khách đã được phục vụ
 - **Trả lời khách qua email** — Gửi email trực tiếp bằng EmailJS
 - **Thông báo tức thời** — Phản hồi trực tiếp cho mọi thao tác quản trị
 
@@ -105,8 +106,11 @@ cafe-management-system/
 ├── screenshots/            # Ảnh chụp màn hình trong README
 └── functions/              # Firebase Cloud Functions
     ├── index.js
+    ├── config/
+    │   └── tables.js
     ├── services/
-    │   └── smsService.js
+    │   ├── smsService.js
+    │   └── tableAssignment.js
     └── templates/
         └── emailTemplates.js
 ```
@@ -115,10 +119,21 @@ cafe-management-system/
 
 ## 🔒 Bảo mật
 
-- **Quy tắc Firestore** — Chỉ người dùng đã xác thực mới có thể đọc, cập nhật hoặc xóa lượt đặt bàn
-- **Tạo yêu cầu công khai** — Bất kỳ ai cũng có thể gửi yêu cầu đặt bàn sau khi các trường được kiểm tra
+- **Quy tắc Firestore** — Chỉ quản trị viên được đọc hồ sơ đặt bàn và lượt ghé; khách chỉ có thể tạo yêu cầu đặt bàn theo trường được kiểm tra
+- **Lượt ghé** — Một bản ghi bất biến cho mỗi mã đặt bàn; đặt bàn bị hủy không thể được ghi nhận đã ghé
+- **Tạo yêu cầu công khai** — Rules giới hạn schema reservation đang chờ và bắt buộc ghi kèm dấu chống gửi trùng; chỉ admin được đọc reservation và dấu chống trùng không chứa thông tin khách
 - **Firebase Auth** — Bảng quản trị yêu cầu đăng nhập bằng email và mật khẩu Firebase
 - **Biến môi trường** — Khóa API nhạy cảm được lưu trong `functions/.env` và không đưa lên Git
+
+## Chăm sóc khách hàng
+
+- Hướng dẫn dùng hồ sơ, tìm kiếm và ghi nhận lượt ghé: [CUSTOMER_CARE_GUIDE.md](./CUSTOMER_CARE_GUIDE.md)
+- Các trường hợp kiểm thử, kết quả và giới hạn kiểm thử tích hợp: [CUSTOMER_CARE_TEST_PLAN.md](./CUSTOMER_CARE_TEST_PLAN.md)
+
+## Gán số bàn
+
+- Khách có thể chọn bàn mong muốn B01–B20; đây chỉ là yêu cầu, không phải bàn đã được gán. Bảng quản trị cho phép admin xác nhận và gán bàn sau khi kiểm tra sức chứa và khung giờ; các lần gán cùng ngày được tuần tự hóa bằng revision trong transaction.
+- Cấu hình sức chứa và thời lượng giữ bàn: [TABLE_ASSIGNMENT_GUIDE.md](./TABLE_ASSIGNMENT_GUIDE.md). Đối chiếu sức chứa với sơ đồ quán trước khi dùng thao tác gán bàn.
 
 ---
 

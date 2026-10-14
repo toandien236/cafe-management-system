@@ -9,8 +9,15 @@ const {
   getCancelledEmail
 } = require('./templates/emailTemplates');
 const smsService = require('./services/smsService');
+const { createReservationWithTable } = require('./services/tableAssignment');
+const {
+  normalizeFirestoreErrorCode,
+  mapFirestoreErrorCodeToCallableCode
+} = require('./services/errorCodes');
+const { safeErrorDiagnostic } = require('./services/safeDiagnostics');
 
 admin.initializeApp();
+const TABLE_ASSIGNMENT_FUNCTION_REGION = 'us-central1';
 
 /**
  * Configure Nodemailer Transporter
@@ -42,6 +49,86 @@ function createTransporter() {
 
 const transporter = createTransporter();
 const SENDER_EMAIL = process.env.SMTP_FROM || process.env.SMTP_USER || 'reservations@mochaandmiso.com';
+
+/**
+ * Create a reservation and assign its table in one server transaction.
+ * The per-date coordination document serializes concurrent assignments.
+ */
+exports.createReservationWithTable = functions
+  .region(TABLE_ASSIGNMENT_FUNCTION_REGION)
+  .https.onCall(async (data) => {
+  try {
+    return await createReservationWithTable(admin.firestore(), data, {
+      serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp()
+    });
+  } catch (error) {
+    const firestoreCode = normalizeFirestoreErrorCode(error);
+    // A Firestore NOT_FOUND is an operation/data failure, not evidence that
+    // the callable endpoint itself is missing. Reserve callable not-found for
+    // the client-side endpoint lookup error.
+    const code = mapFirestoreErrorCodeToCallableCode(error);
+    const requestId = data && typeof data.requestId === 'string'
+      && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.requestId)
+      ? data.requestId
+      : null;
+    const step = String(error && error.step || 'callable-handler').slice(0, 60);
+    console.error('[table-assignment] reservation request failed', {
+      code,
+      firestoreCode,
+      step,
+      requestId,
+      errorType: String(error && error.name || 'Error'),
+      rawCodeType: error && typeof error.code || 'undefined',
+      diagnostic: safeErrorDiagnostic(error)
+    });
+
+    if (error instanceof functions.https.HttpsError) throw error;
+    if (code === 'invalid-argument') {
+      throw new functions.https.HttpsError('invalid-argument', 'Thông tin đặt bàn không hợp lệ.');
+    }
+    if (code === 'no-available-table') {
+      throw new functions.https.HttpsError('resource-exhausted', 'Khung giờ này không còn bàn phù hợp.');
+    }
+    if (code === 'resource-exhausted') {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'Firestore đang quá tải hoặc đã chạm giới hạn tạm thời. Vui lòng thử lại sau.',
+        { reason: 'firestore-resource-exhausted' }
+      );
+    }
+    if (code === 'table-not-available') {
+      throw new functions.https.HttpsError('resource-exhausted', 'Bàn đã chọn không còn trống vào thời gian này. Vui lòng chọn bàn khác.', { reason: 'table-not-available' });
+    }
+    if (code === 'table-capacity-exceeded') {
+      throw new functions.https.HttpsError('invalid-argument', 'Bàn đã chọn không đủ sức chứa cho số khách.', { reason: 'table-capacity-exceeded' });
+    }
+    if (code === 'table-not-configured') {
+      throw new functions.https.HttpsError('failed-precondition', 'Số bàn đã chọn chưa được cấu hình tại quán.');
+    }
+    if (['table-config-mismatch', 'legacy-reservation-invalid', 'legacy-reservation-unassignable'].includes(code)) {
+      throw new functions.https.HttpsError('failed-precondition', 'Dữ liệu bàn của lịch đặt cũ cần được nhân viên kiểm tra.');
+    }
+    if (code === 'failed-precondition') {
+      throw new functions.https.HttpsError('failed-precondition', 'Máy chủ không thể xác nhận an toàn dữ liệu đặt bàn. Hãy thử lại cùng thông tin hoặc liên hệ quán.');
+    }
+    if (['idempotency-record-invalid', 'reservation-not-found'].includes(code)) {
+      throw new functions.https.HttpsError('failed-precondition', 'Yêu cầu đã xử lý trước đó cần được kiểm tra; chưa tạo đặt bàn khác.');
+    }
+    if (code === 'already-exists') {
+      throw new functions.https.HttpsError('already-exists', 'Mã yêu cầu đã được dùng cho thông tin đặt bàn khác.');
+    }
+    if (code === 'permission-denied') {
+      throw new functions.https.HttpsError('permission-denied', 'Máy chủ không có quyền ghi đặt bàn vào Firestore.');
+    }
+    if (['aborted', 'cancelled', 'unavailable', 'deadline-exceeded'].includes(code)) {
+      throw new functions.https.HttpsError(code, 'Giao dịch đặt bàn chưa trả về kết quả xác nhận.');
+    }
+    if (code === 'unauthenticated') {
+      throw new functions.https.HttpsError('unauthenticated', 'Máy chủ không xác thực được yêu cầu đặt bàn.');
+    }
+    throw new functions.https.HttpsError('internal', 'Máy chủ không thể hoàn tất giao dịch đặt bàn.');
+  }
+});
 
 /**
  * Helper to safely dispatch email and update Firestore status
