@@ -120,29 +120,24 @@ async function submitOrder() {
   const orderId = `ORD-${Date.now().toString().slice(-8)}`;
   const orderNote = document.getElementById('order-note') ? document.getElementById('order-note').value.trim() : '';
 
-  const client = window.supabaseClient || window.supabaseDb || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
-
   try {
-    if (client && typeof client.from === 'function') {
-      const { data, error } = await client.from('orders').insert([{
-        order_id: orderId,
-        table_number: normalizedTableNumber,
-        items: items,
-        total: total,
-        note: orderNote,
-        status: 'new',
-        payment_status: 'unpaid'
-      }]).select().single();
-
-      if (error) throw error;
+    const firestore = await window.firebaseFirestoreReady;
+    if (!firestore || typeof firestore.methods.addDoc !== 'function') {
+      throw new Error('Firebase Firestore is not available.');
     }
 
-    // Save to local backup
-    try {
-      const localOrders = JSON.parse(localStorage.getItem('mocha_orders') || '[]');
-      localOrders.unshift({ order_id: orderId, table_number: normalizedTableNumber, items, total, note: orderNote, status: 'new', payment_status: 'unpaid', created_at: new Date().toISOString() });
-      localStorage.setItem('mocha_orders', JSON.stringify(localOrders));
-    } catch (e) {}
+    const createdAt = new Date().toISOString();
+    await firestore.methods.addDoc(firestore.methods.collection(firestore.db, 'orders'), {
+      orderId,
+      tableNumber: normalizedTableNumber,
+      items,
+      total,
+      note: orderNote,
+      status: 'new',
+      paymentStatus: 'unpaid',
+      createdAt,
+      updatedAt: createdAt
+    });
 
     document.getElementById('success-order-id').textContent = orderId;
     submitButton.textContent = 'Đã gửi đơn';
@@ -151,7 +146,10 @@ async function submitOrder() {
     cart = [];
   } catch (error) {
     console.error('[Order Submit Error]', error);
-    alert('Chưa gửi được đơn. Vui lòng kiểm tra kết nối và thử lại.');
+    const message = error.code === 'permission-denied'
+      ? 'Firebase chưa cho phép nhận đơn từ QR. Vui lòng nhờ chủ dự án kiểm tra quyền ghi vào Firestore > orders.'
+      : 'Chưa gửi được đơn lên Firebase. Vui lòng kiểm tra kết nối và thử lại.';
+    alert(message);
     submitButton.disabled = false;
     submitButton.textContent = 'Gửi đơn gọi món';
   }

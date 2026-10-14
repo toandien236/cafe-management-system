@@ -100,6 +100,11 @@ function initAdminAuth(authApi) {
       loginSection.style.display = 'flex';
       dashSection.hidden = true;
       dashSection.style.display = 'none';
+      if (ordersUnsubscribe) {
+        ordersUnsubscribe();
+        ordersUnsubscribe = null;
+        allOrders = [];
+      }
 
       if (user) {
         await authApi.signOut();
@@ -220,6 +225,7 @@ let allReservations = [];
 let activeFilter    = 'all';
 let searchQuery     = '';
 let allOrders       = [];
+let ordersUnsubscribe = null;
 
 function initAdminDashboard() {
   // Filter tabs
@@ -334,32 +340,53 @@ function loadOrders() {
   const tbody = document.getElementById('orders-tbody');
   if (!tbody) return;
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  if (!dbInstance || typeof dbInstance.collection !== 'function') {
+  const firestoreMethods = window.firebaseFirestoreMethods;
+  if (!dbInstance || (!firestoreMethods && typeof dbInstance.collection !== 'function')) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px;">Chưa kết nối được hệ thống đơn gọi món.</td></tr>';
     return;
   }
 
-  dbInstance.collection('orders').onSnapshot((snapshot) => {
+  if (ordersUnsubscribe) ordersUnsubscribe();
+  const handleSnapshot = (snapshot) => {
     allOrders = [];
     snapshot.forEach(doc => allOrders.push({ id: doc.id, ...doc.data() }));
-    allOrders.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    allOrders.sort((a, b) => String(b.createdAt || b.created_at || '').localeCompare(String(a.createdAt || a.created_at || '')));
     renderOrders();
-  }, (error) => {
+  };
+  const handleError = (error) => {
     console.warn('Orders snapshot notice:', error);
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px;">Không thể tải đơn gọi món.</td></tr>';
-  });
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px;">Không thể tải đơn gọi món. Kiểm tra quyền truy cập Firestore.</td></tr>';
+  };
+
+  if (firestoreMethods && typeof firestoreMethods.collection === 'function') {
+    ordersUnsubscribe = firestoreMethods.onSnapshot(
+      firestoreMethods.collection(dbInstance, 'orders'),
+      handleSnapshot,
+      handleError
+    );
+  } else {
+    ordersUnsubscribe = dbInstance.collection('orders').onSnapshot(handleSnapshot, handleError);
+  }
 }
 
-function formatOrderMoney(value) {
+function formatOrderMoney(value, items) {
+  const amount = Number(value || 0);
+  const itemPrices = Array.isArray(items)
+    ? items.map(item => Number(item.price)).filter(Number.isFinite)
+    : [];
+  const amountUsesThousands = itemPrices.length
+    ? itemPrices.every(price => Math.abs(price) < 1000)
+    : Math.abs(amount) < 1000;
+  const amountInVnd = amountUsesThousands ? amount * 1000 : amount;
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
     currency: 'VND',
     maximumFractionDigits: 0
-  }).format(Number(value || 0) * 1000);
+  }).format(amountInVnd);
 }
 
 function getOrderStatusLabel(status) {
-  return { new: 'Mới', preparing: 'Đang làm', served: 'Đã phục vụ', completed: 'Hoàn tất', cancelled: 'Đã hủy' }[status] || status;
+  return { new: 'Mới', preparing: 'Đang làm', in_progress: 'Đang làm', served: 'Đã phục vụ', completed: 'Hoàn tất', cancelled: 'Đã hủy' }[status] || status;
 }
 
 function renderOrders() {
@@ -373,12 +400,14 @@ function renderOrders() {
   tbody.innerHTML = allOrders.map(order => {
     const items = Array.isArray(order.items) ? order.items : [];
     const status = order.status || 'new';
-    const paymentStatus = order.paymentStatus || 'unpaid';
+    const paymentStatus = order.paymentStatus || order.payment_status || 'unpaid';
+    const orderId = order.orderId || order.order_id || order.id;
+    const tableNumber = order.tableNumber || order.table_number || '--';
     return `
       <tr>
-        <td><strong>${escapeHtml(order.orderId || order.id)}</strong><br><span class="order-table-number">Bàn ${escapeHtml(order.tableNumber || '--')}</span></td>
+        <td><strong>${escapeHtml(orderId)}</strong><br><span class="order-table-number">Bàn ${escapeHtml(tableNumber)}</span></td>
         <td>${items.map(item => `<div>${escapeHtml(item.name)} <strong>×${Number(item.quantity) || 0}</strong></div>`).join('')}${order.note ? `<small class="order-note">${escapeHtml(order.note)}</small>` : ''}</td>
-        <td><strong>${formatOrderMoney(order.total)}</strong></td>
+        <td><strong>${formatOrderMoney(order.total, items)}</strong></td>
         <td><span class="order-status order-status--${escapeHtml(status)}">${getOrderStatusLabel(status)}</span></td>
         <td><span class="payment-status payment-status--${escapeHtml(paymentStatus)}">${paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}</span></td>
         <td><div class="order-actions">
@@ -394,6 +423,15 @@ function renderOrders() {
 window.updateOrderStatus = function(id, status) {
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
   if (!dbInstance || !id) return;
+  const firestoreMethods = window.firebaseFirestoreMethods;
+  if (firestoreMethods && typeof firestoreMethods.updateDoc === 'function') {
+    firestoreMethods.updateDoc(firestoreMethods.doc(dbInstance, 'orders', id), { status, updatedAt: new Date().toISOString() })
+      .catch(error => {
+        console.error('Order status update failed:', error);
+        showToast('Không thể cập nhật trạng thái đơn gọi món.', 'error');
+      });
+    return;
+  }
   dbInstance.collection('orders').doc(id).update({ status, updatedAt: new Date().toISOString() })
     .catch(error => console.warn('Order status update notice:', error));
 };
@@ -401,7 +439,17 @@ window.updateOrderStatus = function(id, status) {
 window.markOrderPaid = function(id) {
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
   if (!dbInstance || !id) return;
-  dbInstance.collection('orders').doc(id).update({ paymentStatus: 'paid', status: 'completed', paidAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
+  const firestoreMethods = window.firebaseFirestoreMethods;
+  const paymentUpdate = { paymentStatus: 'paid', status: 'completed', paidAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  if (firestoreMethods && typeof firestoreMethods.updateDoc === 'function') {
+    firestoreMethods.updateDoc(firestoreMethods.doc(dbInstance, 'orders', id), paymentUpdate)
+      .catch(error => {
+        console.error('Order payment update failed:', error);
+        showToast('Không thể cập nhật thanh toán cho đơn gọi món.', 'error');
+      });
+    return;
+  }
+  dbInstance.collection('orders').doc(id).update(paymentUpdate)
     .catch(error => console.warn('Order payment update notice:', error));
 };
 
