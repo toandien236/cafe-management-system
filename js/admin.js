@@ -1,25 +1,23 @@
-/**
- * ============================================================
- * MOCHA & MISO — ADMIN PORTAL JAVASCRIPT (SUPABASE / POSTGRESQL)
- * Admin authentication & reservation/order management system
- * ============================================================
- */
-
-let allReservations = [];
-let activeFilter    = 'all';
-let searchQuery     = '';
-let allOrders       = [];
-let reservationsSubscription = null;
-let ordersSubscription = null;
-let customerSearchQuery = '';
-
-/* ──────────────────────────────────────────────────────────
-   BOOT — initialize Admin Portal
-   ────────────────────────────────────────────────────────── */
+/* ??????????????????????????????????????????????????????????
+   BOOT ? wait for Firebase SDKs to be ready before init
+   ?????????????????????????????????????????????????????????? */
 function bootAdmin() {
-  const client = window.supabaseClient || window.supabaseDb;
-  initAdminAuth(client);
-  initAdminDashboard();
+  const waitForFirebase = setInterval(() => {
+    const authInstance = window.firebaseAuth || window.auth || (typeof firebase !== 'undefined' ? firebase.auth() : null);
+    if (authInstance && typeof authInstance.onAuthStateChanged === 'function') {
+      clearInterval(waitForFirebase);
+      initAdminAuth(authInstance);
+      initAdminDashboard();
+    }
+  }, 80);
+
+  setTimeout(() => {
+    clearInterval(waitForFirebase);
+    const authInstance = window.firebaseAuth || window.auth;
+    if (!authInstance) {
+      showLoginError('Kh?ng t?i ???c Firebase. Vui l?ng t?i l?i trang.');
+    }
+  }, 8000);
 }
 
 if (document.readyState === 'loading') {
@@ -28,16 +26,22 @@ if (document.readyState === 'loading') {
   bootAdmin();
 }
 
-/* ──────────────────────────────────────────────────────────
-   1. ADMIN AUTHENTICATION — Supabase Auth
-   ────────────────────────────────────────────────────────── */
-function initAdminAuth(client) {
+/* ??????????????????????????????????????????????????????????
+  1. ADMIN AUTHENTICATION ? Firebase Auth primary
+  ?????????????????????????????????????????????????????????? */
+function initAdminAuth(authInstance) {
   const loginSection = document.getElementById('admin-login-section');
   const dashSection  = document.getElementById('admin-dashboard-section');
   const loginForm    = document.getElementById('admin-login-form');
   const logoutBtn    = document.getElementById('admin-logout-btn');
   const emailDisplay = document.getElementById('logged-admin-email');
   const forgotPasswordBtn = document.getElementById('admin-forgot-password');
+  const allowedAdminEmails = (window.ENV_ADMIN_EMAILS || localStorage.getItem('mocha_admin_emails') || 'lehwangduong@gmail.com,rickmondal598@gmail.com').split(',').map((email) => (email || '').trim().toLowerCase()).filter(Boolean);
+
+  if (!authInstance || typeof authInstance.onAuthStateChanged !== 'function') {
+    showLoginError('Firebase chưa được cấu hình. Thiết lập window.FIREBASE_CONFIG hoặc localStorage.mocha_firebase_config với thông tin project Firebase.');
+    return;
+  }
 
   function setAuthenticatedView(email) {
     if (emailDisplay) emailDisplay.textContent = email || 'Admin';
@@ -54,33 +58,17 @@ function initAdminAuth(client) {
     if (ordersSubscription) { ordersSubscription.unsubscribe(); ordersSubscription = null; }
   }
 
-  if (client && client.auth) {
-    // Check active session
-    client.auth.getSession().then(({ data: { session } }) => {
-      if (session && session.user) {
-        setAuthenticatedView(session.user.email);
-      } else {
-        setUnauthenticatedView();
-      }
-    }).catch(() => setUnauthenticatedView());
-
-    // Listen for auth state change
-    client.auth.onAuthStateChange((event, session) => {
-      if (session && session.user) {
-        setAuthenticatedView(session.user.email);
-      } else {
-        setUnauthenticatedView();
-      }
-    });
-  } else {
-    // Fallback: local session check
-    const localSession = localStorage.getItem('mocha_admin_session');
-    if (localSession) {
-      setAuthenticatedView(localSession);
+  authInstance.onAuthStateChanged((user) => {
+    if (user && user.email && allowedAdminEmails.includes(user.email.toLowerCase())) {
+      setAuthenticatedView(user.email);
     } else {
       setUnauthenticatedView();
+      if (user) {
+        authInstance.signOut().catch(() => {});
+        showLoginError('Tài khoản này không có quyền truy cập cổng quản trị.');
+      }
     }
-  }
+  });
 
   // ── Login form submission ──────────────────────────────────
   if (loginForm) {
@@ -107,21 +95,16 @@ function initAdminAuth(client) {
       if (submitBtn) submitBtn.disabled = true;
 
       try {
-        if (client && client.auth) {
-          const { data, error } = await client.auth.signInWithPassword({
-            email: email,
-            password: pass
-          });
-
-          if (error) throw error;
-          if (data && data.user) {
-            setAuthenticatedView(data.user.email);
-          }
-        } else {
-          // Demo fallback
-          localStorage.setItem('mocha_admin_session', email);
-          setAuthenticatedView(email);
+        if (!authInstance || typeof authInstance.signInWithEmailAndPassword !== 'function') {
+          throw new Error('FIREBASE_AUTH_NOT_READY');
         }
+
+        if (!allowedAdminEmails.includes(email.toLowerCase())) {
+          showLoginError('Email này không có quyền truy cập cổng quản trị.');
+          return;
+        }
+
+        await authInstance.signInWithEmailAndPassword(email, pass);
       } catch (err) {
         console.error('[Admin Login Error]', err);
         let msg = 'Truy cập bị từ chối: email hoặc mật khẩu không đúng.';
@@ -147,11 +130,17 @@ function initAdminAuth(client) {
         return;
       }
       try {
-        if (client && client.auth) {
-          const { error } = await client.auth.resetPasswordForEmail(email);
-          if (error) throw error;
+        if (!authInstance || typeof authInstance.sendPasswordResetEmail !== 'function') {
+          throw new Error('FIREBASE_AUTH_NOT_READY');
         }
-        showLoginError('Đã gửi liên kết đặt lại mật khẩu đến email. Hãy kiểm tra cả hộp thư Spam.');
+
+        if (!allowedAdminEmails.includes(email.toLowerCase())) {
+          showLoginError('Nhập đúng email quản trị của bạn để nhận liên kết đặt lại mật khẩu.');
+          return;
+        }
+
+        await authInstance.sendPasswordResetEmail(email);
+        showLoginError('Đã gửi liên kết đặt lại mật khẩu đến email quản trị. Hãy kiểm tra cả hộp thư Spam.');
       } catch (err) {
         console.error('[Admin Password Reset Error]', err);
         showLoginError('Không thể gửi email đặt lại mật khẩu. Vui lòng kiểm tra lại tài khoản.');
@@ -163,8 +152,8 @@ function initAdminAuth(client) {
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
       try {
-        if (client && client.auth) {
-          await client.auth.signOut();
+        if (authInstance && typeof authInstance.signOut === 'function') {
+          await authInstance.signOut();
         }
         localStorage.removeItem('mocha_admin_session');
         setUnauthenticatedView();

@@ -13,9 +13,10 @@ function bootAdmin() {
   // Firebase SDKs are loaded with defer, so poll until ready
   const waitForFirebase = setInterval(() => {
     const authInstance = window.firebaseAuth || window.auth || (typeof firebase !== 'undefined' ? firebase.auth() : null);
-    if (authInstance && typeof authInstance.onAuthStateChanged === 'function') {
+    const authApi = getFirebaseAuthApi(authInstance);
+    if (authApi) {
       clearInterval(waitForFirebase);
-      initAdminAuth(authInstance);
+      initAdminAuth(authApi);
       initAdminDashboard();
     }
   }, 80);
@@ -24,7 +25,7 @@ function bootAdmin() {
   setTimeout(() => {
     clearInterval(waitForFirebase);
     const authInstance = window.firebaseAuth || window.auth;
-    if (!authInstance) {
+    if (!getFirebaseAuthApi(authInstance)) {
       showLoginError('Không tải được Firebase. Vui lòng tải lại trang.');
     }
   }, 8000);
@@ -36,13 +37,45 @@ if (document.readyState === 'loading') {
   bootAdmin();
 }
 
+function getFirebaseAuthApi(authInstance) {
+  if (!authInstance) return null;
+
+  const methods = window.firebaseAuthMethods;
+  if (methods
+    && typeof methods.onAuthStateChanged === 'function'
+    && typeof methods.signInWithEmailAndPassword === 'function'
+    && typeof methods.signOut === 'function'
+    && typeof methods.sendPasswordResetEmail === 'function') {
+    return {
+      onAuthStateChanged: (callback) => methods.onAuthStateChanged(authInstance, callback),
+      signInWithEmailAndPassword: (email, password) => methods.signInWithEmailAndPassword(authInstance, email, password),
+      signOut: () => methods.signOut(authInstance),
+      sendPasswordResetEmail: (email) => methods.sendPasswordResetEmail(authInstance, email)
+    };
+  }
+
+  if (typeof authInstance.onAuthStateChanged === 'function'
+    && typeof authInstance.signInWithEmailAndPassword === 'function'
+    && typeof authInstance.signOut === 'function'
+    && typeof authInstance.sendPasswordResetEmail === 'function') {
+    return {
+      onAuthStateChanged: (callback) => authInstance.onAuthStateChanged(callback),
+      signInWithEmailAndPassword: (email, password) => authInstance.signInWithEmailAndPassword(email, password),
+      signOut: () => authInstance.signOut(),
+      sendPasswordResetEmail: (email) => authInstance.sendPasswordResetEmail(email)
+    };
+  }
+
+  return null;
+}
+
 /* ──────────────────────────────────────────────────────────
   1. ADMIN AUTHENTICATION — Firebase Auth primary
   ────────────────────────────────────────────────────────── */
 
 const ADMIN_EMAIL = 'lehwangduong@gmail.com';
 
-function initAdminAuth(authInstance) {
+function initAdminAuth(authApi) {
   const loginSection = document.getElementById('admin-login-section');
   const dashSection  = document.getElementById('admin-dashboard-section');
   const loginForm    = document.getElementById('admin-login-form');
@@ -51,7 +84,7 @@ function initAdminAuth(authInstance) {
   const forgotPasswordBtn = document.getElementById('admin-forgot-password');
 
   // ── Session state driven by Firebase Auth ──────────────────
-  authInstance.onAuthStateChanged(async (user) => {
+  authApi.onAuthStateChanged(async (user) => {
     if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL) {
       // Authenticated: show dashboard
       if (emailDisplay) emailDisplay.textContent = user.email;
@@ -69,7 +102,7 @@ function initAdminAuth(authInstance) {
       dashSection.style.display = 'none';
 
       if (user) {
-        await authInstance.signOut();
+        await authApi.signOut();
         showLoginError('Tài khoản này không có quyền truy cập cổng quản trị.');
       }
     }
@@ -108,7 +141,7 @@ function initAdminAuth(authInstance) {
 
       try {
         // Firebase Auth is the ONLY authentication gate
-        await authInstance.signInWithEmailAndPassword(email, pass);
+        await authApi.signInWithEmailAndPassword(email, pass);
         // onAuthStateChanged above handles the view switch
       } catch (err) {
         // Map Firebase error codes to friendly messages
@@ -144,7 +177,7 @@ function initAdminAuth(authInstance) {
         return;
       }
       try {
-        await authInstance.sendPasswordResetEmail(email);
+        await authApi.sendPasswordResetEmail(email);
         showLoginError('Đã gửi liên kết đặt lại mật khẩu đến email quản trị. Hãy kiểm tra cả thư mục Spam.');
       } catch (err) {
         console.error('[Admin Password Reset Error]', err.code, err.message);
@@ -157,7 +190,7 @@ function initAdminAuth(authInstance) {
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
       try {
-        await authInstance.signOut();
+        await authApi.signOut();
         // onAuthStateChanged above will flip back to login view
         if (loginForm) loginForm.reset();
       } catch (err) {

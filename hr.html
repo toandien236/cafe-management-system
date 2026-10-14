@@ -15,9 +15,24 @@
     href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap"
     rel="stylesheet" />
 
-  <!-- Supabase JS Client SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase.js" defer></script>
+  <!-- Firebase config and SDK -->
+  <script src="js/firebase-config.js"></script>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+    const config = window.FIREBASE_CONFIG || {};
+    if (config.apiKey && config.authDomain && config.projectId) {
+      const app = initializeApp(config);
+      const auth = getAuth(app);
+      window.firebaseApp = app;
+      window.firebaseAuth = auth;
+      window.firebaseAuthMethods = { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail };
+    } else {
+      console.error('[Firebase Config] Missing required Firebase web app configuration.');
+      window.firebaseAuth = null;
+    }
+  </script>
 
   <!-- GSAP CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
@@ -91,7 +106,7 @@
 
   <!-- Scripts -->
   <script src="js/main.js" defer></script>
-  <script src="js/admin.js" defer></script>
+  <script src="admin.js" defer></script>
   <script src="employee-management.js" defer></script>
   <script src="staff-operations.js" defer></script>
 </body>
