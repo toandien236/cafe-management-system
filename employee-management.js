@@ -80,9 +80,13 @@
 
   function rowData(employee) {
     return {
+      employee_code: employee.employee_code || null,
       name: employee.name,
+      birth_date: employee.birth_date || null,
+      gender: employee.gender || null,
       email: employee.email || null,
       phone: employee.phone || null,
+      address: employee.address || null,
       position: employee.position,
       status: employee.status === 'inactive' ? 'inactive' : 'active',
       updated_at: new Date().toISOString()
@@ -92,15 +96,20 @@
   function renderEmployees() {
     const tbody = document.getElementById('employees-tbody');
     if (!tbody) return;
-    if (employees.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="employee-empty">Chưa có nhân viên.</td></tr>';
+    const query = (document.getElementById('employee-search')?.value || '').trim().toLocaleLowerCase('vi');
+    const visibleEmployees = employees.filter(employee => [employee.employee_code, employee.name, employee.email, employee.phone, employee.position, employee.address]
+      .some(value => String(value || '').toLocaleLowerCase('vi').includes(query)));
+    if (visibleEmployees.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="employee-empty">Không có nhân viên khớp với tìm kiếm.</td></tr>';
       return;
     }
-    tbody.innerHTML = employees.map(employee => {
+    tbody.innerHTML = visibleEmployees.map(employee => {
       const status = employee.status === 'inactive' ? 'inactive' : 'active';
       return `<tr>
-        <td><strong>${escapeEmployeeHtml(employee.name)}</strong></td>
+        <td><strong>${escapeEmployeeHtml(employee.employee_code || '—')}</strong><div>${escapeEmployeeHtml(employee.name)}</div></td>
         <td>${employee.email ? `<div>${escapeEmployeeHtml(employee.email)}</div>` : ''}${employee.phone ? `<div>${escapeEmployeeHtml(employee.phone)}</div>` : ''}</td>
+        <td>${employee.birth_date ? escapeEmployeeHtml(employee.birth_date) : '—'}<div>${escapeEmployeeHtml(employee.gender || '—')}</div></td>
+        <td>${escapeEmployeeHtml(employee.address || '—')}</td>
         <td>${escapeEmployeeHtml(employee.position)}</td>
         <td><span class="employee-status employee-status--${status}">${status === 'active' ? 'Đang làm việc' : 'Đã nghỉ'}</span></td>
         <td><div class="employee-actions">
@@ -118,9 +127,13 @@
     if (!form || !modal) return;
     form.reset();
     document.getElementById('employee-id').value = employee ? employee.id : '';
+    document.getElementById('employee-code').value = employee ? employee.employee_code || '' : '';
     document.getElementById('employee-name').value = employee ? employee.name || '' : '';
+    document.getElementById('employee-birth-date').value = employee ? employee.birth_date || '' : '';
+    document.getElementById('employee-gender').value = employee ? employee.gender || '' : '';
     document.getElementById('employee-email').value = employee ? employee.email || '' : '';
     document.getElementById('employee-phone').value = employee ? employee.phone || '' : '';
+    document.getElementById('employee-address').value = employee ? employee.address || '' : '';
     document.getElementById('employee-position').value = employee ? employee.position || '' : '';
     document.getElementById('employee-status').value = employee && employee.status === 'inactive' ? 'inactive' : 'active';
     document.getElementById('employee-modal-title').textContent = employee ? 'Sửa hồ sơ nhân viên' : 'Thêm nhân viên';
@@ -135,14 +148,18 @@
     const oldEmployee = employees.find(item => item.id === id);
     const employee = {
       id,
+      employee_code: document.getElementById('employee-code').value.trim(),
       name: document.getElementById('employee-name').value.trim(),
+      birth_date: document.getElementById('employee-birth-date').value || null,
+      gender: document.getElementById('employee-gender').value || null,
       email: document.getElementById('employee-email').value.trim(),
       phone: document.getElementById('employee-phone').value.trim(),
+      address: document.getElementById('employee-address').value.trim(),
       position: document.getElementById('employee-position').value.trim(),
       status: document.getElementById('employee-status').value,
       created_at: oldEmployee?.created_at || new Date().toISOString()
     };
-    if (!employee.name || !employee.position) return;
+    if (!employee.employee_code || !employee.name || !employee.position) return;
     const saveButton = document.getElementById('employee-save-btn');
     saveButton.disabled = true;
     try {
@@ -164,6 +181,10 @@
       renderEmployees();
       showEmployeeToast(id ? 'Đã cập nhật nhân viên.' : 'Đã thêm nhân viên.', 'success');
     } catch (error) {
+      if (client && error?.code) {
+        showEmployeeToast(`Không lưu được nhân viên: ${error.message || 'lỗi từ Supabase'}`, 'error');
+        return;
+      }
       storageMode = 'local';
       const localEmployee = {
         ...employee,
@@ -194,6 +215,10 @@
       if (error) throw error;
       showEmployeeToast('Đã xóa nhân viên.', 'success');
     } catch (error) {
+      if (client && error?.code) {
+        showEmployeeToast(`Không xóa được nhân viên: ${error.message || 'lỗi từ Supabase'}`, 'error');
+        return;
+      }
       storageMode = 'local';
       const ids = readDeletions();
       if (!String(id).startsWith('local_') && !ids.includes(id)) ids.push(id);
@@ -275,15 +300,16 @@
     section.className = 'admin-employees-section';
     section.hidden = true;
     section.setAttribute('aria-labelledby', 'employees-heading');
-    section.innerHTML = '<div class="admin-section-heading"><div><span class="admin-section-kicker">Nhân sự</span><h2 id="employees-heading">Quản lý nhân viên</h2><p id="employees-storage-note" class="employee-storage-note" role="status">Đang kết nối dữ liệu nhân viên...</p></div><button id="employee-add-btn" class="btn-action btn-action--approve" type="button">Thêm nhân viên</button></div><div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Họ và tên</th><th>Liên hệ</th><th>Chức vụ</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody id="employees-tbody"><tr><td colspan="5" class="employee-empty">Đang tải danh sách nhân viên...</td></tr></tbody></table></div></div>';
+    section.innerHTML = '<div class="admin-section-heading"><div><span class="admin-section-kicker">Nhân sự</span><h2 id="employees-heading">Quản lý nhân viên</h2><p id="employees-storage-note" class="employee-storage-note" role="status">Đang kết nối dữ liệu nhân viên...</p></div><div class="employee-toolbar"><input id="employee-search" type="search" class="form-input" placeholder="Tìm theo mã, tên, SĐT, chức vụ..." aria-label="Tìm kiếm nhân viên"><button id="employee-add-btn" class="btn-action btn-action--approve" type="button">Thêm nhân viên</button></div></div><div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Mã NV / Họ tên</th><th>Liên hệ</th><th>Ngày sinh / Giới tính</th><th>Địa chỉ</th><th>Chức vụ</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody id="employees-tbody"><tr><td colspan="7" class="employee-empty">Đang tải danh sách nhân viên...</td></tr></tbody></table></div></div>';
     orders.insertAdjacentElement('afterend', section);
-    document.body.insertAdjacentHTML('beforeend', '<div id="employee-modal" class="admin-modal-overlay" hidden><form id="employee-form" class="admin-modal-card" aria-labelledby="employee-modal-title"><h3 id="employee-modal-title" class="admin-modal-title">Thêm nhân viên</h3><input id="employee-id" type="hidden"><div class="form-group employee-field"><input id="employee-name" class="form-input" type="text" maxlength="100" required><label class="form-label form-label--up" for="employee-name">Họ và tên</label></div><div class="form-group employee-field"><input id="employee-email" class="form-input" type="email" maxlength="254"><label class="form-label form-label--up" for="employee-email">Email</label></div><div class="form-group employee-field"><input id="employee-phone" class="form-input" type="tel" maxlength="30"><label class="form-label form-label--up" for="employee-phone">Số điện thoại</label></div><div class="form-group employee-field"><input id="employee-position" class="form-input" type="text" maxlength="80" required><label class="form-label form-label--up" for="employee-position">Chức vụ</label></div><div class="form-group employee-field"><label class="form-label form-label--up" for="employee-status">Trạng thái</label><select id="employee-status" class="form-input"><option value="active">Đang làm việc</option><option value="inactive">Đã nghỉ</option></select></div><div class="admin-modal-actions"><button id="employee-cancel-btn" class="btn btn-outline" type="button">Hủy</button><button id="employee-save-btn" class="btn btn-primary" type="submit">Lưu nhân viên</button></div></form></div>');
+    document.body.insertAdjacentHTML('beforeend', '<div id="employee-modal" class="admin-modal-overlay" hidden><form id="employee-form" class="admin-modal-card" aria-labelledby="employee-modal-title"><h3 id="employee-modal-title" class="admin-modal-title">Thêm nhân viên</h3><input id="employee-id" type="hidden"><div class="form-group employee-field"><input id="employee-code" class="form-input" type="text" maxlength="30" required><label class="form-label form-label--up" for="employee-code">Mã nhân viên</label></div><div class="form-group employee-field"><input id="employee-name" class="form-input" type="text" maxlength="100" required><label class="form-label form-label--up" for="employee-name">Họ và tên</label></div><div class="form-group employee-field"><input id="employee-birth-date" class="form-input" type="date"><label class="form-label form-label--up" for="employee-birth-date">Ngày sinh</label></div><div class="form-group employee-field"><label class="form-label form-label--up" for="employee-gender">Giới tính</label><select id="employee-gender" class="form-input"><option value="">Chưa chọn</option><option value="female">Nữ</option><option value="male">Nam</option><option value="other">Khác</option></select></div><div class="form-group employee-field"><input id="employee-email" class="form-input" type="email" maxlength="254"><label class="form-label form-label--up" for="employee-email">Email</label></div><div class="form-group employee-field"><input id="employee-phone" class="form-input" type="tel" maxlength="30"><label class="form-label form-label--up" for="employee-phone">Số điện thoại</label></div><div class="form-group employee-field"><input id="employee-address" class="form-input" type="text" maxlength="255"><label class="form-label form-label--up" for="employee-address">Địa chỉ</label></div><div class="form-group employee-field"><input id="employee-position" class="form-input" type="text" maxlength="80" required><label class="form-label form-label--up" for="employee-position">Chức vụ</label></div><div class="form-group employee-field"><label class="form-label form-label--up" for="employee-status">Trạng thái</label><select id="employee-status" class="form-input"><option value="active">Đang làm việc</option><option value="inactive">Đã nghỉ</option></select></div><div class="admin-modal-actions"><button id="employee-cancel-btn" class="btn btn-outline" type="button">Hủy</button><button id="employee-save-btn" class="btn btn-primary" type="submit">Lưu nhân viên</button></div></form></div>');
     const style = document.createElement('style');
     style.textContent = '.admin-employees-section{margin-top:64px}.employee-empty{text-align:center;padding:40px!important;color:var(--warm-gray)!important}.employee-storage-note{margin-top:6px;color:var(--success);font-size:12px}.employee-storage-note--local{color:#9b473e}.employee-status{display:inline-block;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}.employee-status--active{color:#286a59;background:#dceee7}.employee-status--inactive{color:#79594c;background:#eee4dd}.employee-actions{display:flex;gap:8px}.employee-field{margin-bottom:16px}.admin-modal-overlay[hidden]{display:none!important}';
     document.head.appendChild(style);
     document.getElementById('employee-add-btn').addEventListener('click', () => openEmployeeForm(''));
     document.getElementById('employee-cancel-btn').addEventListener('click', () => { document.getElementById('employee-modal').hidden = true; });
     document.getElementById('employee-form').addEventListener('submit', saveEmployee);
+    document.getElementById('employee-search').addEventListener('input', renderEmployees);
     document.getElementById('employees-tbody').addEventListener('click', event => {
       const button = event.target.closest('[data-employee-action]');
       if (!button) return;

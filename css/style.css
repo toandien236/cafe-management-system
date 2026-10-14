@@ -2942,3 +2942,23 @@ img, video, svg, iframe {
   color: #F57F17;
   border: 1px solid rgba(245, 127, 23, 0.2);
 }
+
+/* Employee scheduling, attendance, payroll and reporting */
+.staff-operations { margin: 64px 0; }
+.staff-operations[hidden],
+.staff-operations [hidden] { display: none !important; }
+.staff-tabs, .staff-report-filters, .staff-filter { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 20px 0; }
+.staff-tabs button { border: 1px solid var(--border-mid); border-radius: 999px; background: var(--cream); color: var(--bark); padding: 10px 18px; cursor: pointer; }
+.staff-tabs button[aria-selected="true"] { color: var(--cream); background: var(--bark); border-color: var(--bark); }
+.staff-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); align-items: end; gap: 14px; padding: 22px; margin: 20px 0; border: 1px solid var(--border-mid); border-radius: 14px; background: var(--cream); }
+.staff-form h3 { grid-column: 1 / -1; margin: 0; color: var(--bark); }
+.staff-field, .staff-filter label, .staff-report-filters label { display: grid; gap: 6px; color: var(--bark); font-size: 13px; }
+.staff-field input, .staff-field select, .staff-filter input, .staff-report-filters input { min-height: 42px; padding: 9px 11px; border: 1px solid var(--border-mid); border-radius: 8px; color: var(--bark); background: #fff; font: inherit; }
+.staff-table { margin: 18px 0 28px; }
+.staff-empty { padding: 26px !important; text-align: center; color: var(--warm-gray) !important; }
+.staff-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin: 18px 0; }
+.staff-summary article { display: grid; gap: 8px; padding: 18px; border: 1px solid var(--border-mid); border-radius: 12px; background: var(--cream); color: var(--warm-gray); }
+.staff-summary strong { color: var(--bark); font-size: 22px; }
+.employee-toolbar { display: flex; align-items: center; gap: 10px; }
+.employee-toolbar input { min-width: min(340px, 42vw); }
+@media (max-width: 640px) { .staff-tabs { gap: 8px; } .staff-tabs button { padding: 8px 12px; } .staff-form { padding: 15px; } }
