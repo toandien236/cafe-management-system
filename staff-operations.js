@@ -221,8 +221,8 @@
   }
 
   function initialize() {
-    const orders = document.querySelector('.admin-orders-section');
-    if (!orders || document.getElementById('staff-operations')) return;
+    const mount = document.querySelector('[data-hr-mount]') || document.querySelector('.admin-orders-section');
+    if (!mount || document.getElementById('staff-operations')) return;
     const section = document.createElement('section');
     section.id = 'staff-operations';
     section.className = 'staff-operations';
@@ -235,7 +235,7 @@
       <section data-staff-panel="payroll" hidden><form class="staff-form" id="staff-payroll-form"><h3>Lập bảng lương</h3>${selectHtml('staff-payroll-employee','Nhân viên','<option value="">Đang tải...</option>')}<label class="staff-field"><span>Tháng</span><input id="staff-payroll-month" type="month" required></label><label class="staff-field"><span>Hình thức</span><select id="staff-pay-type"><option value="hourly">Theo giờ</option><option value="monthly">Theo tháng</option></select></label><label class="staff-field"><span>Tổng giờ thường</span><input id="staff-pay-hours" type="number" min="0" step="0.25" value="0"></label><label class="staff-field"><span>Lương mỗi giờ</span><input id="staff-hourly-rate" type="number" min="0" step="1000" value="30000"></label><label class="staff-field"><span>Lương tháng</span><input id="staff-monthly-salary" type="number" min="0" step="100000" value="0"></label><label class="staff-field"><span>Giờ tăng ca</span><input id="staff-overtime-hours" type="number" min="0" step="0.25" value="0"></label><label class="staff-field"><span>Thưởng</span><input id="staff-bonus" type="number" min="0" value="0"></label><label class="staff-field"><span>Phạt</span><input id="staff-penalty" type="number" min="0" value="0"></label><button class="btn btn-primary" type="submit">Tính và lưu lương</button></form><div class="staff-filter"><label>Tháng xem <input id="staff-payroll-filter" type="month"></label></div><div class="admin-table-card staff-table"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Tháng</th><th>Nhân viên</th><th>Hình thức</th><th>Tổng giờ</th><th>Thực nhận</th></tr></thead><tbody id="staff-payroll-rows"></tbody></table></div></div></section>
       <section data-staff-panel="report" hidden><div class="staff-report-filters"><label>Lọc tháng <input id="staff-report-month" type="month"></label><label>Lọc ngày <input id="staff-report-day" type="date"></label><button class="btn btn-outline" id="staff-export-report" type="button">Xuất CSV</button></div><div class="staff-summary"><article><span>Nhân viên</span><strong id="staff-report-count">0</strong></article><article><span>Tổng giờ làm</span><strong id="staff-report-hours">0</strong></article><article><span>Tổng lương</span><strong id="staff-report-pay">0 ₫</strong></article></div><div class="admin-table-card staff-table"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Nhân viên</th><th>Trạng thái</th><th>Ngày công</th><th>Giờ làm</th><th>Đi trễ</th><th>Vắng</th><th>Lương</th></tr></thead><tbody id="staff-report-rows"></tbody></table></div></div></section>`;
     const employeeSection = document.getElementById('admin-employees-section');
-    (employeeSection || orders).insertAdjacentElement('afterend', section);
+    (employeeSection || mount).insertAdjacentElement('afterend', section);
     document.getElementById('staff-shift-date').value = today();
     document.getElementById('staff-attendance-date').value = today();
     document.getElementById('staff-payroll-month').value = today().slice(0, 7);

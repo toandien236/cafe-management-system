@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quản lý nhân sự — Mocha &amp; Miso</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/jpeg" href="assets/logo_icon.jpg" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+
+  <!-- Supabase JS Client SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.js" defer></script>
+
+  <!-- GSAP CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body class="admin-body">
+
+  <!-- ============================================================ -->
+  <!-- 1. LOGIN SCREEN -->
+  <!-- ============================================================ -->
+  <section class="admin-login-screen" id="admin-login-section">
+    <div class="admin-login-card">
+      <div class="admin-brand-header">
+        <img src="assets/logo_icon.jpg" alt="Mocha & Miso" class="admin-brand-logo" />
+        <h1 class="admin-brand-title">Cổng quản lý nhân sự</h1>
+        <p class="admin-brand-sub">Mocha &amp; Miso · Cà phê thủ công</p>
+      </div>
+
+      <form class="reservation-form" id="admin-login-form" novalidate>
+        <div class="form-group">
+          <input type="email" id="admin-email" class="form-input" placeholder=" " required autocomplete="username" />
+          <label for="admin-email" class="form-label form-label--up">Email quản trị</label>
+          <span class="form-line"></span>
+        </div>
+
+        <div class="form-group">
+          <input type="password" id="admin-password" class="form-input" placeholder=" " required
+            autocomplete="current-password" />
+          <label for="admin-password" class="form-label form-label--up">Mật khẩu</label>
+          <span class="form-line"></span>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="admin-login-submit">
+          <span class="btn-text">Đăng nhập</span>
+        </button>
+        <button type="button" class="admin-forgot-password" id="admin-forgot-password">Quên mật khẩu?</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 2. DASHBOARD VIEW (Hidden until Auth) -->
+  <!-- ============================================================ -->
+  <div id="admin-dashboard-section" hidden>
+
+    <!-- Top Header Navigation -->
+    <header class="admin-header">
+      <div class="container admin-header-inner">
+        <div class="admin-logo-group">
+          <h2 class="admin-header-title">Mocha &amp; Miso</h2>
+          <span class="admin-badge">Quản lý nhân sự</span>
+        </div>
+        <div class="admin-user-info">
+          <a class="btn-logout" href="admin.html">Trang quản trị</a>
+          <span class="admin-email-text" id="logged-admin-email">lehwangduong@gmail.com</span>
+          <a class="btn-logout" href="inventory.html">Quản lý kho</a>
+          <button type="button" class="btn-logout" id="admin-logout-btn">Đăng xuất</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Nội dung riêng của trang nhân sự -->
+    <main class="admin-main container">
+      <div data-hr-mount></div>
+    </main>
+  </div>
+
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <!-- Scripts -->
+  <script src="js/main.js" defer></script>
+  <script src="js/admin.js" defer></script>
+  <script src="employee-management.js" defer></script>
+  <script src="staff-operations.js" defer></script>
+</body>
+
+</html>

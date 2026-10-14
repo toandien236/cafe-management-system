@@ -42,8 +42,8 @@ function initAdminAuth(client) {
     if (emailDisplay) emailDisplay.textContent = email || 'Admin';
     if (loginSection) { loginSection.hidden = true; loginSection.style.display = 'none'; }
     if (dashSection) { dashSection.hidden = false; dashSection.style.display = 'block'; }
-    loadReservations();
-    loadOrders();
+    if (document.getElementById('bookings-tbody')) loadReservations();
+    if (document.getElementById('orders-tbody')) loadOrders();
   }
 
   function setUnauthenticatedView() {
