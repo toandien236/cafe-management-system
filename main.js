@@ -381,7 +381,24 @@ function initHeroParallax() {
   });
 }
 
-/* ── G1. Signature dishes image animations ──────────────── */
+/* ── G1. Atmosphere parallax ─────────────────────────────── */
+function initAtmosphereParallax() {
+  const atmosphereWrap = document.querySelector('.atmosphere-image-wrap');
+  if (!atmosphereWrap) return;
+
+  gsap.to(atmosphereWrap, {
+    yPercent: 12,
+    ease: 'none',
+    scrollTrigger: {
+      trigger: '.atmosphere',
+      start: 'top bottom',
+      end: 'bottom top',
+      scrub: 1.4
+    }
+  });
+}
+
+/* ── G2. Signature dishes image animations ──────────────── */
 function initSignatureImageAnimations() {
   const signatureItems = document.querySelectorAll('.signature-item');
 
