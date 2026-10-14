@@ -1,176 +1,192 @@
-# ☕ Mocha & Miso — Website quán cà phê thủ công
+# ☕ Mocha & Miso — Website & Hệ Thống Quản Lý Quán Cà Phê
 
 <div align="center">
 
-![Mocha & Miso](./asstes/logo.jpg)
+![Mocha & Miso](./assets/logo.jpg)
 
-**Hệ thống quản lý quán cà phê lấy cảm hứng Japandi, gồm website dành cho khách và cổng quản trị bảo mật.**
-
-[![Xem website](https://img.shields.io/badge/🌐_Xem_website-mochaandmiso.web.app-5A3E36?style=for-the-badge)](https://mochaandmiso.web.app)
-[![Cổng quản trị](https://img.shields.io/badge/🔐_Cổng_quản_trị-Đăng_nhập-8B5E52?style=for-the-badge)](https://mochaandmiso.web.app/admin.html)
-[![Firebase](https://img.shields.io/badge/Firebase-Đã_host-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com)
+**Hệ thống quản lý quán cà phê phong cách Japandi với Backend PostgreSQL & Supabase.**
 
 </div>
 
 ---
 
-## 🖼️ Ảnh chụp màn hình
-
-### 🏠 Trang chủ — Phần giới thiệu
-![Phần giới thiệu trang chủ](./screenshots/hero.png)
-
-### 🛡️ Bảng điều khiển quản trị
-![Bảng điều khiển quản trị](./screenshots/admin-dashboard.png)
-
----
-
-## ✨ Tính năng
-
-### 🌐 Website dành cho khách
-- **Phần giới thiệu chuyển động** — Ảnh nền thị sai, hiệu ứng cuộn GSAP và hiệu ứng hơi nước
-- **Câu chuyện quán** — Giới thiệu thương hiệu với hiệu ứng hiện chữ khi cuộn
-- **Thực đơn tương tác** — Lọc theo nhóm đồ uống, món ăn và món tráng miệng; hơn 14 món
-- **Món đặc sắc** — Giới thiệu các món và đồ uống nổi bật
-- **Thư viện ảnh** — Bộ sưu tập hình ảnh quán cà phê dạng khảm
-- **Biểu mẫu đặt bàn** — Lưu đặt chỗ theo thời gian thực trên Firestore và gửi email xác nhận
-- **Liên hệ và địa điểm** — Giờ mở cửa, địa chỉ và biểu mẫu liên hệ
-- **Con trỏ tùy chỉnh** — Hiệu ứng con trỏ hút theo nút khi rê chuột
-- **Cuộn mượt** — Sử dụng thư viện Lenis
-- **Tương thích mọi màn hình** — Thiết kế ưu tiên điện thoại, có menu thu gọn
-
-### 🔐 Cổng quản trị
-- **Xác thực Firebase** — Đăng nhập an toàn bằng email và mật khẩu
-- **Bảng đặt bàn trực tiếp** — Cập nhật theo thời gian thực từ Firestore
-- **Thống kê tổng quan** — Tổng lượt đặt, lượt đang chờ, lượt đã xác nhận và số khách
-- **Quản lý đặt bàn** — Xác nhận, hủy hoặc xóa lượt đặt
-- **Tìm kiếm và lọc** — Lọc theo trạng thái hoặc tìm theo tên, email, số điện thoại
-- **Trả lời khách qua email** — Gửi email trực tiếp bằng EmailJS
-- **Thông báo tức thời** — Phản hồi trực tiếp cho mọi thao tác quản trị
-
-### 🍽️ Gọi món bằng QR theo bàn
-- **QR riêng từng bàn** — Mỗi mã mở `order.html?table=01`, `02`...
-- **Giỏ món trên điện thoại** — Khách chọn món, số lượng và ghi chú không cần đăng nhập
-- **Đơn hàng thời gian thực** — Đơn mới hiện trong admin kèm số bàn, món và tổng tiền
-- **Luồng phục vụ** — Mới → Đang làm → Đã phục vụ → Hoàn tất
-- **Ghi nhận thanh toán** — Nhân viên bấm “Đã thanh toán” sau khi thu tiền tại bàn/quầy
+## 📑 Mục Lục
+1. [Giới thiệu](#-giới-thiệu)
+2. [Kiến Trúc Công Nghệ](#️-kiến-trúc-công-nghệ)
+3. [Cấu Trúc Thư Mục Dự Án](#-cấu-trúc-thư-mục-dự-án)
+4. [Hướng Dẫn Chạy Hệ Thống Ở Local](#-hướng-dẫn-chạy-hệ-thống-ở-local-để-phát-triển)
+5. [Hướng Dẫn Thiết Lập Supabase & PostgreSQL](#-hướng-dẫn-thiết-lập-supabase--postgresql)
+6. [Tạo Tài Khoản Quản Trị Viên (Admin)](#-tạo-tài-khoản-quản-trị-viên-admin)
+7. [Kiểm Tra Kết Nối Tự Động (Health Check)](#-kiểm-tra-kết-nối-tự-động-health-check)
+8. [Các Phân Hệ & Đường Dẫn Sử Dụng](#-các-phân-hệ--đường-dẫn-sử-dụng)
 
 ---
 
-## 🛠️ Công nghệ sử dụng
+## 📖 Giới thiệu
 
-| Layer | Technology |
+**Mocha & Miso** là giải pháp toàn diện cho quán cà phê gồm:
+* **Website thương hiệu:** Trải nghiệm thị giác cao cấp, hiệu ứng mượt mà (GSAP, Lenis), xem menu và đặt bàn trực tuyến.
+* **Gọi món QR tại bàn (Mobile App):** Khách quét QR theo số bàn, chọn món, ghi chú và gửi đơn trực tiếp không cần tải ứng dụng.
+* **Cổng quản trị (Admin Dashboard):** Quản lý đơn đặt bàn và đơn gọi món theo thời gian thực (Realtime), duyệt đơn, cập nhật thanh toán.
+* **Quản trị kho nguyên vật liệu:** Quản lý tồn kho, định mức an toàn, tạo phiếu nhập/xuất kho tự động tính toán số dư.
+
+---
+
+## 🛠️ Kiến Trúc Công Nghệ
+
+| Thành phần | Công nghệ sử dụng |
 |---|---|
-| **Giao diện** | HTML5, CSS thuần, JavaScript thuần |
-| **Hiệu ứng** | GSAP 3, ScrollTrigger, SplitType, Lenis |
-| **Cơ sở dữ liệu** | Firebase Firestore |
-| **Xác thực** | Firebase Auth (email/mật khẩu) |
-| **Lưu trữ website** | Firebase Hosting |
-| **Email** | EmailJS |
-| **Hàm máy chủ** | Firebase Cloud Functions (Node.js 20) |
+| **Cơ sở dữ liệu chính** | **PostgreSQL** (Tables, Foreign Keys, UUIDs, Triggers, RLS, Realtime) |
+| **Backend as a Service** | **Supabase** (Auth, PostgREST API, Realtime Channels, Storage) |
+| **Frontend UI** | HTML5, CSS3 hiện đại (Flexbox/Grid), JavaScript thuần (Vanilla ES6+) |
+| **Hiệu ứng & Chuyển động** | GSAP 3, ScrollTrigger, SplitType, Lenis Smooth Scroll |
+| **SDK & Thư viện** | `@supabase/supabase-js v2`, `QRCode.js`, `EmailJS` |
 
 ---
 
-## 🚀 Bản chạy trực tuyến
+## 📁 Cấu Trúc Thư Mục Dự Án
 
-🌐 **Website:** [https://mochaandmiso.web.app](https://mochaandmiso.web.app)
-
-🔐 **Cổng quản trị:** [https://mochaandmiso.web.app/admin.html](https://mochaandmiso.web.app/admin.html)
-> Cần tài khoản Firebase Authentication đã đăng ký để truy cập trang quản trị.
-
-## 🍽️ Vận hành gọi món bằng QR
-
-1. Mở `qr.html` trên domain đã deploy, chọn số lượng bàn rồi bấm **Tạo mã QR**.
-2. In và đặt từng mã lên đúng bàn. Không dùng URL `localhost` khi in QR cho quán thật.
-3. Khách quét mã, chọn món và gửi đơn. Đường dẫn sẽ tự gắn số bàn.
-4. Nhân viên mở cổng admin, xử lý đơn theo thứ tự **Bắt đầu làm** → **Đã mang ra**.
-5. Sau khi thu tiền, bấm **Đã thanh toán** để hoàn tất đơn.
-
-Phiên bản hiện tại ghi nhận thanh toán thủ công tại quầy hoặc tại bàn. Muốn thu tiền trực tuyến cần tích hợp thêm một cổng thanh toán phù hợp với quốc gia và tài khoản ngân hàng của quán.
-
----
-
-## 📁 Cấu trúc dự án
+Codebase được tổ chức phân tầng rõ ràng theo chuẩn module để dễ dàng mở rộng và bảo trì:
 
 ```
 cafe-management-system/
-├── index.html              # Website dành cho khách
-├── admin.html              # Cổng quản trị
-├── admin.js                # Bảng quản trị và xác thực Firebase
-├── main.js                 # Tương tác website và biểu mẫu đặt bàn
-├── style.css               # Giao diện dùng chung cho các trang
-├── firebase.js             # Khởi tạo Firebase
-├── firestore.rules         # Quy tắc bảo mật Firestore
-├── firebase.json           # Cấu hình Firebase Hosting và Functions
-├── asstes/                 # Hình ảnh và tài nguyên
-├── screenshots/            # Ảnh chụp màn hình trong README
-└── functions/              # Firebase Cloud Functions
-    ├── index.js
-    ├── services/
-    │   └── smsService.js
-    └── templates/
-        └── emailTemplates.js
+├── assets/                     # Tài nguyên tĩnh (Hình ảnh sản phẩm, logo, banner)
+├── css/                        # Tất cả các file Stylesheet
+│   ├── style.css               # Giao diện chính (Website khách, Cổng Admin, Quản lý kho)
+│   └── order.css               # Giao diện tối ưu Mobile cho ứng dụng Gọi món QR tại bàn
+├── js/                         # Tất cả các file JavaScript xử lý logic
+│   ├── supabase.js             # Khởi tạo Supabase Client & Cấu hình kết nối API
+│   ├── main.js                 # Hiệu ứng Website, Form đặt bàn & gửi EmailJS
+│   ├── admin.js                # Logic Cổng quản trị: Auth, Quản lý đơn & Realtime Listener
+│   ├── order.js                # Logic Giỏ hàng, Menu & Gửi đơn gọi món PostgreSQL
+│   └── inventory.js            # Logic Quản lý Kho: CRUD nguyên liệu, Nhập/Xuất kho
+├── database/                   # Cơ sở dữ liệu
+│   └── supabase-schema.sql     # Script khởi tạo toàn bộ Bảng, Indexes, Triggers, RLS & Seed data
+├── scripts/                    # Các script tiện ích hỗ trợ phát triển & kiểm thử
+│   └── check-supabase.js       # Script kiểm tra tự động kết nối & hoạt động của Supabase
+├── screenshots/                # Hình ảnh minh họa giao diện trong tài liệu
+├── index.html                  # Giao diện Website thương hiệu & Đặt bàn Online
+├── admin.html                  # Giao diện Cổng Quản trị Viên (Dashboard)
+├── order.html                  # Giao diện Gọi món tại bàn bằng mã QR
+├── inventory.html              # Giao diện Quản trị Kho nguyên vật liệu
+├── qr.html                     # Công cụ tạo & in mã QR cho từng bàn
+└── README.md                   # Tài liệu hướng dẫn sử dụng & phát triển
 ```
 
 ---
 
-## 🔒 Bảo mật
+## 💻 Hướng Dẫn Chạy Hệ Thống Ở Local Để Phát Triển
 
-- **Quy tắc Firestore** — Chỉ người dùng đã xác thực mới có thể đọc, cập nhật hoặc xóa lượt đặt bàn
-- **Tạo yêu cầu công khai** — Bất kỳ ai cũng có thể gửi yêu cầu đặt bàn sau khi các trường được kiểm tra
-- **Firebase Auth** — Bảng quản trị yêu cầu đăng nhập bằng email và mật khẩu Firebase
-- **Biến môi trường** — Khóa API nhạy cảm được lưu trong `functions/.env` và không đưa lên Git
+### Yêu cầu môi trường
+* Đã cài đặt [Python 3.x](https://www.python.org/) **hoặc** [Node.js](https://nodejs.org/) (phiên bản 18+).
 
----
+### Cách chạy nhanh Local Server
 
-## 🎨 Hệ thống thiết kế
-
-- **Kiểu chữ:** Cormorant Garamond (tiêu đề có chân) và DM Sans (nội dung)
-- **Bảng màu:** Nâu cà phê ấm, trắng kem và tông gỗ trầm
-- **Phong cách:** Japandi — tối giản Nhật Bản kết hợp nét ấm áp Bắc Âu
-- **Hiệu ứng:** Hiện nội dung theo vị trí cuộn, hiệu ứng rê chuột và thị sai bằng GSAP
-
----
-
-## 📦 Bắt đầu chạy dự án trên máy
-
-> ⚠️ Website sử dụng cấu hình Firebase Hosting; một số tính năng hoạt động tốt nhất khi chạy qua Firebase.
-
-### Yêu cầu
-- [Node.js](https://nodejs.org/) v18+
-- [Firebase CLI](https://firebase.google.com/docs/cli): `npm install -g firebase-tools`
-
-### Chạy trên máy
-```bash
-# Tải mã nguồn dự án
-git clone https://github.com/Jishnu09-siuu/cafe-management-system.git
-cd cafe-management-system
-
-# Đăng nhập Firebase
-firebase login
-
-# Chạy website trên máy
-firebase serve --only hosting
+#### 👉 Cách 1: Sử dụng Python (Tích hợp sẵn, không cần cài thêm thư viện)
+Mở Terminal / PowerShell tại thư mục dự án và chạy:
+```powershell
+python -m http.server 5500
 ```
 
-Mở [http://localhost:5000](http://localhost:5000) trong trình duyệt.
-
-### Triển khai lên Firebase
-```bash
-firebase deploy --only hosting
+#### 👉 Cách 2: Sử dụng Node.js `serve` hoặc `http-server`
+```powershell
+npx serve . -p 5500
+# Hoặc
+npx http-server -p 5500
 ```
 
----
-
-## 📄 Giấy phép
-
-Dự án dành cho mục đích cá nhân và hồ sơ năng lực. Hình ảnh quán cà phê được lấy từ các nguồn miễn phí bản quyền.
+#### 👉 Cách 3: Sử dụng Live Server trong Visual Studio Code
+1. Cài Extension **Live Server** (`ritwickdey.LiveServer`) trên VS Code.
+2. Nhấp chuột phải vào file `index.html` chọn **Open with Live Server**.
 
 ---
 
-<div align="center">
+## 🗄️ Hướng Dẫn Thiết Lập Supabase & PostgreSQL
 
-Made with ☕ by **Jishnu**
+Nếu bạn muốn kết nối với một Project Supabase mới của riêng mình:
 
-[![GitHub](https://img.shields.io/badge/GitHub-Jishnu09--siuu-181717?style=flat&logo=github)](https://github.com/Jishnu09-siuu)
+1. **Tạo Project mới:**
+   * Truy cập [https://supabase.com](https://supabase.com) và tạo một project.
+2. **Khởi tạo Database Schema:**
+   * Vào mục **SQL Editor** trong Supabase Dashboard.
+   * Sao chép toàn bộ nội dung file [`database/supabase-schema.sql`](database/supabase-schema.sql), dán vào ô nhập liệu và bấm **Run**.
+   * Script sẽ tự động tạo:
+     * `reservations` (Đơn đặt bàn)
+     * `orders` (Đơn gọi món tại bàn)
+     * `inventory` (Kho nguyên liệu)
+     * `stock_imports` (Phiếu nhập kho)
+     * `stock_exports` (Phiếu xuất kho)
+     * `menu_items` (Danh mục thực đơn mẫu)
+     * Cấu hình RLS Policies cho phép khách tạo đơn và nhân viên quản trị.
+     * Bật Realtime publication cho tất cả các bảng.
+3. **Cấu hình thông tin API:**
+   * Vào **Project Settings** ➔ **API** trên Supabase Dashboard.
+   * Lấy **Project URL** và **anon public key**, sau đó cập nhật vào file [`js/supabase.js`](js/supabase.js):
+   ```javascript
+   const SUPABASE_CONFIG = {
+     url: "https://<your-project-id>.supabase.co",
+     anonKey: "<your-anon-key>"
+   };
+   ```
 
-</div>
+---
+
+## 🔐 Tạo Tài Khoản Quản Trị Viên (Admin)
+
+Để đăng nhập vào Cổng Quản trị ([admin.html](admin.html)):
+
+1. Truy cập Supabase Dashboard ➔ Chọn mục **Authentication** ➔ **Users**.
+2. Nhấn nút **Add user** ➔ chọn **Create user**.
+3. Nhập Email (ví dụ: `admin@mochaandmiso.com`) và Mật khẩu quản trị.
+4. Mở [http://localhost:5500/admin.html](http://localhost:5500/admin.html) và đăng nhập bằng tài khoản vừa tạo.
+
+---
+
+## 🌱 Nạp Dữ Liệu Mẫu (Seed Data)
+
+Dự án cung cấp 2 phương thức nạp dữ liệu mẫu hoàn chỉnh:
+
+### 👉 Cách 1: Chạy script Node.js (Tự động nạp qua REST API)
+```powershell
+node scripts/seed-data.js
+```
+
+### 👉 Cách 2: Chạy file SQL trực tiếp trên Supabase
+Mở SQL Editor trên Supabase Dashboard và thực thi file: [`database/seed-data.sql`](database/seed-data.sql).
+
+**Dữ liệu mẫu bao gồm:**
+* 🍱 **15 món thực đơn** (`menu_items`) đầy đủ hình ảnh, giá và mô tả.
+* 📦 **15 nguyên vật liệu kho** (`inventory`) với tồn kho và mức an toàn.
+* 📥 **5 phiếu nhập kho** (`stock_imports`) có thông tin nhà cung cấp và giá nhập.
+* 📤 **4 phiếu xuất kho** (`stock_exports`) với lý do sử dụng quầy Bar / Làm bánh.
+* 🪑 **5 lượt đặt bàn mẫu** (`reservations`) với các trạng thái Chờ duyệt / Đã xác nhận / Đã hủy.
+* 🍽️ **4 đơn gọi món mẫu tại bàn** (`orders`) với các trạng thái Mới / Đang làm / Đã mang ra / Hoàn tất.
+
+---
+
+## ✅ Kiểm Tra Kết Nối Tự Động (Health Check)
+
+Dự án có sẵn script kiểm tra toàn diện hoạt động của Supabase và PostgreSQL. Chỉ cần chạy lệnh:
+
+```powershell
+node scripts/check-supabase.js
+```
+
+Script sẽ kiểm tra:
+* Kết nối API Supabase
+* Quyền truy cập các bảng (`reservations`, `orders`, `inventory`, `stock_imports`, `stock_exports`)
+* Kiểm tra thử nghiệm tạo đơn và tự động dọn dẹp bản ghi test.
+
+---
+
+## 🌐 Các Phân Hệ & Đường Dẫn Sử Dụng
+
+Khi server đang chạy tại port `5500`:
+
+| Phân hệ | Đường dẫn Local | Mô tả |
+|---|---|---|
+| **🌐 Website Khách hàng** | [http://localhost:5500/index.html](http://localhost:5500/index.html) | Giới thiệu thương hiệu, Menu, Form đặt bàn online |
+| **📱 Gọi món QR tại bàn** | [http://localhost:5500/order.html?table=01](http://localhost:5500/order.html?table=01) | Gọi món theo bàn (Bàn 01, 02... đổi tham số `?table=XX`) |
+| **🔐 Cổng Quản trị (Admin)** | [http://localhost:5500/admin.html](http://localhost:5500/admin.html) | Xem thống kê, nhận đơn món Realtime, duyệt đặt bàn |
+| **📦 Quản lý Kho** | [http://localhost:5500/inventory.html](http://localhost:5500/inventory.html) | Quản lý nguyên vật liệu, lập phiếu nhập kho & xuất kho |
+| **🖨️ In mã QR bàn** | [http://localhost:5500/qr.html](http://localhost:5500/qr.html) | Sinh mã QR hàng loạt theo số lượng bàn của quán để in |

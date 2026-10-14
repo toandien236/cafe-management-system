@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cổng quản trị — Mocha & Miso</title>
   <meta name="robots" content="noindex, nofollow" />
-  <link rel="icon" type="image/jpeg" href="asstes/logo_icon.jpg" />
+  <link rel="icon" type="image/jpeg" href="assets/logo_icon.jpg" />
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -15,15 +15,10 @@
     href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap"
     rel="stylesheet" />
 
-  <!-- Firebase SDKs (Compat) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
-
   <!-- GSAP CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
 
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 
 <body class="admin-body">
@@ -34,7 +29,7 @@
   <section class="admin-login-screen" id="admin-login-section">
     <div class="admin-login-card">
       <div class="admin-brand-header">
-        <img src="asstes/logo_icon.jpg" alt="Mocha & Miso" class="admin-brand-logo" />
+        <img src="assets/logo_icon.jpg" alt="Mocha & Miso" class="admin-brand-logo" />
         <h1 class="admin-brand-title">Cổng quản trị</h1>
         <p class="admin-brand-sub">Mocha &amp; Miso · Cà phê thủ công</p>
       </div>
@@ -56,7 +51,7 @@
         <button type="submit" class="btn btn-primary btn-full" id="admin-login-submit">
           <span class="btn-text">Đăng nhập</span>
         </button>
-        <button type="button" class="admin-forgot-password" id="admin-forgot-password">Quên mật khẩu?</button>
+
       </form>
     </div>
   </section>
@@ -71,10 +66,13 @@
       <div class="container admin-header-inner">
         <div class="admin-logo-group">
           <h2 class="admin-header-title">Mocha &amp; Miso</h2>
-          <span class="admin-badge">Bảng điều khiển quản trị</span>
+          <span class="admin-badge">Bảng điều khiển</span>
         </div>
         <div class="admin-user-info">
-          <span class="admin-email-text" id="logged-admin-email">lehwangduong@gmail.com</span>
+          <a href="revenue.html" class="btn btn-outline admin-top-link">Trang doanh thu</a>
+          <span class="admin-email-text" id="logged-admin-email">rickmondal598@gmail.com</span>
+          <a class="btn-logout" href="hr.html">Quản lý nhân sự</a>
+          <a class="btn-logout" href="inventory.html">Quản lý kho</a>
           <button type="button" class="btn-logout" id="admin-logout-btn">Đăng xuất</button>
         </div>
       </div>
@@ -131,78 +129,160 @@
         </div>
       </div>
 
-      <!-- Controls: Filter Tabs & Search -->
-      <div class="admin-controls-bar">
-        <div class="admin-filter-group" role="tablist">
-          <button type="button" class="admin-filter-tab active" data-filter="all">Tất cả đặt bàn</button>
-          <button type="button" class="admin-filter-tab" data-filter="pending">Đang chờ</button>
-          <button type="button" class="admin-filter-tab" data-filter="confirmed">Đã xác nhận</button>
-          <button type="button" class="admin-filter-tab" data-filter="cancelled">Đã hủy</button>
+      <div class="admin-content-grid">
+        <div class="admin-main-column">
+          <!-- Controls: Filter Tabs & Search -->
+          <div class="admin-controls-bar">
+            <div class="admin-filter-group" role="tablist">
+              <button type="button" class="admin-filter-tab active" data-filter="all">Tất cả</button>
+              <button type="button" class="admin-filter-tab" data-filter="pending">Chờ xác nhận</button>
+              <button type="button" class="admin-filter-tab" data-filter="confirmed">Đã xác nhận</button>
+              <button type="button" class="admin-filter-tab" data-filter="cancelled">Đã hủy</button>
+            </div>
+
+            <input type="text" id="admin-search" class="admin-search-input"
+              placeholder="Tìm theo tên, email hoặc số điện thoại..." />
+          </div>
+
+          <!-- Table Container -->
+          <div class="admin-table-card">
+            <div class="admin-table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Thông tin khách</th>
+                    <th>Ngày và giờ</th>
+                    <th>Số khách</th>
+                    <th>Ghi chú đặc biệt</th>
+                    <th>Trạng thái</th>
+                    <th>Tình trạng email</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="bookings-tbody">
+                  <tr>
+                    <td colspan="7" style="text-align:center; padding: 40px; color: var(--warm-gray);">
+                      Đang tải danh sách đặt bàn...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <section class="customer-care-section" aria-labelledby="customer-care-heading">
+            <div class="admin-section-heading">
+              <div>
+                <p class="admin-section-eyebrow">Chăm sóc khách hàng</p>
+                <h2 class="admin-section-title" id="customer-care-heading">Hồ sơ khách</h2>
+              </div>
+              <label class="customer-search-label" for="customer-search">Tìm khách
+                <input type="search" id="customer-search" class="admin-search-input"
+                  placeholder="Tên, email hoặc số điện thoại" autocomplete="off" />
+              </label>
+            </div>
+
+            <div class="customer-care-stats" aria-live="polite">
+              <div class="stat-card"><span class="stat-label">Khách duy nhất</span><strong id="care-customer-count">0</strong></div>
+              <div class="stat-card"><span class="stat-label">Lượt đặt bàn</span><strong id="care-reservation-count">0</strong></div>
+              <div class="stat-card"><span class="stat-label">Đặt bàn gần nhất</span><strong id="care-last-reservation">Chưa có</strong></div>
+            </div>
+
+            <div class="admin-table-card">
+              <div class="admin-table-wrap">
+                <table class="admin-table customer-care-table">
+                  <thead>
+                    <tr>
+                      <th>Khách hàng</th>
+                      <th>Email</th>
+                      <th>Điện thoại</th>
+                      <th>Số lượt đặt</th>
+                      <th>Lần đặt gần nhất</th>
+                      <th>Lịch sử</th>
+                    </tr>
+                  </thead>
+                  <tbody id="customers-tbody">
+                    <tr><td colspan="6" class="customer-care-empty">Đang tải hồ sơ khách…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
         </div>
 
-        <input type="text" id="admin-search" class="admin-search-input"
-          placeholder="Tìm theo tên, email hoặc số điện thoại..." />
+        <aside class="admin-sidebar-column">
+          <section class="admin-revenue-section" aria-labelledby="admin-revenue-title">
+            <div class="admin-revenue-heading">
+              <div>
+                <p class="admin-section-eyebrow">Bán hàng</p>
+                <h3 class="admin-section-title" id="admin-revenue-title">Doanh thu</h3>
+              </div>
+            </div>
+
+            <div class="admin-stats-grid admin-revenue-stats">
+              <div class="stat-card">
+                <div class="stat-label">Hôm nay</div>
+                <div class="stat-num" id="revenue-today">₹0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Tháng này</div>
+                <div class="stat-num" id="revenue-month">₹0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Tổng doanh thu</div>
+                <div class="stat-num" id="revenue-total">₹0</div>
+              </div>
+            </div>
+
+            <form class="admin-revenue-form" id="admin-revenue-form">
+              <label class="admin-revenue-field">
+                <span>Số tiền (₹)</span>
+                <input id="revenue-amount" type="number" min="1" step="1" required />
+              </label>
+              <label class="admin-revenue-field">
+                <span>Ngày bán</span>
+                <input id="revenue-date" type="date" required />
+              </label>
+              <label class="admin-revenue-field admin-revenue-description">
+                <span>Ghi chú</span>
+                <input id="revenue-description" type="text" maxlength="200" placeholder="Ví dụ: Bán tại quầy" />
+              </label>
+              <button class="btn btn-primary admin-revenue-submit" id="revenue-submit" type="submit">Ghi nhận</button>
+            </form>
+
+            <div class="admin-table-card">
+              <div class="admin-table-wrap">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Ngày bán</th>
+                      <th>Ghi chú</th>
+                      <th>Số tiền</th>
+                      <th>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody id="revenue-tbody">
+                    <tr><td colspan="4" style="text-align:center; padding:30px;">Đang tải doanh thu…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </aside>
       </div>
-
-      <!-- Table Container -->
-      <div class="admin-table-card">
-        <div class="admin-table-wrap">
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>Thông tin khách</th>
-                <th>Ngày và giờ</th>
-                <th>Số khách</th>
-                <th>Ghi chú</th>
-                <th>Trạng thái</th>
-                <th>Tình trạng email</th>
-                <th>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody id="bookings-tbody">
-              <tr>
-                <td colspan="7" style="text-align:center; padding: 40px; color: var(--warm-gray);">
-                  Đang tải danh sách đặt bàn...
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <section class="admin-orders-section" aria-labelledby="orders-heading">
-        <div class="admin-section-heading">
-          <div>
-            <span class="admin-section-kicker">Bếp và phục vụ</span>
-            <h2 id="orders-heading">Đơn gọi món theo bàn</h2>
-          </div>
-          <div class="admin-section-actions">
-            <a class="admin-qr-link" href="qr.html" target="_blank" rel="noopener">Tạo QR bàn</a>
-            <span class="admin-live-indicator">Đang cập nhật trực tiếp</span>
-          </div>
-        </div>
-        <div class="admin-table-card">
-          <div class="admin-table-wrap">
-            <table class="admin-table admin-orders-table">
-              <thead>
-                <tr>
-                  <th>Mã đơn / Bàn</th>
-                  <th>Món đã gọi</th>
-                  <th>Tổng tiền</th>
-                  <th>Trạng thái</th>
-                  <th>Thanh toán</th>
-                  <th>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody id="orders-tbody">
-                <tr><td colspan="6" style="text-align:center; padding: 40px; color: var(--warm-gray);">Đang tải đơn gọi món...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
 
     </main>
+  </div>
+
+  <div class="admin-modal-overlay" id="customer-history-modal" hidden>
+    <div class="admin-modal-card customer-history-card" role="dialog" aria-modal="true"
+      aria-labelledby="customer-history-title">
+      <h3 class="admin-modal-title" id="customer-history-title">Lịch sử đặt bàn</h3>
+      <div id="customer-history-content"></div>
+      <div class="admin-modal-actions">
+        <button type="button" class="btn btn-outline" id="customer-history-close">Đóng</button>
+      </div>
+    </div>
   </div>
 
   <!-- ============================================================ -->
@@ -210,7 +290,7 @@
   <!-- ============================================================ -->
   <div class="admin-modal-overlay" id="reply-modal" hidden>
     <div class="admin-modal-card">
-      <h3 class="admin-modal-title">Gửi email cho khách</h3>
+      <h3 class="admin-modal-title">Trả lời khách hàng</h3>
 
       <div class="form-group" style="margin-bottom: 20px;">
         <input type="email" id="modal-guest-email" class="form-input" readonly />
@@ -218,13 +298,13 @@
       </div>
 
       <div class="form-group" style="margin-bottom: 20px;">
-        <input type="text" id="modal-subject" class="form-input" value="Thông tin đặt bàn tại Mocha & Miso Café" />
+        <input type="text" id="modal-subject" class="form-input" value="Thông tin đặt bàn tại Mocha & Miso" />
         <label for="modal-subject" class="form-label form-label--up">Tiêu đề</label>
       </div>
 
       <div class="form-group" style="margin-bottom: 20px;">
         <textarea id="modal-message" class="form-input form-textarea" rows="5"
-          placeholder="Soạn nội dung gửi khách..."></textarea>
+          placeholder="Viết lời nhắn gửi khách hàng..."></textarea>
         <label for="modal-message" class="form-label form-label--up">Nội dung</label>
       </div>
 
@@ -255,9 +335,9 @@
   </script>
 
   <!-- Scripts -->
-  <script src="firebase.js?v=2" defer></script>
-  <script src="main.js" defer></script>
-  <script src="admin.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="js/supabase.js" defer></script>
+  <script src="js/admin.js" defer></script>
 </body>
 
 </html>
