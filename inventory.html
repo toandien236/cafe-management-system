@@ -333,6 +333,869 @@
 
         }
 
+        body {
+            min-height: 100vh;
+            background:
+                radial-gradient(ellipse at 10% 0%, rgba(184, 155, 139, 0.16), transparent 34rem),
+                #f7f3ed;
+            color: #34251f;
+            font-family: var(--font-sans, "DM Sans", Arial, sans-serif);
+        }
+
+        .inventory-container {
+            width: min(1200px, calc(100% - 40px));
+            margin: 0 auto;
+            padding: clamp(28px, 5vw, 56px) 0;
+        }
+
+        .inventory-header {
+            flex-wrap: wrap;
+            gap: 16px 22px;
+            padding-bottom: 22px;
+            border-bottom: 1px solid rgba(90, 62, 54, 0.16);
+        }
+
+        .inventory-header > div {
+            flex: 1 1 300px;
+        }
+
+        .inventory-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            color: #788768;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+        }
+
+        .inventory-kicker::before {
+            width: 20px;
+            height: 1px;
+            background: currentColor;
+            content: "";
+        }
+
+        .inventory-header h1 {
+            font-family: var(--font-serif, Georgia, serif);
+            font-size: clamp(34px, 5vw, 48px);
+            line-height: 1.05;
+            letter-spacing: -0.025em;
+        }
+
+        .inventory-header p {
+            margin-top: 9px;
+            color: #806e64;
+            font-size: 14px;
+        }
+
+        .inventory-header {
+            position: relative;
+            overflow: hidden;
+            padding: 24px 26px;
+            border: 1px solid rgba(90, 62, 54, 0.1);
+            border-radius: 16px;
+            background: linear-gradient(112deg, rgba(255, 253, 249, 0.97), rgba(246, 239, 230, 0.88));
+            box-shadow: 0 12px 32px rgba(60, 42, 36, 0.06);
+        }
+
+        .inventory-header::after {
+            position: absolute;
+            top: -74px;
+            right: 20%;
+            width: 210px;
+            height: 210px;
+            border: 1px solid rgba(120, 135, 104, 0.13);
+            border-radius: 50%;
+            box-shadow: 0 0 0 22px rgba(120, 135, 104, 0.035), 0 0 0 44px rgba(120, 135, 104, 0.025);
+            content: "";
+            pointer-events: none;
+        }
+
+        .inventory-header > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .inventory-header > div {
+            position: relative;
+            z-index: 1;
+        }
+
+        .btn {
+            min-height: 42px;
+            padding: 11px 17px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-weight: 600;
+            transition: background-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 14px rgba(60, 42, 36, 0.14);
+        }
+
+        .btn:focus-visible,
+        input:focus-visible,
+        select:focus-visible,
+        textarea:focus-visible,
+        .inventory-login:focus-visible {
+            outline: 3px solid rgba(120, 135, 104, 0.38);
+            outline-offset: 2px;
+        }
+
+        .btn-add {
+            background: #5a3e36;
+        }
+
+        .btn-add:hover {
+            background: #3c2a24;
+        }
+
+        .inventory-login {
+            padding: 9px 2px;
+            color: #604638;
+            text-decoration: none;
+            border-bottom: 1px solid #b89b8b;
+        }
+
+        .inventory-login:hover {
+            color: #3c2a24;
+            border-color: #3c2a24;
+        }
+
+        .inventory-message {
+            min-height: 0;
+            margin: 14px 0 22px;
+            font-size: 14px;
+        }
+
+        .inventory-message:empty {
+            display: none;
+        }
+
+        .inventory-stats {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+            margin: 0 0 26px;
+        }
+
+        .stat-card {
+            position: relative;
+            overflow: hidden;
+            padding: 20px 22px;
+            border: 1px solid rgba(90, 62, 54, 0.1);
+            border-radius: 14px;
+            box-shadow: 0 8px 24px rgba(60, 42, 36, 0.055);
+        }
+
+        .stat-card::after {
+            position: absolute;
+            top: 17px;
+            right: 18px;
+            display: grid;
+            width: 32px;
+            height: 32px;
+            place-items: center;
+            border-radius: 50%;
+            background: rgba(120, 135, 104, 0.1);
+            color: #667557;
+            content: "#";
+            font-family: var(--font-serif, Georgia, serif);
+            font-size: 19px;
+            font-weight: 700;
+        }
+
+        .stat-card:nth-child(2)::after {
+            background: rgba(207, 149, 80, 0.13);
+            color: #ad7430;
+            content: "!";
+        }
+
+        .stat-card:nth-child(3)::after {
+            background: rgba(189, 110, 97, 0.12);
+            color: #a9584c;
+            content: "0";
+        }
+
+        .stat-card::before {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 4px;
+            background: #788768;
+            content: "";
+        }
+
+        .stat-card:nth-child(2)::before {
+            background: #cf9550;
+        }
+
+        .stat-card:nth-child(3)::before {
+            background: #bd6e61;
+        }
+
+        .stat-card h3 {
+            margin: 0 0 10px;
+            color: #806e64;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            line-height: 1.45;
+        }
+
+        .stat-card p {
+            color: #3c2a24;
+            font-size: clamp(28px, 4vw, 36px);
+            line-height: 1.15;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.015em;
+        }
+
+        .inventory-workflows {
+            gap: 18px;
+            margin-bottom: 24px;
+        }
+
+        .workflow-panel,
+        .table-container {
+            border: 1px solid rgba(90, 62, 54, 0.12);
+            border-radius: 14px;
+            box-shadow: 0 8px 24px rgba(60, 42, 36, 0.055);
+        }
+
+        .workflow-panel {
+            position: relative;
+            overflow: hidden;
+            padding: clamp(18px, 3vw, 24px);
+        }
+
+        .workflow-panel::before {
+            position: absolute;
+            inset: 0 0 auto;
+            height: 3px;
+            background: linear-gradient(90deg, #788768, #c4b59f);
+            content: "";
+        }
+
+        .workflow-panel:nth-child(2)::before {
+            background: linear-gradient(90deg, #bd6e61, #d7a293);
+        }
+
+        .workflow-panel h2 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-family: var(--font-sans, "DM Sans", Arial, sans-serif);
+            font-size: 19px;
+            font-weight: 700;
+            letter-spacing: 0.005em;
+            line-height: 1.4;
+        }
+
+        .workflow-panel h2::before {
+            display: grid;
+            width: 32px;
+            height: 32px;
+            place-items: center;
+            border-radius: 9px;
+            background: #eef1e9;
+            color: #667557;
+            content: "+";
+            font-family: var(--font-sans, Arial, sans-serif);
+            font-size: 20px;
+            font-weight: 500;
+        }
+
+        .workflow-panel:nth-child(2) h2::before {
+            background: #f8ece9;
+            color: #a9584c;
+            content: "\2212";
+        }
+
+        .workflow-form {
+            gap: 14px;
+        }
+
+        .workflow-form label,
+        .form-group label {
+            color: #5a463d;
+        }
+
+        .workflow-form input,
+        .workflow-form select,
+        .workflow-form textarea,
+        .form-group input,
+        .form-group select,
+        .item-search {
+            min-height: 42px;
+            border: 1px solid #d9cec4;
+            border-radius: 7px;
+            background: #fffdfa;
+            color: #34251f;
+            transition: border-color 160ms ease, box-shadow 160ms ease;
+        }
+
+        .workflow-form input:focus,
+        .workflow-form select:focus,
+        .workflow-form textarea:focus,
+        .form-group input:focus,
+        .form-group select:focus,
+        .item-search:focus {
+            border-color: #8b6c5c;
+            box-shadow: 0 0 0 3px rgba(139, 108, 92, 0.12);
+            outline: none;
+        }
+
+        .workflow-form textarea {
+            min-height: 76px;
+        }
+
+        .workflow-form button {
+            min-height: 44px;
+        }
+
+        .movement-table {
+            border: 1px solid #eee6de;
+            border-radius: 9px;
+        }
+
+        .movement-table table {
+            min-width: 520px;
+        }
+
+        .item-search {
+            max-width: 400px;
+            margin-bottom: 12px;
+            padding: 10px 13px;
+            box-shadow: 0 3px 12px rgba(60, 42, 36, 0.04);
+        }
+
+        .inventory-list-heading {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 16px;
+            margin: 34px 0 13px;
+        }
+
+        .inventory-list-heading h2 {
+            color: #3c2a24;
+            font-family: var(--font-serif, Georgia, serif);
+            font-size: 28px;
+            line-height: 1.1;
+        }
+
+        .inventory-list-heading p {
+            margin-top: 5px;
+            color: #806e64;
+            font-size: 13px;
+        }
+
+        .table-container {
+            padding: 0;
+            overflow: auto;
+        }
+
+        .table-container > table {
+            min-width: 760px;
+        }
+
+        th,
+        td {
+            padding: 13px 15px;
+            border-bottom-color: #eee8e1;
+            vertical-align: middle;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #f1ebe3;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.035em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .table-container td,
+        .movement-table td {
+            font-family: var(--font-sans, "DM Sans", Arial, sans-serif);
+            font-variant-numeric: lining-nums;
+            letter-spacing: 0.005em;
+            line-height: 1.5;
+        }
+
+        .table-container tbody td:nth-child(3),
+        .table-container tbody td:nth-child(4),
+        .table-container tbody td:nth-child(5),
+        .table-container tbody td:nth-child(6),
+        .movement-table tbody td:nth-child(3) {
+            font-variant-numeric: lining-nums tabular-nums;
+            letter-spacing: 0.015em;
+        }
+
+        .table-container .btn-secondary,
+        .table-container .btn-logout {
+            min-height: 34px;
+            padding: 6px 11px;
+            border: 1px solid transparent;
+            border-radius: 7px;
+            color: #fff;
+            font: 600 12px/1.2 var(--font-sans, "DM Sans", Arial, sans-serif);
+            cursor: pointer;
+            transition: background-color 150ms ease, transform 150ms ease;
+        }
+
+        .table-container .btn-secondary {
+            background: #b27c32;
+        }
+
+        .table-container .btn-secondary:hover {
+            background: #956425;
+            transform: translateY(-1px);
+        }
+
+        .table-container .btn-logout {
+            background: #b86659;
+        }
+
+        .table-container .btn-logout:hover {
+            background: #9f5147;
+            transform: translateY(-1px);
+        }
+
+        .table-container .btn-secondary:focus-visible,
+        .table-container .btn-logout:focus-visible {
+            outline: 3px solid rgba(120, 135, 104, 0.38);
+            outline-offset: 2px;
+        }
+
+        tbody tr {
+            transition: background-color 140ms ease;
+        }
+
+        tbody tr:hover {
+            background: #fbf8f4;
+        }
+
+        .row-low {
+            background: #fff9ee;
+        }
+
+        .row-out {
+            background: #fff3f1;
+        }
+
+        .modal {
+            z-index: 1000;
+            padding: 18px;
+            background: rgba(35, 25, 21, 0.56);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            width: min(460px, 100%);
+            max-height: min(88vh, 760px);
+            overflow-y: auto;
+            padding: clamp(22px, 5vw, 30px);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            border-radius: 16px;
+            box-shadow: 0 24px 70px rgba(35, 25, 21, 0.24);
+        }
+
+        .modal-content h2 {
+            margin-bottom: 22px;
+            font-family: var(--font-serif, Georgia, serif);
+            font-size: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 17px;
+        }
+
+        .form-group label {
+            margin-bottom: 7px;
+            font-size: 13px;
+        }
+
+        .form-group input,
+        .form-group select {
+            min-height: 43px;
+            padding: 10px 12px;
+            font: inherit;
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 7px;
+            color: #806e64;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .modal-buttons {
+            margin-top: 24px;
+        }
+
+        @media (max-width: 700px) {
+            .inventory-container {
+                width: min(100% - 28px, 560px);
+                padding-top: 24px;
+            }
+
+            .inventory-header {
+                display: grid;
+                grid-template-columns: 1fr auto;
+                align-items: center;
+                gap: 14px;
+                margin-bottom: 18px;
+                padding: 20px;
+            }
+
+            .inventory-header > div {
+                grid-column: 1 / -1;
+            }
+
+            .inventory-header .btn {
+                grid-column: 1 / -1;
+                justify-self: start;
+            }
+
+            .inventory-header .inventory-login {
+                grid-column: 1 / -1;
+                justify-self: start;
+            }
+
+            .inventory-stats {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 9px;
+                margin-bottom: 20px;
+            }
+
+            .stat-card {
+                padding: 16px 12px 16px 15px;
+            }
+
+            .stat-card h3 {
+                min-height: 32px;
+                font-size: 11px;
+                line-height: 1.4;
+                letter-spacing: 0;
+            }
+
+            .stat-card p {
+                font-size: 27px;
+            }
+
+            .workflow-panel {
+                padding: 17px;
+            }
+
+            .inventory-list-heading {
+                align-items: start;
+                flex-direction: column;
+                gap: 5px;
+                margin-top: 27px;
+            }
+
+            .table-container {
+                margin-right: -1px;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .inventory-header {
+                grid-template-columns: 1fr;
+            }
+
+            .inventory-header > div {
+                grid-column: auto;
+            }
+
+            .inventory-login {
+                justify-self: start;
+            }
+
+            .inventory-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .stat-card h3 {
+                min-height: 0;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .stat-card::after {
+                display: none;
+            }
+
+            .inventory-stats {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 8px;
+            }
+
+            .stat-card {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                align-items: center;
+                gap: 12px;
+                min-height: 70px;
+                padding: 12px 17px 12px 20px;
+            }
+
+            .stat-card h3 {
+                width: auto;
+                max-width: 100%;
+                min-height: 0;
+                margin: 0;
+                overflow-wrap: normal;
+                word-break: normal;
+                font-size: 13px;
+            }
+
+            .stat-card p {
+                min-width: 2ch;
+                margin: 0;
+                text-align: right;
+                font-size: 25px;
+                line-height: 1.2;
+            }
+
+            .workflow-panel h2 {
+                gap: 9px;
+                font-size: 18px;
+                letter-spacing: 0;
+                line-height: 1.45;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+
+            #stock-import-form > div:nth-child(4) {
+                grid-column: 1 / -1;
+            }
+
+            .inventory-workflows {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 14px;
+            }
+
+            .workflow-form {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 12px 10px;
+            }
+
+            .workflow-form > div:first-child,
+            .workflow-form .workflow-wide {
+                grid-column: 1 / -1;
+            }
+
+            .workflow-form input,
+            .workflow-form select,
+            .workflow-form textarea {
+                min-width: 0;
+                font-size: 16px;
+            }
+
+            .table-container {
+                overflow: visible;
+            }
+
+            .table-container > table,
+            .table-container > table tbody,
+            .movement-table table,
+            .movement-table tbody {
+                display: block;
+                width: 100%;
+                min-width: 0;
+            }
+
+            .table-container > table thead,
+            .movement-table thead {
+                display: none;
+            }
+
+            .table-container > table tbody tr {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 4px 12px;
+                margin: 8px;
+                padding: 10px 12px;
+                border: 1px solid #eee6de;
+                border-radius: 10px;
+                background: #fffdfa;
+                box-shadow: 0 3px 10px rgba(60, 42, 36, 0.04);
+            }
+
+            .table-container > table tbody tr:hover {
+                background: #fffdfa;
+            }
+
+            .table-container > table tbody td {
+                display: flex;
+                min-width: 0;
+                flex-direction: column;
+                gap: 2px;
+                padding: 3px 2px;
+                border: 0;
+                overflow-wrap: break-word;
+                font-size: 13px;
+                line-height: 1.45;
+                letter-spacing: 0;
+            }
+
+            .table-container > table tbody td::before {
+                color: #8a776d;
+                content: "Thông tin";
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.035em;
+                line-height: 1.35;
+                text-transform: uppercase;
+            }
+
+            .table-container > table tbody td:nth-child(3),
+            .table-container > table tbody td:nth-child(4),
+            .table-container > table tbody td:nth-child(5),
+            .table-container > table tbody td:nth-child(6) {
+                white-space: nowrap;
+                font-variant-numeric: lining-nums tabular-nums;
+                letter-spacing: 0.01em;
+            }
+
+            .table-container > table tbody td:nth-child(7) {
+                font-size: 12px;
+                font-variant-numeric: lining-nums tabular-nums;
+            }
+
+            .table-container > table tbody td:nth-child(1)::before { content: "Nguyên liệu"; }
+            .table-container > table tbody td:nth-child(2)::before { content: "Danh mục"; }
+            .table-container > table tbody td:nth-child(3)::before { content: "Số lượng tồn"; }
+            .table-container > table tbody td:nth-child(4)::before { content: "Mức tối thiểu"; }
+            .table-container > table tbody td:nth-child(5)::before { content: "Giá nhập"; }
+            .table-container > table tbody td:nth-child(6)::before { content: "Trạng thái"; }
+            .table-container > table tbody td:nth-child(7)::before { content: "Cập nhật"; }
+
+            .table-container > table tbody td:first-child,
+            .table-container > table tbody td:last-child {
+                grid-column: 1 / -1;
+            }
+
+            .table-container > table tbody td:last-child {
+                flex-direction: row;
+                gap: 8px;
+                padding-top: 9px;
+                border-top: 1px solid #f0e9e2;
+            }
+
+            .table-container > table tbody td:last-child::before {
+                display: none;
+            }
+
+            .table-container > table tbody td[colspan] {
+                grid-column: 1 / -1;
+                align-items: center;
+                padding: 15px 8px;
+                color: #806e64;
+                text-align: center;
+            }
+
+            .table-container > table tbody td[colspan]::before {
+                display: none;
+            }
+
+            .table-container > table .btn-edit,
+            .table-container > table .btn-delete {
+                min-height: 40px;
+                flex: 1;
+            }
+
+            .movement-table {
+                overflow: visible;
+            }
+
+            .movement-table tbody tr {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 4px 10px;
+                margin: 7px 0 0;
+                padding: 9px 11px;
+                border: 1px solid #eee6de;
+                border-radius: 9px;
+                background: #fffdfa;
+            }
+
+            .movement-table tbody td {
+                display: flex;
+                min-width: 0;
+                flex-direction: column;
+                gap: 2px;
+                padding: 3px 2px;
+                border: 0;
+                overflow-wrap: break-word;
+                font-size: 12px;
+                line-height: 1.4;
+                letter-spacing: 0;
+            }
+
+            .movement-table tbody td::before {
+                color: #8a776d;
+                content: "Chi tiết";
+                font-size: 9px;
+                font-weight: 700;
+                letter-spacing: 0.035em;
+                line-height: 1.3;
+                text-transform: uppercase;
+            }
+
+            .movement-table tbody td:nth-child(1),
+            .movement-table tbody td:nth-child(3) {
+                font-variant-numeric: lining-nums tabular-nums;
+                letter-spacing: 0.01em;
+            }
+
+            .movement-table tbody td:nth-child(1)::before { content: "Thời gian"; }
+            .movement-table tbody td:nth-child(2)::before { content: "Nguyên liệu"; }
+            .movement-table tbody td:nth-child(3)::before { content: "Số lượng"; }
+
+            .movement-table tbody td:nth-child(4),
+            .movement-table tbody td:nth-child(5) {
+                grid-column: 1 / -1;
+            }
+
+            .movement-table tbody td:nth-child(4)::before {
+                content: "Nhà cung cấp / lý do";
+            }
+
+            .movement-table tbody td:nth-child(5)::before {
+                content: "Ghi chú";
+            }
+
+            .movement-table tbody td[colspan] {
+                grid-column: 1 / -1;
+                align-items: center;
+                padding: 12px 4px;
+                text-align: center;
+            }
+
+            .movement-table tbody td[colspan]::before {
+                display: none;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
     </style>
 
 </head>
@@ -349,6 +1212,8 @@
 
         <div>
 
+            <span class="inventory-kicker">MOCHA &amp; MISO · QUẢN TRỊ</span>
+
             <h1>📦 Quản lý kho</h1>
 
             <p>
@@ -362,7 +1227,8 @@
             class="btn btn-add"
             id="add-item-btn"
             type="button"
-            disabled>
+            aria-haspopup="dialog"
+            aria-controls="inventory-modal">
 
             + Thêm nguyên liệu
 
@@ -424,8 +1290,8 @@
                     <input id="import-quantity" type="number" min="1" step="any" required>
                 </div>
                 <div>
-                    <label for="import-unit-price">Giá nhập / đơn vị</label>
-                    <input id="import-unit-price" type="number" min="0" step="any" required>
+                    <label for="import-unit-price">Giá nhập / đơn vị (VND)</label>
+                    <input id="import-unit-price" type="number" min="0" step="1" inputmode="numeric" required>
                 </div>
                 <div>
                     <label for="import-supplier">Nhà cung cấp</label>
@@ -480,6 +1346,13 @@
 
 
     <!-- BẢNG -->
+
+    <div class="inventory-list-heading">
+        <div>
+            <h2>Nguyên liệu trong kho</h2>
+            <p>Theo dõi số lượng, giá nhập và cảnh báo tồn kho.</p>
+        </div>
+    </div>
 
     <input class="item-search" id="item-search" type="search" placeholder="Tìm nguyên liệu..." aria-label="Tìm nguyên liệu">
 
@@ -604,10 +1477,11 @@
                 </label>
 
                 <input
-                    type="number"
+                    type="text"
                     id="item-quantity"
-                    min="0"
-                    step="any"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    autocomplete="off"
                     required>
 
                 <small>Chỉ dùng khi tạo mới; các thay đổi tồn sau này dùng phiếu nhập/xuất.</small>
@@ -617,13 +1491,15 @@
 
             <div class="form-group">
 
-                <label for="item-price">Giá nhập / đơn vị</label>
+                <label for="item-price">Giá nhập / đơn vị (VND)</label>
 
                 <input
                     type="number"
                     id="item-price"
                     min="0"
-                    step="any"
+                    step="1"
+                    inputmode="numeric"
+                    placeholder="Ví dụ: 180000"
                     required>
 
             </div>
@@ -651,10 +1527,11 @@
                 </label>
 
                 <input
-                    type="number"
+                    type="text"
                     id="item-min"
-                    min="0"
-                    step="any"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    autocomplete="off"
                     required>
 
             </div>
