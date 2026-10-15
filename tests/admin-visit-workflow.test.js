@@ -20,6 +20,7 @@ const customerDataSource = extractSource('function normalizeCustomerEmail(', '\n
 const visitLoadSource = extractSource('function stopReservationVisitsListener()', '\nfunction normalizeCustomerEmail(');
 const visitSource = extractSource('async function recordReservationVisit(', '\nfunction loadOrders()');
 const profileRenderSource = extractSource('function renderCustomerProfile(', '\nasync function recordReservationVisit(');
+const renderTableSource = extractSource('function renderTable()', '\nfunction getStatusLabel(');
 const statusSource = extractSource('window.updateBookingStatus = async function', '\nwindow.deleteBooking = async function');
 const deleteSource = extractSource('window.deleteBooking = async function', '\n// Reply Modal Controls');
 
@@ -120,6 +121,7 @@ function createHarness({
     formatTime: value => String(value || ''),
     getStatusLabel: status => String(status),
     getEmailStatusLabel: status => String(status),
+    getVisitReservationId: visit => visit.reservationId || visit.id,
     confirm: () => true,
     showToast: (message, type) => events.toasts.push({ message, type }),
     renderCustomers() {},
@@ -129,6 +131,7 @@ function createHarness({
   vm.runInContext(diagnosticSource, sandbox);
   vm.runInContext('adminSessionActive = true;', sandbox);
   vm.runInContext(customerDataSource, sandbox);
+  vm.runInContext(renderTableSource, sandbox);
   vm.runInContext(visitLoadSource, sandbox);
   vm.runInContext(profileRenderSource, sandbox);
   vm.runInContext(visitSource, sandbox);
@@ -568,7 +571,7 @@ test('keeps the admin rule private and normalizes the email claim', () => {
   assert.match(rulesSource, /match \/reservationVisits\/{reservationId}/);
   assert.match(rulesSource, /hasAll\(\['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer'\]\)/);
   assert.match(rulesSource, /allow read: if isAdmin\(\)/);
-  assert.match(rulesSource, /allow update: if isAdmin\(\)[\s\S]*affectedKeys\(\)\.hasOnly\(\['customer'\]\)/);
+  assert.match(rulesSource, /allow update: if isAdmin\(\)[\s\S]*affectedKeys\(\)\.hasOnly\(\['customer', 'reservationId'\]\)/);
   assert.match(rulesSource, /allow delete: if false/);
   assert.match(rulesSource, /isValidVisitCustomerSnapshot\(\s*getAfter\(/);
   assert.doesNotMatch(rulesSource, /allow read: if true/);
