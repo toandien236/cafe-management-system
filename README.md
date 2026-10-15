@@ -190,3 +190,9 @@ Khi server đang chạy tại port `5500`:
 | **🔐 Cổng Quản trị (Admin)** | [http://localhost:5500/admin.html](http://localhost:5500/admin.html) | Xem thống kê, nhận đơn món Realtime, duyệt đặt bàn |
 | **📦 Quản lý Kho** | [http://localhost:5500/inventory.html](http://localhost:5500/inventory.html) | Quản lý nguyên vật liệu, lập phiếu nhập kho & xuất kho |
 | **🖨️ In mã QR bàn** | [http://localhost:5500/qr.html](http://localhost:5500/qr.html) | Sinh mã QR hàng loạt theo số lượng bàn của quán để in |
+
+## Chăm sóc khách hàng và lượt ghé
+
+- Hướng dẫn sử dụng hồ sơ khách hàng và ghi nhận lượt ghé: [CUSTOMER_CARE_GUIDE.md](./CUSTOMER_CARE_GUIDE.md)
+- Các tình huống kiểm thử và giới hạn tích hợp: [CUSTOMER_CARE_TEST_PLAN.md](./CUSTOMER_CARE_TEST_PLAN.md)
+- Quy tắc Firestore cho đặt bàn và lượt ghé nằm trong [firestore.rules](./firestore.rules).

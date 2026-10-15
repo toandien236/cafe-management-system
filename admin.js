@@ -13,10 +13,9 @@ function bootAdmin() {
   // Firebase SDKs are loaded with defer, so poll until ready
   const waitForFirebase = setInterval(() => {
     const authInstance = window.firebaseAuth || window.auth || (typeof firebase !== 'undefined' ? firebase.auth() : null);
-    const authApi = getFirebaseAuthApi(authInstance);
-    if (authApi) {
+    if (authInstance && typeof authInstance.onAuthStateChanged === 'function') {
       clearInterval(waitForFirebase);
-      initAdminAuth(authApi);
+      initAdminAuth(authInstance);
       initAdminDashboard();
     }
   }, 80);
@@ -25,7 +24,7 @@ function bootAdmin() {
   setTimeout(() => {
     clearInterval(waitForFirebase);
     const authInstance = window.firebaseAuth || window.auth;
-    if (!getFirebaseAuthApi(authInstance)) {
+    if (!authInstance) {
       showLoginError('Không tải được Firebase. Vui lòng tải lại trang.');
     }
   }, 8000);
@@ -37,45 +36,113 @@ if (document.readyState === 'loading') {
   bootAdmin();
 }
 
-function getFirebaseAuthApi(authInstance) {
-  if (!authInstance) return null;
-
-  const methods = window.firebaseAuthMethods;
-  if (methods
-    && typeof methods.onAuthStateChanged === 'function'
-    && typeof methods.signInWithEmailAndPassword === 'function'
-    && typeof methods.signOut === 'function'
-    && typeof methods.sendPasswordResetEmail === 'function') {
-    return {
-      onAuthStateChanged: (callback) => methods.onAuthStateChanged(authInstance, callback),
-      signInWithEmailAndPassword: (email, password) => methods.signInWithEmailAndPassword(authInstance, email, password),
-      signOut: () => methods.signOut(authInstance),
-      sendPasswordResetEmail: (email) => methods.sendPasswordResetEmail(authInstance, email)
-    };
-  }
-
-  if (typeof authInstance.onAuthStateChanged === 'function'
-    && typeof authInstance.signInWithEmailAndPassword === 'function'
-    && typeof authInstance.signOut === 'function'
-    && typeof authInstance.sendPasswordResetEmail === 'function') {
-    return {
-      onAuthStateChanged: (callback) => authInstance.onAuthStateChanged(callback),
-      signInWithEmailAndPassword: (email, password) => authInstance.signInWithEmailAndPassword(email, password),
-      signOut: () => authInstance.signOut(),
-      sendPasswordResetEmail: (email) => authInstance.sendPasswordResetEmail(email)
-    };
-  }
-
-  return null;
-}
-
 /* ──────────────────────────────────────────────────────────
   1. ADMIN AUTHENTICATION — Firebase Auth primary
   ────────────────────────────────────────────────────────── */
 
 const ADMIN_EMAIL = 'lehwangduong@gmail.com';
+let adminSessionActive = false;
 
-function initAdminAuth(authApi) {
+function normalizeAdminEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function firestoreErrorCode(error) {
+  return String(error && error.code || 'unknown').replace(/^firestore\//, '');
+}
+
+function logFirestoreDiagnostic(operation, error, {
+  paths = [], authInstance = null, step = 'unspecified', operations = null
+} = {}) {
+  const resolvedAuth = authInstance || window.firebaseAuth || window.auth || null;
+  const currentUser = resolvedAuth && resolvedAuth.currentUser;
+  const details = {
+    code: firestoreErrorCode(error),
+    step,
+    paths,
+    auth: {
+      signedIn: Boolean(currentUser),
+      adminEmailMatches: Boolean(currentUser && normalizeAdminEmail(currentUser.email) === ADMIN_EMAIL)
+    }
+  };
+  if (Array.isArray(operations)) details.operations = operations;
+  console.warn(`[Firestore] ${operation}`, details);
+}
+
+function firestoreUserMessage(operation, error, step = '') {
+  const code = firestoreErrorCode(error);
+  if (code === 'unauthenticated') {
+    return operation === 'read-visit-history'
+      ? 'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại bằng tài khoản quản trị để xem lịch sử lượt ghé.'
+      : operation === 'delete-reservation'
+        ? 'Phiên đăng nhập đã hết hạn; đặt bàn chưa bị xóa.'
+        : operation === 'update-reservation-status'
+          ? 'Phiên đăng nhập đã hết hạn; trạng thái đặt bàn chưa được cập nhật.'
+          : 'Bạn chưa đăng nhập bằng tài khoản quản trị; chưa ghi nhận lượt ghé.';
+  }
+  if (code === 'permission-denied') {
+    if (operation === 'update-reservation-status') {
+      return step === 'preflight-auth'
+        ? 'Tài khoản đang đăng nhập không khớp tài khoản quản trị được cấu hình.'
+        : 'Firestore từ chối cập nhật đặt bàn. Trạng thái đã được hoàn tác; kiểm tra email admin và Rules đang áp dụng.';
+    }
+    if (operation === 'create-reservation-visit' && step === 'read-reservation') {
+      return 'Firestore từ chối đọc đặt bàn. Kiểm tra quyền admin trong Rules đang áp dụng cho project này.';
+    }
+    if (operation === 'delete-reservation' && step === 'read-reservation') {
+      return 'Firestore từ chối đọc đặt bàn; đặt bàn chưa bị xóa. Kiểm tra quyền đọc admin của /reservations trong Rules đang áp dụng.';
+    }
+    if (step === 'read-existing-visit') {
+      return operation === 'delete-reservation'
+        ? 'Firestore từ chối đọc reservationVisits; đặt bàn chưa bị xóa. Rules đang áp dụng cần cho admin đọc lịch sử lượt ghé.'
+        : 'Firestore từ chối đọc reservationVisits. Rules đang áp dụng cần cho admin đọc lịch sử lượt ghé.';
+    }
+    if (operation === 'delete-reservation' && step === 'preserve-visit-customer') {
+      return 'Firestore từ chối cập nhật snapshot khách của lượt ghé cũ; đặt bàn và lịch sử đều được giữ nguyên.';
+    }
+    if (operation === 'delete-reservation' && step === 'delete-reservation') {
+      return 'Firestore từ chối thao tác xóa /reservations; đặt bàn chưa bị xóa. Log chẩn đoán ghi rõ path và trạng thái đăng nhập.';
+    }
+    if (operation === 'delete-reservation' && step === 'commit-transaction') {
+      return 'Firestore từ chối commit transaction xóa. Đặt bàn và lượt ghé vẫn được giữ; lỗi commit nguyên tử không chỉ ra write nào bị từ chối. Xem log chẩn đoán để biết các thao tác đã thử.';
+    }
+    if (operation === 'create-reservation-visit' && ['create-visit', 'commit-transaction'].includes(step)) {
+      return 'Firestore từ chối tạo lượt ghé. Kiểm tra Rules đang áp dụng có khớp schema và reservation confirmed không.';
+    }
+    return operation === 'read-visit-history'
+      ? 'Firestore từ chối đọc lịch sử lượt ghé. Hãy kiểm tra tài khoản quản trị và Rules đã triển khai.'
+      : operation === 'delete-reservation'
+        ? 'Firestore từ chối thao tác xóa. Hãy kiểm tra tài khoản quản trị và Rules đã triển khai; đặt bàn chưa bị xóa.'
+        : 'Firestore từ chối ghi lượt ghé. Hãy kiểm tra tài khoản quản trị và Rules đã triển khai.';
+  }
+  if (code === 'not-found') {
+    return operation === 'update-reservation-status'
+      ? 'Không tìm thấy đặt bàn trên Firestore; trạng thái chưa được cập nhật.'
+      : operation === 'delete-reservation'
+      ? 'Không tìm thấy đặt bàn trên Firestore; không có dữ liệu nào bị xóa.'
+      : 'Không tìm thấy đặt bàn trên Firestore; chưa ghi nhận lượt ghé.';
+  }
+  if (['reservation-not-found', 'reservation-not-confirmed', 'reservation-invalid'].includes(code)) {
+    return code === 'reservation-not-found'
+      ? 'Không tìm thấy đặt bàn trên Firestore; chưa ghi nhận lượt ghé.'
+      : 'Đặt bàn không còn hợp lệ hoặc chưa ở trạng thái đã xác nhận; chưa ghi nhận lượt ghé.';
+  }
+  if (code === 'failed-precondition') {
+    return 'Firestore chưa đáp ứng điều kiện của thao tác. Kiểm tra Rules, cấu hình Firestore và log chẩn đoán.';
+  }
+  if (['unavailable', 'deadline-exceeded', 'network-request-failed'].includes(code)) {
+    return operation === 'update-reservation-status'
+      ? 'Mất kết nối Firestore; trạng thái đã được hoàn tác và chưa cập nhật lên máy chủ.'
+      : 'Không kết nối được Firestore. Kiểm tra mạng rồi thử lại; chưa xác nhận thay đổi.';
+  }
+  return operation === 'read-visit-history'
+    ? 'Không tải được lịch sử lượt ghé. Đặt bàn vẫn được giữ nguyên; hãy thử lại sau.'
+    : operation === 'delete-reservation'
+      ? 'Không thể kiểm tra/xóa đặt bàn an toàn. Đặt bàn chưa bị xóa; hãy thử lại sau.'
+      : 'Không thể ghi nhận lượt ghé. Kiểm tra log Firestore và thử lại.';
+}
+
+function initAdminAuth(authInstance) {
   const loginSection = document.getElementById('admin-login-section');
   const dashSection  = document.getElementById('admin-dashboard-section');
   const loginForm    = document.getElementById('admin-login-form');
@@ -84,30 +151,54 @@ function initAdminAuth(authApi) {
   const forgotPasswordBtn = document.getElementById('admin-forgot-password');
 
   // ── Session state driven by Firebase Auth ──────────────────
-  authApi.onAuthStateChanged(async (user) => {
-    if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL) {
+  authInstance.onAuthStateChanged(async (user) => {
+    // This client check only controls the admin UI; Firestore Rules remain authoritative.
+    if (user && normalizeAdminEmail(user.email) === ADMIN_EMAIL) {
       // Authenticated: show dashboard
+      adminSessionActive = true;
       if (emailDisplay) emailDisplay.textContent = user.email;
       loginSection.hidden = true;
       loginSection.style.display = 'none';
       dashSection.hidden = false;
       dashSection.style.display = 'block';
       loadReservations();
+      loadReservationVisits();
       loadOrders();
     } else {
       // Not authenticated: show login
+      adminSessionActive = false;
+      stopReservationVisitsListener();
+      serverAcknowledgedVisits.clear();
+      if (ordersUnsubscribe) {
+        ordersUnsubscribe();
+        ordersUnsubscribe = null;
+      }
       loginSection.hidden = false;
       loginSection.style.display = 'flex';
       dashSection.hidden = true;
       dashSection.style.display = 'none';
-      if (ordersUnsubscribe) {
-        ordersUnsubscribe();
-        ordersUnsubscribe = null;
-        allOrders = [];
-      }
+      const customerModal = document.getElementById('customer-profile-modal');
+      const customerProfileBody = document.getElementById('customer-profile-body');
+      const replyModal = document.getElementById('reply-modal');
+      if (customerModal) customerModal.hidden = true;
+      if (replyModal) replyModal.hidden = true;
+      if (customerProfileBody) customerProfileBody.textContent = '';
+      const replyEmail = document.getElementById('modal-guest-email');
+      const replyMessage = document.getElementById('modal-message');
+      if (replyEmail) replyEmail.value = '';
+      if (replyMessage) replyMessage.value = '';
+      selectedCustomerKey = null;
+      allReservations = [];
+      allVisits = [];
+      allOrders = [];
+      updateStats();
+      renderTable();
+      renderCustomers();
+      const ordersBody = document.getElementById('orders-tbody');
+      if (ordersBody) ordersBody.textContent = '';
 
       if (user) {
-        await authApi.signOut();
+        await authInstance.signOut();
         showLoginError('Tài khoản này không có quyền truy cập cổng quản trị.');
       }
     }
@@ -123,7 +214,7 @@ function initAdminAuth(authApi) {
       const submitBtn  = document.getElementById('admin-login-submit');
       const btnText    = submitBtn ? submitBtn.querySelector('.btn-text') : null;
 
-      const email = emailInput ? emailInput.value.trim() : '';
+      const email = normalizeAdminEmail(emailInput ? emailInput.value : '');
       const pass  = passInput  ? passInput.value.trim()  : '';
 
       // Clear previous error
@@ -135,7 +226,7 @@ function initAdminAuth(authApi) {
         return;
       }
 
-      if (email.toLowerCase() !== ADMIN_EMAIL) {
+      if (email !== ADMIN_EMAIL) {
         showLoginError('Email này không có quyền truy cập cổng quản trị.');
         return;
       }
@@ -146,7 +237,7 @@ function initAdminAuth(authApi) {
 
       try {
         // Firebase Auth is the ONLY authentication gate
-        await authApi.signInWithEmailAndPassword(email, pass);
+        await authInstance.signInWithEmailAndPassword(email, pass);
         // onAuthStateChanged above handles the view switch
       } catch (err) {
         // Map Firebase error codes to friendly messages
@@ -176,13 +267,13 @@ function initAdminAuth(authApi) {
   if (forgotPasswordBtn) {
     forgotPasswordBtn.addEventListener('click', async () => {
       const emailInput = document.getElementById('admin-email');
-      const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
+      const email = normalizeAdminEmail(emailInput ? emailInput.value : '');
       if (email !== ADMIN_EMAIL) {
         showLoginError(`Nhập đúng email quản trị ${ADMIN_EMAIL} để nhận liên kết đặt lại mật khẩu.`);
         return;
       }
       try {
-        await authApi.sendPasswordResetEmail(email);
+        await authInstance.sendPasswordResetEmail(email);
         showLoginError('Đã gửi liên kết đặt lại mật khẩu đến email quản trị. Hãy kiểm tra cả thư mục Spam.');
       } catch (err) {
         console.error('[Admin Password Reset Error]', err.code, err.message);
@@ -195,7 +286,7 @@ function initAdminAuth(authApi) {
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
       try {
-        await authApi.signOut();
+        await authInstance.signOut();
         // onAuthStateChanged above will flip back to login view
         if (loginForm) loginForm.reset();
       } catch (err) {
@@ -226,6 +317,15 @@ let activeFilter    = 'all';
 let searchQuery     = '';
 let allOrders       = [];
 let ordersUnsubscribe = null;
+let allVisits       = [];
+let visitLoadState   = 'loading';
+let reservationLoadState = 'loading';
+let customerSearchQuery = '';
+let selectedCustomerKey = null;
+const visitSavingIds = new Set();
+const serverAcknowledgedVisits = new Map();
+let reservationVisitsUnsubscribe = null;
+let reservationVisitsListenerGeneration = 0;
 
 function initAdminDashboard() {
   // Filter tabs
@@ -243,10 +343,66 @@ function initAdminDashboard() {
   const searchInput = document.getElementById('admin-search');
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
-      searchQuery = e.target.value.toLowerCase().trim();
+      searchQuery = normalizeCustomerSearch(e.target.value);
       renderTable();
     });
   }
+
+  const customerSearchInput = document.getElementById('customer-search');
+  if (customerSearchInput) {
+    customerSearchInput.addEventListener('input', (e) => {
+      customerSearchQuery = e.target.value;
+      renderCustomers();
+    });
+  }
+
+  const customersBody = document.getElementById('customers-tbody');
+  if (customersBody) {
+    customersBody.addEventListener('click', (event) => {
+      const profileButton = event.target.closest('[data-customer-key]');
+      if (profileButton) {
+        openCustomerProfile(profileButton.dataset.customerKey);
+        return;
+      }
+      const visitButton = event.target.closest('[data-visit-res-id]');
+      if (visitButton) recordReservationVisit(visitButton.dataset.visitResId);
+    });
+  }
+
+  const bookingsBody = document.getElementById('bookings-tbody');
+  if (bookingsBody) {
+    bookingsBody.addEventListener('click', (event) => {
+      const visitButton = event.target.closest('[data-visit-res-id]');
+      if (visitButton) recordReservationVisit(visitButton.dataset.visitResId);
+    });
+  }
+
+  const customerProfileBody = document.getElementById('customer-profile-body');
+  if (customerProfileBody) {
+    customerProfileBody.addEventListener('click', (event) => {
+      const visitButton = event.target.closest('[data-visit-res-id]');
+      if (visitButton) recordReservationVisit(visitButton.dataset.visitResId);
+    });
+  }
+
+  const customerModal = document.getElementById('customer-profile-modal');
+  const closeCustomerModal = () => {
+    if (customerModal) customerModal.hidden = true;
+    selectedCustomerKey = null;
+  };
+  const closeCustomerButton = document.getElementById('customer-profile-close');
+  if (closeCustomerButton) closeCustomerButton.addEventListener('click', closeCustomerModal);
+  if (customerModal) {
+    customerModal.addEventListener('click', (event) => {
+      if (event.target === customerModal) closeCustomerModal();
+    });
+    customerModal.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeCustomerModal();
+    });
+  }
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && customerModal && !customerModal.hidden) closeCustomerModal();
+  });
 
   // Modal close handlers
   const cancelBtn = document.getElementById('modal-cancel-btn');
@@ -274,15 +430,17 @@ function initAdminDashboard() {
 function loadReservations() {
   const tbody = document.getElementById('bookings-tbody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px;">Đang tải danh sách đặt bàn…</td></tr>';
+  reservationLoadState = 'loading';
+  renderCustomers();
 
   // Read local backup array
   let localData = [];
   try {
     localData = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
     localData = localData.map((item, idx) => ({
-      id: 'local_' + (item.createdAt || idx),
-      isLocal: true,
-      ...item
+      ...item,
+      id: `local_${idx}_${item.createdAt || ''}`,
+      isLocal: true
     }));
   } catch (err) {
     console.warn('LocalStorage read error:', err);
@@ -293,29 +451,37 @@ function loadReservations() {
 
   if (dbInstance && typeof dbInstance.collection === 'function') {
     dbInstance.collection('reservations').onSnapshot((snapshot) => {
+      if (!adminSessionActive) return;
       const remoteData = [];
       snapshot.forEach(doc => {
-        remoteData.push({ id: doc.id, ...doc.data() });
+        remoteData.push({ ...doc.data(), id: doc.id, isLocal: false });
       });
 
       // Firestore is authoritative when connected; local drafts are not global bookings.
       allReservations = remoteData;
+      reservationLoadState = 'ready';
       // Sort newest first
       allReservations.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
       updateStats();
       renderTable();
+      renderCustomers();
     }, (error) => {
+      if (!adminSessionActive) return;
       console.warn('Firestore snapshot notice, rendering local backup:', error);
       allReservations = localData;
+      reservationLoadState = 'error';
       updateStats();
       renderTable();
+      renderCustomers();
       showToast('Không tải được đặt bàn từ Firestore. Số liệu hiện chỉ gồm dữ liệu lưu trên thiết bị này.', 'error');
     });
   } else {
     allReservations = localData;
+    reservationLoadState = 'local';
     updateStats();
     renderTable();
+    renderCustomers();
   }
 }
 
@@ -336,37 +502,646 @@ function updateStats() {
   if (guestsEl) guestsEl.textContent = guests;
 }
 
+function stopReservationVisitsListener() {
+  reservationVisitsListenerGeneration += 1;
+  if (typeof reservationVisitsUnsubscribe === 'function') {
+    reservationVisitsUnsubscribe();
+  }
+  reservationVisitsUnsubscribe = null;
+}
+
+function mergeAcknowledgedVisits(snapshotVisits) {
+  const visitsByReservationId = new Map();
+  snapshotVisits.forEach(visit => {
+    const reservationId = getVisitReservationId(visit);
+    if (!reservationId) return;
+    const normalizedVisit = { ...visit, id: visit.id || reservationId, reservationId };
+    visitsByReservationId.set(reservationId, normalizedVisit);
+    serverAcknowledgedVisits.set(reservationId, normalizedVisit);
+  });
+  serverAcknowledgedVisits.forEach((visit, reservationId) => {
+    if (!visitsByReservationId.has(reservationId)) visitsByReservationId.set(reservationId, visit);
+  });
+  return Array.from(visitsByReservationId.values());
+}
+
+function loadReservationVisits() {
+  stopReservationVisitsListener();
+  const listenerGeneration = reservationVisitsListenerGeneration;
+  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
+  if (!dbInstance || typeof dbInstance.collection !== 'function') {
+    visitLoadState = 'unavailable';
+    renderTable();
+    renderCustomers();
+    return;
+  }
+
+  visitLoadState = 'loading';
+  renderTable();
+  reservationVisitsUnsubscribe = dbInstance.collection('reservationVisits').onSnapshot((snapshot) => {
+    if (!adminSessionActive || listenerGeneration !== reservationVisitsListenerGeneration) return;
+    const snapshotVisits = [];
+    snapshot.forEach(doc => snapshotVisits.push({ ...doc.data(), id: doc.id }));
+    allVisits = mergeAcknowledgedVisits(snapshotVisits);
+    visitLoadState = 'ready';
+    renderTable();
+    renderCustomers();
+  }, (error) => {
+    if (!adminSessionActive || listenerGeneration !== reservationVisitsListenerGeneration) return;
+    logFirestoreDiagnostic('read-visit-history', error, {
+      paths: ['/reservationVisits'],
+      step: 'listen-collection'
+    });
+    allVisits = mergeAcknowledgedVisits([]);
+    visitLoadState = 'error';
+    renderTable();
+    renderCustomers();
+    showToast(firestoreUserMessage('read-visit-history', error), 'error');
+  });
+}
+
+function normalizeCustomerEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getCustomerIdentityEmail(reservation) {
+  const email = normalizeCustomerEmail(reservation && reservation.email);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
+}
+
+function normalizeCustomerPhone(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('0084') && digits.length >= 13) digits = `0${digits.slice(4)}`;
+  if (digits.startsWith('84') && digits.length >= 11) digits = `0${digits.slice(2)}`;
+  return digits;
+}
+
+function normalizeCustomerSearch(value) {
+  return String(value || '')
+    .trim()
+    .toLocaleLowerCase('vi')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd');
+}
+
+function getCustomerReservationName(reservation) {
+  return String(reservation.customerName || '').trim() || String(reservation.name || '').trim();
+}
+
+function getCustomerReservationPhone(reservation) {
+  return String(reservation.phone || '').trim();
+}
+
+function getReservationSortKey(reservation) {
+  const date = String(reservation.date || '');
+  const time = String(reservation.time || '').replace(':', '').padStart(4, '0');
+  return `${date}T${time}|${String(reservation.createdAt || '')}`;
+}
+
+function addReservationToCustomer(profile, reservation) {
+  profile.reservations.push(reservation);
+}
+
+function buildVisitCustomerSnapshot(reservation, reservationId) {
+  const email = getCustomerIdentityEmail(reservation);
+  const phone = getCustomerReservationPhone(reservation);
+  const phoneNormalized = normalizeCustomerPhone(phone);
+  const stableReservationId = String(reservationId || reservation.id || 'unknown');
+  const key = email
+    ? `email:${email}`
+    : phoneNormalized
+      ? `phone:${phoneNormalized}`
+      : `reservation:${stableReservationId}`;
+  return {
+    key,
+    name: getCustomerReservationName(reservation),
+    email,
+    phone,
+    phoneNormalized
+  };
+}
+
+function isVisitCustomerSnapshotValid(customer) {
+  const allowedKeys = ['email', 'key', 'name', 'phone', 'phoneNormalized'];
+  const customerKeys = customer && typeof customer === 'object' && !Array.isArray(customer)
+    ? Object.keys(customer).sort()
+    : [];
+  return Boolean(customer && typeof customer === 'object' && !Array.isArray(customer)
+    && customerKeys.length === allowedKeys.length
+    && allowedKeys.every((key, index) => customerKeys[index] === key)
+    && typeof customer.key === 'string' && customer.key.length > 0 && customer.key.length <= 300
+    && typeof customer.name === 'string' && customer.name.length <= 500
+    && typeof customer.email === 'string' && customer.email.length <= 512
+    && typeof customer.phone === 'string' && customer.phone.length <= 100
+    && typeof customer.phoneNormalized === 'string' && customer.phoneNormalized.length <= 40);
+}
+
+function buildCustomerProfiles() {
+  const profilesByKey = new Map();
+  const emailGroupsByPhone = new Map();
+  const reservationProfileKeyById = new Map();
+  const reservationsWithoutEmail = [];
+
+  const ensureProfile = (key, ambiguousPhoneMatch = false) => {
+    if (!profilesByKey.has(key)) {
+      profilesByKey.set(key, { key, reservations: [], visits: [], customerSnapshots: [], ambiguousPhoneMatch });
+    } else if (ambiguousPhoneMatch) {
+      profilesByKey.get(key).ambiguousPhoneMatch = true;
+    }
+    return profilesByKey.get(key);
+  };
+
+  allReservations.forEach((reservation, index) => {
+    const email = getCustomerIdentityEmail(reservation);
+    const phone = normalizeCustomerPhone(getCustomerReservationPhone(reservation));
+    if (!email) {
+      reservationsWithoutEmail.push({ reservation, phone, index });
+      return;
+    }
+
+    const key = `email:${email}`;
+    addReservationToCustomer(ensureProfile(key), reservation);
+    if (reservation.id) reservationProfileKeyById.set(String(reservation.id), key);
+    if (phone.length >= 7) {
+      if (!emailGroupsByPhone.has(phone)) emailGroupsByPhone.set(phone, new Set());
+      emailGroupsByPhone.get(phone).add(key);
+    }
+  });
+
+  emailGroupsByPhone.forEach(owners => {
+    if (owners.size > 1) owners.forEach(key => ensureProfile(key, true));
+  });
+
+  const phoneOnlyGroups = new Map();
+  reservationsWithoutEmail.forEach(({ reservation, phone, index }) => {
+    if (phone.length < 7) {
+      const key = `reservation:${reservation.id || index}`;
+      addReservationToCustomer(ensureProfile(key), reservation);
+      if (reservation.id) reservationProfileKeyById.set(String(reservation.id), key);
+      return;
+    }
+    if (!phoneOnlyGroups.has(phone)) phoneOnlyGroups.set(phone, []);
+    phoneOnlyGroups.get(phone).push(reservation);
+  });
+
+  phoneOnlyGroups.forEach((reservations, phone) => {
+    const owners = emailGroupsByPhone.get(phone) || new Set();
+    // A phone-only booking joins an email profile only when the phone points
+    // to exactly one email. A phone known to belong to multiple email profiles
+    // is too ambiguous to use for merging, even across other phone-only bookings.
+    if (owners.size > 1) {
+      reservations.forEach((reservation, index) => {
+        const key = `reservation:${reservation.id || `ambiguous-phone-${phone}-${index}`}`;
+        addReservationToCustomer(ensureProfile(key, true), reservation);
+        if (reservation.id) reservationProfileKeyById.set(String(reservation.id), key);
+      });
+      return;
+    }
+    const key = owners.size === 1 ? Array.from(owners)[0] : `phone:${phone}`;
+    const profile = ensureProfile(key);
+    reservations.forEach(reservation => {
+      addReservationToCustomer(profile, reservation);
+      if (reservation.id) reservationProfileKeyById.set(String(reservation.id), key);
+    });
+  });
+
+  const reservationsById = new Map(allReservations.filter(reservation => reservation.id)
+    .map(reservation => [String(reservation.id), reservation]));
+  const visitsByReservationId = new Map();
+  allVisits.forEach(visit => {
+    const reservationId = getVisitReservationId(visit);
+    if (reservationId) visitsByReservationId.set(reservationId, visit);
+  });
+
+  visitsByReservationId.forEach((visit, reservationId) => {
+    const linkedReservation = reservationsById.get(reservationId);
+    const storedCustomer = visit.customer && typeof visit.customer === 'object' ? visit.customer : null;
+    const customer = isVisitCustomerSnapshotValid(storedCustomer)
+      ? storedCustomer
+      : linkedReservation
+        ? buildVisitCustomerSnapshot(linkedReservation, reservationId)
+        : storedCustomer;
+    const email = getCustomerIdentityEmail({ email: customer && customer.email });
+    const phone = normalizeCustomerPhone(customer && (customer.phoneNormalized || customer.phone));
+    let key = reservationProfileKeyById.get(reservationId);
+    let ambiguousPhoneMatch = false;
+    if (!key && email) {
+      key = `email:${email}`;
+    } else if (!key && phone.length >= 7) {
+      const owners = emailGroupsByPhone.get(phone) || new Set();
+      if (owners.size === 1) {
+        key = Array.from(owners)[0];
+      } else if (owners.size > 1) {
+        key = `visit:${reservationId}`;
+        ambiguousPhoneMatch = true;
+      } else {
+        key = `phone:${phone}`;
+      }
+    }
+    if (!key) {
+      const storedKey = String(customer && customer.key || '');
+      key = /^(?:reservation|visit):/.test(storedKey) ? storedKey : `visit:${reservationId}`;
+    }
+    const profile = ensureProfile(key, ambiguousPhoneMatch);
+    profile.visits.push({ ...visit, id: visit.id || reservationId, reservationId });
+    if (customer) profile.customerSnapshots.push(customer);
+  });
+
+  return Array.from(profilesByKey.values()).map(profile => {
+    profile.reservations.sort((a, b) => getReservationSortKey(b).localeCompare(getReservationSortKey(a)));
+    const names = Array.from(new Set([
+      ...profile.reservations.map(getCustomerReservationName),
+      ...profile.customerSnapshots.map(customer => String(customer.name || '').trim())
+    ].filter(Boolean)));
+    const emails = Array.from(new Set([
+      ...profile.reservations.map(res => normalizeCustomerEmail(res.email)),
+      ...profile.customerSnapshots.map(customer => normalizeCustomerEmail(customer.email))
+    ].filter(Boolean)));
+    const phonesByNormalizedValue = new Map();
+    const phoneValues = [
+      ...profile.reservations.map(getCustomerReservationPhone),
+      ...profile.customerSnapshots.map(customer => String(customer.phone || ''))
+    ];
+    phoneValues.forEach(phone => {
+      if (!phone) return;
+      const normalizedPhone = normalizeCustomerPhone(phone);
+      const key = normalizedPhone || `raw:${phone}`;
+      if (!phonesByNormalizedValue.has(key)) phonesByNormalizedValue.set(key, phone);
+    });
+    const phones = Array.from(phonesByNormalizedValue.values());
+    profile.name = names[0] || 'Khách chưa có tên';
+    profile.names = names;
+    profile.emails = emails;
+    profile.phones = phones;
+    profile.visits.sort((a, b) => getVisitDate(b) - getVisitDate(a));
+    profile.latestVisit = profile.visits[0] || null;
+    return profile;
+  }).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+}
+
+function getVisitDate(visit) {
+  const value = visit && (visit.recordedAt || visit.visitedAt);
+  if (!value) return 0;
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function getVisitReservationId(visit) {
+  return String((visit && (visit.reservationId || visit.id)) || '');
+}
+
+function formatVisitDate(visit) {
+  const timestamp = getVisitDate(visit);
+  if (!timestamp) return 'Chưa ghi nhận lượt ghé';
+  return new Intl.DateTimeFormat('vi-VN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Ho_Chi_Minh'
+  }).format(new Date(timestamp));
+}
+
+function getVisitLoadMessage() {
+  if (visitLoadState === 'loading') return 'Đang tải lịch sử lượt ghé...';
+  if (visitLoadState === 'error') return 'Không tải được dữ liệu lượt ghé';
+  if (visitLoadState === 'unavailable') return 'Chưa kết nối dữ liệu lượt ghé';
+  return 'Chưa có lượt ghé được xác nhận';
+}
+
+function renderCustomers() {
+  const tbody = document.getElementById('customers-tbody');
+  const countEl = document.getElementById('customer-count');
+  const noticeEl = document.getElementById('customer-load-notice');
+  if (!tbody) return;
+
+  if (noticeEl) {
+    const notices = [];
+    if (reservationLoadState === 'error') {
+      notices.push('Không tải được đặt bàn từ Firestore; dữ liệu đang hiển thị chỉ là bản sao cục bộ trên thiết bị này.');
+    } else if (reservationLoadState === 'local') {
+      notices.push('Chưa kết nối Firestore; hồ sơ chỉ gồm dữ liệu đặt bàn cục bộ trên thiết bị này.');
+    }
+    if (visitLoadState === 'error') notices.push('Không tải được lịch sử lượt ghé.');
+    noticeEl.textContent = notices.join(' ');
+    noticeEl.hidden = notices.length === 0;
+    noticeEl.classList.toggle('customer-load-notice--error', reservationLoadState === 'error' || visitLoadState === 'error');
+  }
+
+  if (reservationLoadState === 'loading') {
+    if (countEl) countEl.textContent = 'Đang tải...';
+    tbody.innerHTML = '<tr><td colspan="7" class="customer-empty-state">Đang tải hồ sơ khách hàng...</td></tr>';
+    return;
+  }
+
+  const profiles = buildCustomerProfiles();
+  const normalizedQuery = normalizeCustomerSearch(customerSearchQuery);
+  const queryDigits = normalizeCustomerPhone(customerSearchQuery);
+  const filtered = profiles.filter(profile => {
+    if (!normalizedQuery) return true;
+    const values = [profile.name, ...profile.names, ...profile.emails, ...profile.phones];
+    const textMatch = values.some(value => normalizeCustomerSearch(value).includes(normalizedQuery));
+    const phoneMatch = queryDigits.length >= 3 && profile.phones.some(phone => normalizeCustomerPhone(phone).includes(queryDigits));
+    return textMatch || phoneMatch;
+  });
+
+  if (countEl) {
+    countEl.textContent = reservationLoadState === 'local'
+      ? `${profiles.length} khách hàng · trên thiết bị`
+      : `${profiles.length} khách hàng`;
+  }
+  if (filtered.length === 0) {
+    let message = 'Không tìm thấy khách hàng phù hợp.';
+    if (!profiles.length) {
+      message = reservationLoadState === 'error'
+        ? 'Không thể tải hồ sơ khách hàng từ Firestore.'
+        : reservationLoadState === 'local'
+          ? 'Chưa có dữ liệu đặt bàn trên thiết bị này.'
+          : 'Chưa có dữ liệu đặt bàn để tổng hợp hồ sơ.';
+    }
+    tbody.innerHTML = `<tr><td colspan="7" class="customer-empty-state">${message}</td></tr>`;
+  } else {
+    tbody.innerHTML = filtered.map(profile => {
+      const emails = profile.emails.length
+        ? profile.emails.map(email => `<span class="customer-contact-line">${escapeHtml(email)}</span>`).join('')
+        : '<span class="customer-contact-line">Chưa cung cấp</span>';
+      const phones = profile.phones.length
+        ? profile.phones.map(phone => `<span class="customer-contact-line">${escapeHtml(phone)}</span>`).join('')
+        : '<span class="customer-contact-line">Chưa cung cấp</span>';
+      const latestVisit = visitLoadState === 'ready'
+        ? (profile.latestVisit ? formatVisitDate(profile.latestVisit) : 'Chưa ghi nhận')
+        : getVisitLoadMessage();
+      const duplicateHint = profile.ambiguousPhoneMatch
+        ? '<span class="customer-contact-line">Số điện thoại có hồ sơ email khác; chưa tự gộp</span>'
+        : '';
+      return `
+        <tr>
+          <td><strong>${escapeHtml(profile.name)}</strong>${duplicateHint}</td>
+          <td>${emails}</td>
+          <td>${phones}</td>
+          <td>${profile.reservations.length}</td>
+          <td>${visitLoadState === 'ready' ? profile.visits.length : '—'}</td>
+          <td>${escapeHtml(latestVisit)}</td>
+          <td><button type="button" class="customer-open-profile" data-customer-key="${escapeHtml(profile.key)}">Xem hồ sơ</button></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  if (selectedCustomerKey) {
+    const currentProfile = profiles.find(profile => profile.key === selectedCustomerKey);
+    if (currentProfile) renderCustomerProfile(currentProfile);
+  }
+}
+
+function openCustomerProfile(key) {
+  const profile = buildCustomerProfiles().find(item => item.key === key);
+  if (!profile) return;
+  selectedCustomerKey = key;
+  renderCustomerProfile(profile);
+  const modal = document.getElementById('customer-profile-modal');
+  if (modal) modal.hidden = false;
+}
+
+function renderCustomerProfile(profile) {
+  const title = document.getElementById('customer-profile-title');
+  const note = document.getElementById('customer-profile-description');
+  const body = document.getElementById('customer-profile-body');
+  if (!body) return;
+
+  if (title) title.textContent = profile.name;
+  if (note) {
+    note.textContent = profile.ambiguousPhoneMatch
+      ? 'Số điện thoại này xuất hiện cùng nhiều email. Các hồ sơ được giữ riêng để tránh gộp nhầm khách.'
+      : 'Thông tin được tổng hợp từ các lượt đặt bàn có email hoặc số điện thoại trùng sau khi chuẩn hóa.';
+  }
+
+  const emailText = profile.emails.join(', ') || 'Chưa cung cấp';
+  const phoneText = profile.phones.join(', ') || 'Chưa cung cấp';
+  const latestVisitText = visitLoadState === 'ready'
+    ? (profile.latestVisit ? formatVisitDate(profile.latestVisit) : 'Chưa ghi nhận lượt ghé')
+    : getVisitLoadMessage();
+  const bookingRows = profile.reservations.map(reservation => {
+    const status = reservation.status || 'pending';
+    const linkedVisit = allVisits.find(item => getVisitReservationId(item) === reservation.id);
+    const isConfirmed = String(status).toLowerCase() === 'confirmed';
+    const visit = isConfirmed ? linkedVisit : null;
+    const localOnly = reservation.isLocal || String(reservation.id || '').startsWith('local_');
+    let visitControl;
+    if (visit) {
+      visitControl = `<span class="customer-visit-state">Đã ghi nhận · ${escapeHtml(formatVisitDate(visit))}</span>`;
+    } else if (linkedVisit) {
+      visitControl = '<span class="customer-visit-unavailable" title="Bản ghi lịch sử cần được quản trị viên rà soát">Bản ghi chưa được tính</span>';
+    } else if (visitSavingIds.has(reservation.id)) {
+      visitControl = '<button type="button" class="btn-action btn-action--reply" disabled>Đang ghi nhận...</button>';
+    } else if (localOnly) {
+      visitControl = '<button type="button" class="btn-action btn-action--reply" disabled title="Đặt bàn chỉ có trên thiết bị này">Chỉ có dữ liệu cục bộ</button>';
+    } else if (!isConfirmed) {
+      const statusMessage = String(status).toLowerCase() === 'cancelled'
+        ? 'Đặt bàn đã hủy'
+        : 'Chỉ ghi nhận khi đã xác nhận';
+      visitControl = `<span class="customer-visit-unavailable">${statusMessage}</span>`;
+    } else {
+      visitControl = `<button type="button" class="btn-action btn-action--approve" data-visit-res-id="${escapeHtml(reservation.id)}">Ghi nhận đã ghé</button>`;
+    }
+    const notes = reservation.specialRequest || reservation.notes || '';
+    return `
+      <tr>
+        <td>${escapeHtml(reservation.date || 'Không có ngày')}<br><span class="customer-contact-line">${escapeHtml(formatTime(String(reservation.time || '')) || 'Không có giờ')}</span></td>
+        <td>${Number.isInteger(Number(reservation.guests)) ? Number(reservation.guests) : '—'}</td>
+        <td>${notes ? escapeHtml(notes) : '<span class="customer-contact-line">Không có ghi chú</span>'}</td>
+        <td><span class="status-badge status--${escapeHtml(String(status).toLowerCase())}">${escapeHtml(getStatusLabel(status))}</span></td>
+        <td>${visitControl}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const visitRows = profile.visits.map(visit => {
+    const reservationId = getVisitReservationId(visit);
+    return `<tr>
+      <td>${escapeHtml(formatVisitDate(visit))}</td>
+      <td>${reservationId ? escapeHtml(reservationId) : 'Không có mã đặt bàn'}</td>
+    </tr>`;
+  }).join('');
+
+  const visitHistoryText = visitLoadState === 'ready'
+    ? `${profile.visits.length} lượt ghé được ghi nhận`
+    : getVisitLoadMessage();
+  body.innerHTML = `
+    <div class="customer-profile-summary">
+      <div><strong>Email</strong><span>${escapeHtml(emailText)}</span></div>
+      <div><strong>Số điện thoại</strong><span>${escapeHtml(phoneText)}</span></div>
+      <div><strong>Lượt đặt bàn</strong><span>${profile.reservations.length}</span></div>
+      <div><strong>Lượt ghé</strong><span>${escapeHtml(visitHistoryText)}<br>Lần gần nhất: ${escapeHtml(latestVisitText)}</span></div>
+    </div>
+    <h3 class="customer-history-heading">Lịch sử đặt bàn (${profile.reservations.length})</h3>
+    <p class="customer-profile-note">Đặt bàn không tự động được tính là lượt ghé. Chỉ ghi nhận sau khi nhân viên xác nhận khách đã đến và được phục vụ.</p>
+    <div class="admin-table-card">
+      <div class="admin-table-wrap">
+        <table class="admin-table customer-history-table">
+          <thead><tr><th>Ngày và giờ</th><th>Số khách</th><th>Ghi chú</th><th>Trạng thái đặt bàn</th><th>Lượt ghé</th></tr></thead>
+          <tbody>${bookingRows || '<tr><td colspan="5" class="customer-history-empty">Chưa có lịch sử đặt bàn.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+    <h3 class="customer-history-heading">Lịch sử lượt ghé (${profile.visits.length})</h3>
+    <div class="admin-table-card">
+      <div class="admin-table-wrap">
+        <table class="admin-table customer-history-table">
+          <thead><tr><th>Ngày giờ ghé</th><th>Mã đặt bàn tham chiếu</th></tr></thead>
+          <tbody>${visitRows || '<tr><td colspan="2" class="customer-history-empty">Chưa ghi nhận lượt ghé.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+async function recordReservationVisit(reservationId) {
+  const reservation = allReservations.find(item => item.id === reservationId);
+  if (!reservation || reservation.isLocal || String(reservation.id).startsWith('local_')) {
+    showToast('Chỉ có thể ghi nhận lượt ghé cho đặt bàn đã lưu trên Firestore.', 'error');
+    return;
+  }
+  if (String(reservation.status || '').toLowerCase() !== 'confirmed') {
+    showToast('Chỉ đặt bàn đã xác nhận mới đủ điều kiện ghi nhận lượt ghé.', 'error');
+    return;
+  }
+  if (allVisits.some(visit => getVisitReservationId(visit) === reservationId)) {
+    showToast('Đặt bàn này đã có lượt ghé được ghi nhận.', 'info');
+    return;
+  }
+  if (visitSavingIds.has(reservationId)) return;
+  if (!confirm(`Xác nhận khách đã đến quán và được phục vụ cho đặt bàn ngày ${reservation.date || 'không rõ ngày'}?`)) return;
+
+  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
+  const authInstance = window.firebaseAuth || window.auth || (typeof auth !== 'undefined' ? auth : null);
+  const fieldValue = window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue;
+  const user = authInstance && authInstance.currentUser;
+  const diagnosticContext = {
+    paths: [`/reservations/${reservationId}`, `/reservationVisits/${reservationId}`],
+    authInstance,
+    step: 'preflight-auth'
+  };
+  if (!user) {
+    const error = Object.assign(new Error('No authenticated user'), { code: 'unauthenticated' });
+    logFirestoreDiagnostic('create-reservation-visit', error, diagnosticContext);
+    showToast(firestoreUserMessage('create-reservation-visit', error, diagnosticContext.step), 'error');
+    return;
+  }
+  if (normalizeAdminEmail(user.email) !== ADMIN_EMAIL) {
+    const error = Object.assign(new Error('Signed-in user is not the configured admin'), { code: 'permission-denied' });
+    logFirestoreDiagnostic('create-reservation-visit', error, diagnosticContext);
+    showToast(firestoreUserMessage('create-reservation-visit', error, diagnosticContext.step), 'error');
+    return;
+  }
+  if (!dbInstance || typeof dbInstance.runTransaction !== 'function' || !fieldValue) {
+    const error = Object.assign(new Error('Firestore transaction or server timestamp is unavailable'), { code: 'failed-precondition' });
+    logFirestoreDiagnostic('create-reservation-visit', error, diagnosticContext);
+    showToast('Firestore chưa sẵn sàng; chưa ghi nhận lượt ghé. Thử tải lại trang sau khi kết nối.', 'error');
+    return;
+  }
+
+  visitSavingIds.add(reservationId);
+  renderTable();
+  renderCustomerProfile(buildCustomerProfiles().find(profile => profile.key === selectedCustomerKey) || {
+    name: 'Khách hàng', reservations: [], emails: [], phones: [], visits: []
+  });
+  let transactionStep = 'create-document-references';
+  try {
+    const reservationRef = dbInstance.collection('reservations').doc(reservationId);
+    const visitRef = dbInstance.collection('reservationVisits').doc(reservationId);
+    const result = await dbInstance.runTransaction(async transaction => {
+      // Keep all transaction reads ahead of the write in a deterministic order.
+      transactionStep = 'read-reservation';
+      const reservationSnapshot = await transaction.get(reservationRef);
+      transactionStep = 'read-existing-visit';
+      const existing = await transaction.get(visitRef);
+      if (!reservationSnapshot.exists) {
+        transactionStep = 'validate-reservation-exists';
+        throw Object.assign(new Error('Reservation not found'), { code: 'reservation-not-found' });
+      }
+      if (String((reservationSnapshot.data() || {}).status || '').toLowerCase() !== 'confirmed') {
+        transactionStep = 'validate-reservation-status';
+        throw Object.assign(new Error('Reservation is not confirmed'), { code: 'reservation-not-confirmed' });
+      }
+      const customer = buildVisitCustomerSnapshot(reservationSnapshot.data() || reservation, reservationId);
+      if (existing.exists) {
+        const existingData = existing.data() || {};
+        return {
+          created: false,
+          visit: {
+            ...existingData,
+            id: reservationId,
+            reservationId,
+            customer: isVisitCustomerSnapshotValid(existingData.customer) ? existingData.customer : customer
+          }
+        };
+      }
+      transactionStep = 'create-visit';
+      transaction.set(visitRef, {
+        reservationId,
+        recordedAt: fieldValue.serverTimestamp(),
+        recordedBy: user.uid,
+        source: 'staff-confirmed',
+        customer
+      });
+      transactionStep = 'commit-transaction';
+      return {
+        created: true,
+        visit: { id: reservationId, reservationId, recordedAt: new Date(), recordedBy: user.uid, source: 'staff-confirmed', customer }
+      };
+    });
+
+    if (!result.created) {
+      if (result.visit) {
+        serverAcknowledgedVisits.set(reservationId, result.visit);
+        allVisits = mergeAcknowledgedVisits([...allVisits, result.visit]);
+      }
+      renderCustomers();
+      renderTable();
+      showToast('Đặt bàn này đã có lượt ghé; lượt thứ hai không được tạo.', 'info');
+      return;
+    }
+
+    serverAcknowledgedVisits.set(reservationId, result.visit);
+    allVisits = mergeAcknowledgedVisits([...allVisits, result.visit]);
+    renderCustomers();
+    renderTable();
+    showToast('Đã ghi nhận lượt ghé cho đặt bàn này.', 'success');
+  } catch (error) {
+    logFirestoreDiagnostic('create-reservation-visit', error, { ...diagnosticContext, step: transactionStep });
+    showToast(firestoreUserMessage('create-reservation-visit', error, transactionStep), 'error');
+  } finally {
+    visitSavingIds.delete(reservationId);
+    renderTable();
+    if (selectedCustomerKey) {
+      const profile = buildCustomerProfiles().find(item => item.key === selectedCustomerKey);
+      if (profile) renderCustomerProfile(profile);
+    }
+  }
+}
+
 function loadOrders() {
   const tbody = document.getElementById('orders-tbody');
   if (!tbody) return;
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  const firestoreMethods = window.firebaseFirestoreMethods;
-  if (!dbInstance || (!firestoreMethods && typeof dbInstance.collection !== 'function')) {
+  if (!dbInstance || typeof dbInstance.collection !== 'function') {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px;">Chưa kết nối được hệ thống đơn gọi món.</td></tr>';
     return;
   }
 
   if (ordersUnsubscribe) ordersUnsubscribe();
-  const handleSnapshot = (snapshot) => {
+  ordersUnsubscribe = dbInstance.collection('orders').onSnapshot((snapshot) => {
+    if (!adminSessionActive) return;
     allOrders = [];
     snapshot.forEach(doc => allOrders.push({ id: doc.id, ...doc.data() }));
-    allOrders.sort((a, b) => String(b.createdAt || b.created_at || '').localeCompare(String(a.createdAt || a.created_at || '')));
+    allOrders.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     renderOrders();
-  };
-  const handleError = (error) => {
+  }, (error) => {
+    if (!adminSessionActive) return;
     console.warn('Orders snapshot notice:', error);
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px;">Không thể tải đơn gọi món. Kiểm tra quyền truy cập Firestore.</td></tr>';
-  };
-
-  if (firestoreMethods && typeof firestoreMethods.collection === 'function') {
-    ordersUnsubscribe = firestoreMethods.onSnapshot(
-      firestoreMethods.collection(dbInstance, 'orders'),
-      handleSnapshot,
-      handleError
-    );
-  } else {
-    ordersUnsubscribe = dbInstance.collection('orders').onSnapshot(handleSnapshot, handleError);
-  }
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px;">Không thể tải đơn gọi món.</td></tr>';
+  });
 }
 
 function formatOrderMoney(value, items) {
@@ -386,7 +1161,7 @@ function formatOrderMoney(value, items) {
 }
 
 function getOrderStatusLabel(status) {
-  return { new: 'Mới', preparing: 'Đang làm', in_progress: 'Đang làm', served: 'Đã phục vụ', completed: 'Hoàn tất', cancelled: 'Đã hủy' }[status] || status;
+  return { new: 'Mới', preparing: 'Đang làm', served: 'Đã phục vụ', completed: 'Hoàn tất', cancelled: 'Đã hủy' }[status] || status;
 }
 
 function renderOrders() {
@@ -400,12 +1175,10 @@ function renderOrders() {
   tbody.innerHTML = allOrders.map(order => {
     const items = Array.isArray(order.items) ? order.items : [];
     const status = order.status || 'new';
-    const paymentStatus = order.paymentStatus || order.payment_status || 'unpaid';
-    const orderId = order.orderId || order.order_id || order.id;
-    const tableNumber = order.tableNumber || order.table_number || '--';
+    const paymentStatus = order.paymentStatus || 'unpaid';
     return `
       <tr>
-        <td><strong>${escapeHtml(orderId)}</strong><br><span class="order-table-number">Bàn ${escapeHtml(tableNumber)}</span></td>
+        <td><strong>${escapeHtml(order.orderId || order.id)}</strong><br><span class="order-table-number">Bàn ${escapeHtml(order.tableNumber || '--')}</span></td>
         <td>${items.map(item => `<div>${escapeHtml(item.name)} <strong>×${Number(item.quantity) || 0}</strong></div>`).join('')}${order.note ? `<small class="order-note">${escapeHtml(order.note)}</small>` : ''}</td>
         <td><strong>${formatOrderMoney(order.total, items)}</strong></td>
         <td><span class="order-status order-status--${escapeHtml(status)}">${getOrderStatusLabel(status)}</span></td>
@@ -423,15 +1196,6 @@ function renderOrders() {
 window.updateOrderStatus = function(id, status) {
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
   if (!dbInstance || !id) return;
-  const firestoreMethods = window.firebaseFirestoreMethods;
-  if (firestoreMethods && typeof firestoreMethods.updateDoc === 'function') {
-    firestoreMethods.updateDoc(firestoreMethods.doc(dbInstance, 'orders', id), { status, updatedAt: new Date().toISOString() })
-      .catch(error => {
-        console.error('Order status update failed:', error);
-        showToast('Không thể cập nhật trạng thái đơn gọi món.', 'error');
-      });
-    return;
-  }
   dbInstance.collection('orders').doc(id).update({ status, updatedAt: new Date().toISOString() })
     .catch(error => console.warn('Order status update notice:', error));
 };
@@ -439,17 +1203,7 @@ window.updateOrderStatus = function(id, status) {
 window.markOrderPaid = function(id) {
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
   if (!dbInstance || !id) return;
-  const firestoreMethods = window.firebaseFirestoreMethods;
-  const paymentUpdate = { paymentStatus: 'paid', status: 'completed', paidAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-  if (firestoreMethods && typeof firestoreMethods.updateDoc === 'function') {
-    firestoreMethods.updateDoc(firestoreMethods.doc(dbInstance, 'orders', id), paymentUpdate)
-      .catch(error => {
-        console.error('Order payment update failed:', error);
-        showToast('Không thể cập nhật thanh toán cho đơn gọi món.', 'error');
-      });
-    return;
-  }
-  dbInstance.collection('orders').doc(id).update(paymentUpdate)
+  dbInstance.collection('orders').doc(id).update({ paymentStatus: 'paid', status: 'completed', paidAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
     .catch(error => console.warn('Order payment update notice:', error));
 };
 
@@ -464,10 +1218,12 @@ function renderTable() {
 
     // Filter search
     if (searchQuery) {
-      const name  = (res.customerName || res.name || '').toLowerCase();
-      const email = (res.email || '').toLowerCase();
-      const phone = (res.phone || '').toLowerCase();
-      if (!name.includes(searchQuery) && !email.includes(searchQuery) && !phone.includes(searchQuery)) {
+      const name = normalizeCustomerSearch(res.customerName || res.name || '');
+      const email = normalizeCustomerSearch(res.email || '');
+      const phone = normalizeCustomerPhone(res.phone || '');
+      const queryPhone = normalizeCustomerPhone(searchQuery);
+      if (!name.includes(searchQuery) && !email.includes(searchQuery)
+          && (!queryPhone || !phone.includes(queryPhone))) {
         return false;
       }
     }
@@ -490,6 +1246,7 @@ function renderTable() {
     const statusLower = rawStatus.toLowerCase();
     const statusClass = `status--${statusLower}`;
     const timeFormatted = formatTime(res.time);
+    const hasRecordedVisit = allVisits.some(visit => getVisitReservationId(visit) === res.id);
 
     // Email status badge
     const emailStatus = res.emailStatus || 'Sent';
@@ -498,6 +1255,21 @@ function renderTable() {
 
     const guestName = res.customerName || res.name || 'Khách';
     const notesText = res.specialRequest || res.notes || '';
+    const localOnly = res.isLocal || String(res.id || '').startsWith('local_');
+    let arrivalAction = '';
+    if (statusLower === 'confirmed') {
+      if (hasRecordedVisit) {
+        arrivalAction = '<span class="customer-visit-state">Khách đã đến</span>';
+      } else if (localOnly) {
+        arrivalAction = '<span class="customer-visit-unavailable" title="Đặt bàn chỉ có trên thiết bị này">Chỉ có dữ liệu cục bộ</span>';
+      } else if (visitSavingIds.has(res.id)) {
+        arrivalAction = '<button type="button" class="btn-action btn-action--reply" disabled>Đang ghi nhận...</button>';
+      } else if (visitLoadState !== 'ready') {
+        arrivalAction = '<span class="customer-visit-unavailable">Chưa kiểm tra được lượt ghé</span>';
+      } else {
+        arrivalAction = `<button type="button" class="btn-action btn-action--approve" data-visit-res-id="${escapeHtml(res.id)}">Xác nhận khách đã đến</button>`;
+      }
+    }
 
     return `
       <tr data-id="${res.id}">
@@ -520,7 +1292,7 @@ function renderTable() {
         <td>
           <span class="status-badge ${statusClass}">
             <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:currentColor;"></span>
-            ${escapeHtml(getStatusLabel(rawStatus))}
+            ${statusLower === 'confirmed' && hasRecordedVisit ? 'Khách đã đến' : escapeHtml(getStatusLabel(rawStatus))}
           </span>
         </td>
         <td>
@@ -530,8 +1302,9 @@ function renderTable() {
         </td>
         <td>
           <div class="action-btn-group">
-            ${statusLower !== 'confirmed' ? `<button type="button" class="btn-action btn-action--approve" onclick="updateBookingStatus('${res.id}', 'Confirmed')">Xác nhận</button>` : ''}
-            ${statusLower !== 'cancelled' ? `<button type="button" class="btn-action btn-action--cancel" onclick="updateBookingStatus('${res.id}', 'Cancelled')">Hủy</button>` : ''}
+            ${statusLower === 'pending' ? `<button type="button" class="btn-action btn-action--approve" onclick="updateBookingStatus('${res.id}', 'Confirmed')">Xác nhận</button>` : ''}
+            ${statusLower === 'pending' && !hasRecordedVisit ? `<button type="button" class="btn-action btn-action--cancel" onclick="updateBookingStatus('${res.id}', 'Cancelled')">Hủy</button>` : ''}
+            ${arrivalAction}
             <button type="button" class="btn-action btn-action--reply" onclick="openReplyModal('${res.id}')">Trả lời</button>
             <button type="button" class="btn-action btn-action--delete" onclick="deleteBooking('${res.id}')">✕</button>
           </div>
@@ -539,6 +1312,7 @@ function renderTable() {
       </tr>
     `;
   }).join('');
+
 }
 
 function getStatusLabel(status) {
@@ -574,83 +1348,191 @@ function showToast(message, type = 'info') {
 }
 
 // Global action functions bound to window for onclick inline handlers
-window.updateBookingStatus = function(id, newStatus) {
-  const item = allReservations.find(r => r.id === id);
+window.updateBookingStatus = async function(id, newStatus) {
+  const reservationId = String(id || '');
+  const targetStatus = String(newStatus).toLowerCase();
+  if (!reservationId || !['confirmed', 'cancelled'].includes(targetStatus)) return;
+  if (String(newStatus).toLowerCase() === 'cancelled'
+      && allVisits.some(visit => getVisitReservationId(visit) === reservationId)) {
+    showToast('Không thể hủy đặt bàn đã được ghi nhận là lượt ghé.', 'error');
+    return;
+  }
+  const item = allReservations.find(r => r.id === reservationId);
+  if (!item) {
+    showToast('Không tìm thấy đặt bàn đang hiển thị; hãy tải lại danh sách rồi thử lại.', 'error');
+    return;
+  }
   const previousStatus = item ? item.status : null;
+  const previousStatusNormalized = String(previousStatus || 'pending').toLowerCase();
+  if (previousStatusNormalized !== 'pending') {
+    showToast('Chỉ đặt bàn đang chờ mới có thể được xác nhận hoặc hủy.', 'error');
+    return;
+  }
   const previousUpdatedAt = item ? item.updatedAt : null;
   const nowIso = new Date().toISOString();
-  if (item) {
-    item.status = newStatus;
-    item.updatedAt = nowIso;
-  }
-
-  // Update localStorage
-  try {
-    const local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
-    local.forEach(r => {
-      if (item && (r.email === item.email || r.reservationId === item.reservationId) && r.date === item.date && r.time === item.time) {
-        r.status = newStatus;
-        r.updatedAt = nowIso;
-      }
-    });
-    localStorage.setItem('mocha_reservations', JSON.stringify(local));
-  } catch (err) {}
-
-  // Update Firestore if available
+  const isLocalReservation = item.isLocal || reservationId.startsWith('local_');
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  if (dbInstance && typeof dbInstance.collection === 'function' && !id.startsWith('local_')) {
-    dbInstance.collection('reservations').doc(id).update({
-      status: newStatus.toLowerCase(),
-      updatedAt: nowIso
-    }).then(() => {
-      // Fire status-change email via EmailJS
-      const emailType = newStatus.toLowerCase() === 'confirmed' ? 'confirmed' : 'cancelled';
-      if (item && item.email && (newStatus === 'Confirmed' || newStatus === 'Cancelled')) {
-        if (typeof window.sendEmailJS === 'function') {
-          window.sendEmailJS(item, emailType, id);
-        }
-      }
-      showToast(`Đặt bàn ${getStatusLabel(newStatus).toLowerCase()}. Email đã được gửi cho khách.`, 'success');
-    }).catch(err => {
-      console.warn('Firestore status update notice:', err);
-      if (item) {
-        item.status = previousStatus;
-        item.updatedAt = previousUpdatedAt;
-      }
-      try {
-        const local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
-        local.forEach(r => {
-          if ((r.email === item?.email || r.reservationId === item?.reservationId) && r.date === item?.date && r.time === item?.time) {
-            r.status = previousStatus;
-            r.updatedAt = previousUpdatedAt;
-          }
-        });
-        localStorage.setItem('mocha_reservations', JSON.stringify(local));
-      } catch (storageError) {}
-      updateStats();
-      renderTable();
-      showToast('Không thể lưu trạng thái lên Firestore; số liệu đã được hoàn tác. Vui lòng thử lại.', 'error');
-    });
-  } else {
-    // Local-only: still send email if available
-    if (item && item.email && (newStatus === 'Confirmed' || newStatus === 'Cancelled')) {
-      const emailType = newStatus.toLowerCase() === 'confirmed' ? 'confirmed' : 'cancelled';
-      if (typeof window.sendEmailJS === 'function') {
-        window.sendEmailJS(item, emailType, id);
-      }
+  const authInstance = window.firebaseAuth || window.auth || (typeof auth !== 'undefined' ? auth : null);
+  const diagnosticContext = {
+    paths: [`/reservations/${reservationId}`],
+    authInstance,
+    step: 'preflight-auth'
+  };
+
+  if (!isLocalReservation) {
+    const user = authInstance && authInstance.currentUser;
+    if (!user) {
+      const error = Object.assign(new Error('No authenticated user'), { code: 'unauthenticated' });
+      logFirestoreDiagnostic('update-reservation-status', error, diagnosticContext);
+      showToast(firestoreUserMessage('update-reservation-status', error, diagnosticContext.step), 'error');
+      return;
     }
-    showToast(`Đã cập nhật trạng thái đặt bàn thành "${getStatusLabel(newStatus)}".`, 'info');
+    if (normalizeAdminEmail(user.email) !== ADMIN_EMAIL) {
+      const error = Object.assign(new Error('Signed-in user is not the configured admin'), { code: 'permission-denied' });
+      logFirestoreDiagnostic('update-reservation-status', error, diagnosticContext);
+      showToast(firestoreUserMessage('update-reservation-status', error, diagnosticContext.step), 'error');
+      return;
+    }
+    if (!dbInstance || typeof dbInstance.collection !== 'function') {
+      const error = Object.assign(new Error('Firestore is unavailable'), { code: 'unavailable' });
+      logFirestoreDiagnostic('update-reservation-status', error, { ...diagnosticContext, step: 'check-firestore' });
+      showToast(firestoreUserMessage('update-reservation-status', error, 'check-firestore'), 'error');
+      return;
+    }
   }
 
+  item.status = newStatus;
+  item.updatedAt = nowIso;
   updateStats();
   renderTable();
+  renderCustomers();
+
+  if (isLocalReservation) {
+    try {
+      const local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
+      local.forEach(record => {
+        if ((record.email === item.email || record.reservationId === item.reservationId)
+            && record.date === item.date && record.time === item.time) {
+          record.status = targetStatus;
+          record.updatedAt = nowIso;
+        }
+      });
+      localStorage.setItem('mocha_reservations', JSON.stringify(local));
+    } catch (error) {
+      console.warn('Local reservation update notice:', error && error.name || 'storage-error');
+    }
+    showToast(`Đã cập nhật trạng thái đặt bàn cục bộ thành "${getStatusLabel(newStatus)}".`, 'info');
+    return;
+  }
+
+  try {
+    await dbInstance.collection('reservations').doc(reservationId).update({
+      status: targetStatus,
+      updatedAt: nowIso
+    });
+    if (item.email && typeof window.sendEmailJS === 'function') {
+      const emailType = targetStatus === 'confirmed' ? 'confirmed' : 'cancelled';
+      try {
+        const emailResult = window.sendEmailJS(item, emailType, reservationId);
+        if (emailResult && typeof emailResult.catch === 'function') {
+          emailResult.catch(error => console.warn('[EmailJS] status notification failed', error && error.code || 'unknown'));
+        }
+      } catch (error) {
+        console.warn('[EmailJS] status notification failed', error && error.code || 'unknown');
+      }
+    }
+    showToast(`Đã cập nhật trạng thái đặt bàn trên Firestore thành "${getStatusLabel(newStatus)}".`, 'success');
+  } catch (error) {
+    item.status = previousStatus;
+    item.updatedAt = previousUpdatedAt;
+    logFirestoreDiagnostic('update-reservation-status', error, {
+      ...diagnosticContext,
+      step: 'update-reservation'
+    });
+    updateStats();
+    renderTable();
+    renderCustomers();
+    showToast(firestoreUserMessage('update-reservation-status', error, 'update-reservation'), 'error');
+  }
 };
 
-window.deleteBooking = function(id) {
+window.deleteBooking = async function(id) {
+  const reservationId = String(id || '');
+  if (!reservationId) return;
+  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
+  const isLocalReservation = reservationId.startsWith('local_');
+  if (!isLocalReservation && (!dbInstance || typeof dbInstance.collection !== 'function'
+      || typeof dbInstance.runTransaction !== 'function')) {
+    showToast('Firestore chưa sẵn sàng. Đặt bàn chưa bị xóa.', 'error');
+    return;
+  }
   if (!confirm('Bạn có chắc muốn xóa lượt đặt bàn này không?')) return;
 
-  const item = allReservations.find(r => r.id === id);
-  allReservations = allReservations.filter(r => r.id !== id);
+  const item = allReservations.find(r => r.id === reservationId);
+
+  if (!isLocalReservation) {
+    const authInstance = window.firebaseAuth || window.auth || (typeof auth !== 'undefined' ? auth : null);
+    let transactionStep = 'create-document-references';
+    let transactionOperations = [];
+    try {
+      const reservationRef = dbInstance.collection('reservations').doc(reservationId);
+      const visitRef = dbInstance.collection('reservationVisits').doc(reservationId);
+      const result = await dbInstance.runTransaction(async transaction => {
+        // Firestore may retry the callback; keep diagnostics scoped to its last attempt.
+        transactionOperations = [];
+        transactionStep = 'read-reservation';
+        transactionOperations.push({ action: 'get', path: reservationRef.path });
+        const reservationSnapshot = await transaction.get(reservationRef);
+        transactionStep = 'read-existing-visit';
+        transactionOperations.push({ action: 'get', path: visitRef.path });
+        const visitSnapshot = await transaction.get(visitRef);
+        if (!reservationSnapshot.exists) return { status: 'reservation-not-found' };
+        let preservedVisit = null;
+        if (visitSnapshot.exists) {
+          const existingVisit = visitSnapshot.data() || {};
+          if (existingVisit.reservationId && existingVisit.reservationId !== reservationId) {
+            throw Object.assign(new Error('Visit record does not match its document ID'), { code: 'failed-precondition' });
+          }
+          preservedVisit = { ...existingVisit, id: reservationId, reservationId };
+          if (!isVisitCustomerSnapshotValid(existingVisit.customer)) {
+            transactionStep = 'preserve-visit-customer';
+            const visitUpdate = {
+              customer: buildVisitCustomerSnapshot(reservationSnapshot.data() || {}, reservationId)
+            };
+            if (!existingVisit.reservationId) visitUpdate.reservationId = reservationId;
+            transactionOperations.push({ action: 'update', path: visitRef.path, fields: Object.keys(visitUpdate).sort() });
+            preservedVisit.customer = buildVisitCustomerSnapshot(reservationSnapshot.data() || {}, reservationId);
+            transaction.update(visitRef, visitUpdate);
+          }
+        }
+        transactionStep = 'delete-reservation';
+        transactionOperations.push({ action: 'delete', path: reservationRef.path });
+        transaction.delete(reservationRef);
+        transactionStep = 'commit-transaction';
+        transactionOperations.push({ action: 'commit' });
+        return { status: 'deleted', visit: preservedVisit };
+      });
+      if (result.status === 'reservation-not-found') {
+        showToast('Không tìm thấy đặt bàn trên Firestore; không có dữ liệu nào bị xóa.', 'error');
+        return;
+      }
+      if (result.visit) {
+        serverAcknowledgedVisits.set(reservationId, result.visit);
+        allVisits = mergeAcknowledgedVisits([...allVisits, result.visit]);
+      }
+    } catch (error) {
+      logFirestoreDiagnostic('delete-reservation', error, {
+        paths: [`/reservations/${reservationId}`, `/reservationVisits/${reservationId}`],
+        authInstance,
+        step: transactionStep,
+        operations: transactionOperations
+      });
+      showToast(firestoreUserMessage('delete-reservation', error, transactionStep), 'error');
+      return;
+    }
+  }
+
+  allReservations = allReservations.filter(r => r.id !== reservationId);
 
   // Remove from localStorage
   try {
@@ -661,16 +1543,12 @@ window.deleteBooking = function(id) {
     localStorage.setItem('mocha_reservations', JSON.stringify(local));
   } catch (err) {}
 
-  // Remove from Firestore
-  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  if (dbInstance && typeof dbInstance.collection === 'function' && !id.startsWith('local_')) {
-    dbInstance.collection('reservations').doc(id).delete().catch(err => {
-      console.warn('Firestore delete notice:', err);
-    });
-  }
-
   updateStats();
   renderTable();
+  renderCustomers();
+  if (!isLocalReservation) {
+    showToast('Đã xóa đặt bàn; lịch sử lượt ghé được giữ nguyên.', 'success');
+  }
 };
 
 // Reply Modal Controls

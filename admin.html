@@ -206,17 +206,14 @@
                 <p class="admin-section-eyebrow">Chăm sóc khách hàng</p>
                 <h2 class="admin-section-title" id="customer-care-heading">Hồ sơ khách</h2>
               </div>
+                <span class="admin-live-indicator" id="customer-count">Đang tải...</span>
               <label class="customer-search-label" for="customer-search">Tìm khách
                 <input type="search" id="customer-search" class="admin-search-input"
                   placeholder="Tên, email hoặc số điện thoại" autocomplete="off" />
               </label>
             </div>
 
-            <div class="customer-care-stats" aria-live="polite">
-              <div class="stat-card"><span class="stat-label">Khách duy nhất</span><strong id="care-customer-count">0</strong></div>
-              <div class="stat-card"><span class="stat-label">Lượt đặt bàn</span><strong id="care-reservation-count">0</strong></div>
-              <div class="stat-card"><span class="stat-label">Đặt bàn gần nhất</span><strong id="care-last-reservation">Chưa có</strong></div>
-            </div>
+              <p class="customer-load-notice" id="customer-load-notice" role="status" aria-live="polite" hidden></p>
 
             <div class="admin-table-card">
               <div class="admin-table-wrap">
@@ -225,14 +222,15 @@
                     <tr>
                       <th>Khách hàng</th>
                       <th>Email</th>
-                      <th>Điện thoại</th>
-                      <th>Số lượt đặt</th>
-                      <th>Lần đặt gần nhất</th>
-                      <th>Lịch sử</th>
+                        <th>Số điện thoại</th>
+                        <th>Lượt đặt bàn</th>
+                        <th>Lượt ghé</th>
+                        <th>Lần ghé gần nhất</th>
+                        <th>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody id="customers-tbody">
-                    <tr><td colspan="6" class="customer-care-empty">Đang tải hồ sơ khách…</td></tr>
+                      <tr><td colspan="7" class="customer-care-empty">Đang tải hồ sơ khách…</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -304,6 +302,21 @@
     </main>
   </div>
 
+  <div class="admin-modal-overlay customer-profile-overlay" id="customer-profile-modal" hidden>
+    <section class="admin-modal-card customer-profile-card" role="dialog" aria-modal="true"
+      aria-labelledby="customer-profile-title" aria-describedby="customer-profile-description">
+      <div class="customer-profile-heading">
+        <div>
+          <span class="admin-section-kicker">Hồ sơ khách hàng</span>
+          <h2 class="admin-modal-title" id="customer-profile-title">Chi tiết khách hàng</h2>
+        </div>
+        <button type="button" class="customer-profile-close" id="customer-profile-close" aria-label="Đóng hồ sơ">&times;</button>
+      </div>
+      <p id="customer-profile-description" class="customer-profile-note"></p>
+      <div id="customer-profile-body"></div>
+    </section>
+  </div>
+
   <div class="admin-modal-overlay" id="customer-history-modal" hidden>
     <div class="admin-modal-card customer-history-card" role="dialog" aria-modal="true"
       aria-labelledby="customer-history-title">
@@ -366,27 +379,10 @@
 
   <!-- Firebase Auth config -->
   <script src="js/firebase-config.js"></script>
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getFirestore, collection, onSnapshot, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-
-    const config = window.FIREBASE_CONFIG || {};
-    if (config.apiKey && config.authDomain && config.projectId) {
-      const app = initializeApp(config);
-      const auth = getAuth(app);
-      const db = getFirestore(app);
-      window.firebaseApp = app;
-      window.firebaseAuth = auth;
-      window.firebaseDb = db;
-      window.firebaseAuthMethods = { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail };
-      window.firebaseFirestoreMethods = { collection, onSnapshot, doc, updateDoc };
-    } else {
-      console.error('[Firebase Config] Missing required Firebase web app configuration.');
-      window.firebaseAuth = null;
-      window.firebaseDb = null;
-    }
-  </script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
+  <script src="firebase.js" defer></script>
   <script src="admin.js" defer></script>
 </body>
 
