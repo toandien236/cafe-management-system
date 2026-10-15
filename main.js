@@ -873,10 +873,6 @@ function getVietnamDateString(date = new Date()) {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
-function formatAssignedTableNumber(value) {
-  const number = String(value || '').trim().replace(/^B/i, '');
-  return /^\d{1,2}$/.test(number) ? `B${number.padStart(2, '0')}` : 'Sẽ được xác nhận sau';
-}
 
 const RESERVATION_REQUEST_STORAGE_KEY = 'mocha_reservation_request_id';
 const RESERVATION_REQUEST_HASH_STORAGE_KEY = 'mocha_reservation_request_hash';
@@ -946,8 +942,7 @@ async function reservationPayloadHash(reservationData) {
     date: reservationData.date,
     time: reservationData.time,
     guests: reservationData.guests,
-    specialRequest: reservationData.specialRequest,
-    requestedTableNumber: reservationData.requestedTableNumber || ''
+    specialRequest: reservationData.specialRequest
   });
   if (!window.crypto || !window.crypto.subtle || typeof TextEncoder !== 'function') {
     throw Object.assign(new Error('Secure request hashing is unavailable'), { code: 'request-id-unavailable' });
@@ -1020,9 +1015,6 @@ async function saveReservationWithRequestId(dbInstance, reservationData, request
     emailStatus: 'Pending',
     createdAt
   };
-  if (reservationData.requestedTableNumber) {
-    reservationRecord.requestedTableNumber = reservationData.requestedTableNumber;
-  }
   const requestRecord = { requestId, reservationId: requestId, payloadHash, createdAt };
   const batch = dbInstance.batch();
   batch.set(reservationRef, reservationRecord);
@@ -1049,7 +1041,6 @@ function initReservationForm() {
   const success = document.getElementById('form-success');
   const submit  = document.getElementById('res-submit');
   const successMessage = document.getElementById('form-success-message');
-  const successTable = document.getElementById('form-success-table');
   const defaultSuccessMessage = 'Yêu cầu đặt bàn đã được lưu thành công.';
 
   if (!form || !success) return;
@@ -1126,7 +1117,6 @@ function initReservationForm() {
     if (typeof window.resetReservationGuests === 'function') window.resetReservationGuests();
     if (dateInput) dateInput.min = getVietnamDateString();
     if (successMessage) successMessage.textContent = defaultSuccessMessage;
-    if (successTable) successTable.textContent = 'Số bàn sẽ được xác nhận sau.';
     clearFormError();
     form.hidden = false;
     form.style.display = 'flex';
@@ -1216,7 +1206,6 @@ function initReservationForm() {
       date: date.value,
       time: time.value,
       guests: guestCount,
-      requestedTableNumber: (document.getElementById('res-requested-table-number') || {}).value || '',
       specialRequest: document.getElementById('res-notes') ? document.getElementById('res-notes').value.trim() : '',
       notes: document.getElementById('res-notes') ? document.getElementById('res-notes').value.trim() : ''
     };
@@ -1252,11 +1241,7 @@ function initReservationForm() {
         }
 
         if (successMessage) successMessage.textContent = 'Đặt bàn đã được lưu thành công.';
-        const requestedTableMessage = reservationData.requestedTableNumber
-          ? `Đã ghi nhận mong muốn bàn B${reservationData.requestedTableNumber}; số bàn sẽ được xác nhận sau.`
-          : 'Số bàn sẽ được xác nhận sau.';
-        if (successTable) successTable.textContent = requestedTableMessage;
-        showToast(`Đã lưu yêu cầu đặt bàn. ${requestedTableMessage}`, 'success');
+        showToast('\u0110\u00e3 l\u01b0u y\u00eau c\u1ea7u \u0111\u1eb7t b\u00e0n.', 'success');
         showSuccessView();
         openSuccessModal(reservationData);
         submissionRequestId = null;
@@ -1401,19 +1386,12 @@ function openSuccessModal(res) {
   const dateEl = document.getElementById('modal-res-date');
   const timeEl = document.getElementById('modal-res-time');
   const guestsEl = document.getElementById('modal-res-guests');
-  const tableEl = document.getElementById('modal-res-table');
 
   if (resIdEl) resIdEl.textContent = res.reservationId || res.id || 'CONFIRMED';
   if (nameEl) nameEl.textContent = res.customerName || res.name || 'Quý khách';
   if (dateEl) dateEl.textContent = res.date || 'Hôm nay';
   if (timeEl) timeEl.textContent = formatTime(res.time) || res.time || '';
   if (guestsEl) guestsEl.textContent = `${res.guests || 2} khách`;
-  if (tableEl) {
-    const requestedTable = /^(0[1-9]|1[0-9]|20)$/.test(String(res.requestedTableNumber || ''))
-      ? `Mong muốn B${res.requestedTableNumber}; sẽ được xác nhận sau`
-      : 'Sẽ được xác nhận sau';
-    tableEl.textContent = res.tableNumber ? formatAssignedTableNumber(res.tableNumber) : requestedTable;
-  }
 
   modal.hidden = false;
   modal.setAttribute('aria-hidden', 'false');

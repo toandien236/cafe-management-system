@@ -173,15 +173,16 @@ service cloud.firestore {
         && existsAfter(/databases/$(database)/documents/reservations/$(reservationId))
         && getAfter(/databases/$(database)/documents/reservations/$(reservationId)).data.status in ['confirmed', 'Confirmed'];
 
-      // A legacy visit without customer data may be enriched only in the same
-      // transaction that removes its reservation. Existing visit facts remain immutable.
+      // A legacy visit without a valid customer snapshot may be enriched only
+      // in the same transaction that removes its reservation. Keep every
+      // existing field immutable; legacy documents may have additional fields.
       allow update: if isAdmin()
-        && resource.data.keys().hasAll(['reservationId', 'recordedAt', 'recordedBy', 'source'])
-        && resource.data.keys().hasOnly(['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer'])
-        && resource.data.reservationId == reservationId
-        && request.resource.data.keys().hasAll(['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer'])
-        && request.resource.data.keys().hasOnly(['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer'])
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customer'])
+        && (!resource.data.keys().hasAny(['reservationId'])
+          || resource.data.reservationId == null
+          || resource.data.reservationId == ''
+          || resource.data.reservationId == reservationId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customer', 'reservationId'])
+        && request.resource.data.reservationId == reservationId
         && (!resource.data.keys().hasAny(['customer'])
           || !isValidVisitCustomerSnapshot(resource.data.customer))
         && isValidVisitCustomerSnapshot(request.resource.data.customer)

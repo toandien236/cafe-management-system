@@ -19,7 +19,6 @@ const diagnosticSource = extractSource('const ADMIN_EMAIL =', '\nfunction initAd
 const customerDataSource = extractSource('function normalizeCustomerEmail(', '\nfunction renderCustomers(');
 const visitLoadSource = extractSource('function stopReservationVisitsListener()', '\nfunction normalizeCustomerEmail(');
 const visitSource = extractSource('async function recordReservationVisit(', '\nfunction loadOrders()');
-const tableSource = extractSource('function formatReservationTableNumber(', '\nfunction getStatusLabel(');
 const profileRenderSource = extractSource('function renderCustomerProfile(', '\nasync function recordReservationVisit(');
 const statusSource = extractSource('window.updateBookingStatus = async function', '\nwindow.deleteBooking = async function');
 const deleteSource = extractSource('window.deleteBooking = async function', '\n// Reply Modal Controls');
@@ -131,7 +130,6 @@ function createHarness({
   vm.runInContext('adminSessionActive = true;', sandbox);
   vm.runInContext(customerDataSource, sandbox);
   vm.runInContext(visitLoadSource, sandbox);
-  vm.runInContext(tableSource, sandbox);
   vm.runInContext(profileRenderSource, sandbox);
   vm.runInContext(visitSource, sandbox);
   return { sandbox, events };
@@ -577,7 +575,8 @@ test('keeps the admin rule private and normalizes the email claim', () => {
 });
 
 test('admin actions have click handlers and the page loads the current script version', () => {
-  assert.match(adminHtml, /admin\.js\?v=8/);
+  assert.match(adminHtml, /admin\.js\?v=9/);
+  assert.match(adminHtml, /main\.js\?v=8/);
   assert.match(adminSource, /bookingsBody\.addEventListener\('click'/);
   assert.match(adminSource, /customersBody\.addEventListener\('click'/);
   assert.match(adminSource, /closest\('\[data-visit-res-id\]'\)/);
@@ -585,22 +584,13 @@ test('admin actions have click handlers and the page loads the current script ve
   assert.match(adminSource, /data-visit-res-id="\$\{escapeHtml\(res\.id\)\}"/);
 });
 
-test('admin reservation table displays the assigned table and handles legacy bookings', () => {
+test('admin reservations do not display table numbers', () => {
   const { sandbox, events } = createHarness();
-  assert.match(adminHtml, /<th>Số bàn<\/th>/);
-  assert.equal(sandbox.getAdminTableCapacity('05'), 4);
-  assert.equal(sandbox.getAdminTableCapacity('12'), 12);
-  assert.equal(sandbox.adminReservationTimesOverlap({ time: '1900' }, { time: '2030' }), true);
-  assert.equal(sandbox.adminReservationTimesOverlap({ time: '1900' }, { time: '2100' }), false);
+  const reservationsTable = adminHtml.match(/<table class="admin-table">[\s\S]*?<thead>([\s\S]*?)<\/thead>/);
+  assert.ok(reservationsTable);
+  assert.equal((reservationsTable[1].match(/<th>/g) || []).length, 7);
   sandbox.allReservations[0].tableNumber = '05';
-  sandbox.renderTable();
-  assert.match(events.bookingsBody.innerHTML, /B05/);
-
-  delete sandbox.allReservations[0].tableNumber;
   sandbox.allReservations[0].requestedTableNumber = '05';
   sandbox.renderTable();
-  assert.match(events.bookingsBody.innerHTML, /Chưa gán/);
-  assert.match(events.bookingsBody.innerHTML, /Khách muốn: B05/);
-  assert.match(events.bookingsBody.innerHTML, /<option value="05"[^>]*selected/);
-  assert.match(events.bookingsBody.innerHTML, /data-assign-reservation=/);
+  assert.doesNotMatch(events.bookingsBody.innerHTML, /B05|reservation-table-number|requestedTableNumber/);
 });

@@ -885,34 +885,6 @@
               <label for="res-notes" class="form-label">Yêu cầu thêm (không bắt buộc)</label>
               <span class="form-line"></span>
             </div>
-            <div class="form-group">
-              <select id="res-requested-table-number" name="requestedTableNumber" class="form-input form-input--select">
-                <option value="">Không có ưu tiên</option>
-                <option value="01">B01</option>
-                <option value="02">B02</option>
-                <option value="03">B03</option>
-                <option value="04">B04</option>
-                <option value="05">B05</option>
-                <option value="06">B06</option>
-                <option value="07">B07</option>
-                <option value="08">B08</option>
-                <option value="09">B09</option>
-                <option value="10">B10</option>
-                <option value="11">B11</option>
-                <option value="12">B12</option>
-                <option value="13">B13</option>
-                <option value="14">B14</option>
-                <option value="15">B15</option>
-                <option value="16">B16</option>
-                <option value="17">B17</option>
-                <option value="18">B18</option>
-                <option value="19">B19</option>
-                <option value="20">B20</option>
-              </select>
-              <label for="res-requested-table-number" class="form-label form-label--up">Bàn mong muốn (không bắt buộc)</label>
-              <span class="form-line"></span>
-            </div>
-            <p class="form-disclaimer" role="status">Đây là bàn bạn mong muốn; quán sẽ kiểm tra và xác nhận số bàn sau.</p>
             <button type="submit" class="btn btn-primary btn-full magnetic" id="res-submit">
               <span class="btn-text">Xác nhận đặt bàn</span>
               <span class="btn-ripple" aria-hidden="true"></span>
@@ -924,10 +896,6 @@
             <div class="form-success-icon" aria-hidden="true">✓</div>
             <h3>Đã nhận yêu cầu đặt bàn</h3>
             <p id="form-success-message">Yêu cầu đặt bàn đã được lưu thành công.</p>
-            <div class="form-success-table" role="status" aria-live="polite">
-              <span>Số bàn</span>
-              <strong id="form-success-table">Số bàn sẽ được xác nhận sau.</strong>
-            </div>
             <button type="button" class="btn btn-outline" id="res-another-btn" style="margin-top:24px; font-size:13px; padding:10px 22px;">Đặt thêm bàn</button>
           </div>
         </div>
@@ -1069,10 +1037,6 @@
           <span class="res-detail-label">Số lượng khách</span>
           <span class="res-detail-value" id="modal-res-guests">-</span>
         </div>
-        <div class="res-detail-row">
-          <span class="res-detail-label">Số bàn</span>
-          <span class="res-detail-value" id="modal-res-table">Sẽ được xác nhận sau</span>
-        </div>
       </div>
 
       <div class="res-modal-actions">
@@ -1101,7 +1065,7 @@
 
   <!-- Firebase + Main JS -->
   <script src="firebase.js?v=4" defer></script>
-  <script src="main.js?v=7" defer></script>
+  <script src="main.js?v=8" defer></script>
 
 </body>
 </html>

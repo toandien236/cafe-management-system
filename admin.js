@@ -618,7 +618,13 @@ function buildVisitCustomerSnapshot(reservation, reservationId) {
 }
 
 function isVisitCustomerSnapshotValid(customer) {
-  return Boolean(customer && typeof customer === 'object'
+  const allowedKeys = ['email', 'key', 'name', 'phone', 'phoneNormalized'];
+  const customerKeys = customer && typeof customer === 'object' && !Array.isArray(customer)
+    ? Object.keys(customer).sort()
+    : [];
+  return Boolean(customer && typeof customer === 'object' && !Array.isArray(customer)
+    && customerKeys.length === allowedKeys.length
+    && allowedKeys.every((key, index) => customerKeys[index] === key)
     && typeof customer.key === 'string' && customer.key.length > 0 && customer.key.length <= 300
     && typeof customer.name === 'string' && customer.name.length <= 500
     && typeof customer.email === 'string' && customer.email.length <= 512
@@ -1187,138 +1193,6 @@ window.markOrderPaid = function(id) {
     .catch(error => console.warn('Order payment update notice:', error));
 };
 
-function formatReservationTableNumber(value) {
-  const number = String(value || '').trim().replace(/^B/i, '');
-  return /^\d{1,2}$/.test(number) ? `B${number.padStart(2, '0')}` : 'Chưa gán';
-}
-
-function getAdminTableCapacity(tableNumber) {
-  const number = Number(String(tableNumber || '').replace(/^B/i, ''));
-  if (number >= 1 && number <= 4) return 2;
-  if ((number >= 5 && number <= 8) || (number >= 13 && number <= 20)) return 4;
-  if (number >= 9 && number <= 10) return 6;
-  if (number === 11) return 8;
-  if (number === 12) return 12;
-  return 0;
-}
-
-function adminReservationStartMinutes(reservation) {
-  const value = String(reservation && reservation.time || '').replace(':', '');
-  if (!/^\d{4}$/.test(value)) return null;
-  const hour = Number(value.slice(0, 2));
-  const minute = Number(value.slice(2));
-  if (hour > 23 || minute > 59) return null;
-  return hour * 60 + minute;
-}
-
-function adminReservationTimesOverlap(first, second) {
-  const firstStart = adminReservationStartMinutes(first);
-  const secondStart = adminReservationStartMinutes(second);
-  if (firstStart === null || secondStart === null) return true;
-  const durationMinutes = 120;
-  return firstStart < secondStart + durationMinutes && secondStart < firstStart + durationMinutes;
-}
-
-window.assignReservationTable = async function(reservationId) {
-  const item = allReservations.find(reservation => reservation.id === reservationId);
-  const tableSelect = document.getElementById(`reservation-table-${reservationId}`);
-  const tableNumber = String(tableSelect && tableSelect.value || '').trim();
-  const authInstance = window.firebaseAuth || window.auth || (typeof auth !== 'undefined' ? auth : null);
-  const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  const user = authInstance && authInstance.currentUser;
-
-  if (!user || normalizeAdminEmail(user.email) !== ADMIN_EMAIL || !adminSessionActive) {
-    showToast('Đăng nhập bằng tài khoản quản trị để gán bàn.', 'error');
-    return;
-  }
-  if (!item || item.isLocal || !item.date || item.tableNumber) {
-    showToast('Không thể gán bàn cho đặt chỗ này. Hãy tải lại danh sách rồi thử lại.', 'error');
-    return;
-  }
-  if (!/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(item.date)
-      || adminReservationStartMinutes(item) === null) {
-    showToast('Ngày hoặc giờ của đặt chỗ cũ không hợp lệ; chưa thể kiểm tra bàn an toàn.', 'error');
-    return;
-  }
-  const guestCount = Number(item.guests || 2);
-  if (!/^(0[1-9]|1[0-9]|20)$/.test(tableNumber)
-      || !Number.isInteger(guestCount) || guestCount < 1 || guestCount > 12
-      || getAdminTableCapacity(tableNumber) < guestCount) {
-    showToast('Bàn đã chọn không đủ sức chứa hoặc không hợp lệ.', 'error');
-    return;
-  }
-  if (!dbInstance || typeof dbInstance.collection !== 'function' || typeof dbInstance.runTransaction !== 'function') {
-    showToast('Firestore chưa sẵn sàng; chưa gán bàn.', 'error');
-    return;
-  }
-
-  const lockRef = dbInstance.collection('tableAllocationDays').doc(item.date);
-  const reservationRef = dbInstance.collection('reservations').doc(reservationId);
-  let expectedRevision = 0;
-  try {
-    const lockSnapshot = await lockRef.get();
-    expectedRevision = lockSnapshot.exists ? Number((lockSnapshot.data() || {}).revision) || 0 : 0;
-    const sameDaySnapshot = await dbInstance.collection('reservations').where('date', '==', item.date).get();
-    const sameDayReservations = [];
-    sameDaySnapshot.forEach(documentSnapshot => {
-      if (documentSnapshot.id === reservationId) return;
-      const reservation = documentSnapshot.data() || {};
-      if (['cancelled', 'canceled', 'deleted'].includes(String(reservation.status || 'pending').toLowerCase())) return;
-      sameDayReservations.push({ ...reservation, id: documentSnapshot.id });
-    });
-
-    const overlappingReservation = sameDayReservations.find(reservation =>
-      String(reservation.tableNumber || '').replace(/^B/i, '').padStart(2, '0') === tableNumber
-      && adminReservationTimesOverlap(reservation, item));
-    if (overlappingReservation) {
-      showToast('Bàn này đã có một đặt chỗ trùng khung giờ; hãy chọn bàn khác.', 'error');
-      return;
-    }
-
-    const firebaseApi = window.firebase || (typeof firebase !== 'undefined' ? firebase : null);
-    const serverTimestamp = firebaseApi && firebaseApi.firestore && firebaseApi.firestore.FieldValue
-      && firebaseApi.firestore.FieldValue.serverTimestamp;
-    if (typeof serverTimestamp !== 'function') throw Object.assign(new Error('Server timestamp unavailable'), { code: 'failed-precondition' });
-    await dbInstance.runTransaction(async transaction => {
-      const latestLock = await transaction.get(lockRef);
-      const currentRevision = latestLock.exists ? Number((latestLock.data() || {}).revision) || 0 : 0;
-      if (currentRevision !== expectedRevision) {
-        throw Object.assign(new Error('Table assignment data changed'), { code: 'aborted' });
-      }
-
-      const currentReservation = await transaction.get(reservationRef);
-      if (!currentReservation.exists) throw Object.assign(new Error('Reservation not found'), { code: 'not-found' });
-      const currentData = currentReservation.data() || {};
-      if (currentData.tableNumber || String(currentData.status || 'pending').toLowerCase() === 'cancelled') {
-        throw Object.assign(new Error('Reservation no longer accepts a table assignment'), { code: 'failed-precondition' });
-      }
-
-      const updatedAt = serverTimestamp();
-      const updates = { tableNumber, updatedAt };
-      if (!currentData.status) updates.status = 'pending';
-      transaction.update(reservationRef, updates);
-      transaction.set(lockRef, {
-        date: item.date,
-        revision: currentRevision + 1,
-        updatedAt
-      });
-    });
-
-    item.tableNumber = tableNumber;
-    renderTable();
-    showToast(`Đã gán bàn B${tableNumber}.`, 'success');
-  } catch (error) {
-    logFirestoreDiagnostic('assign-reservation-table', error, {
-      paths: [`/reservations/${reservationId}`, `/tableAllocationDays/${item.date}`],
-      authInstance,
-      step: 'assignment-transaction'
-    });
-    showToast(error && error.code === 'aborted'
-      ? 'Danh sách bàn vừa thay đổi. Tải lại dữ liệu rồi kiểm tra lại tình trạng bàn.'
-      : 'Không thể xác nhận hoặc gán bàn trên Firestore. Đặt chỗ vẫn được giữ; hãy thử lại sau.', 'error');
-  }
-};
-
 function renderTable() {
   const tbody = document.getElementById('bookings-tbody');
   if (!tbody) return;
@@ -1345,7 +1219,7 @@ function renderTable() {
   if (filtered.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="8" style="text-align:center; padding: 48px; color: var(--warm-gray);">
+        <td colspan="7" style="text-align:center; padding: 48px; color: var(--warm-gray);">
           Không tìm thấy lượt đặt bàn phù hợp.
         </td>
       </tr>
@@ -1395,21 +1269,6 @@ function renderTable() {
           <div style="font-weight: 500;">${escapeHtml(res.date || 'TBD')}</div>
           <div style="font-size: 12px; color: var(--coffee-mid);">${timeFormatted}</div>
         </td>
-        <td>
-          <span class="reservation-table-number">${escapeHtml(formatReservationTableNumber(res.tableNumber))}</span>
-          ${res.requestedTableNumber ? `<div style="font-size: 12px; color: var(--coffee-mid);">Khách muốn: ${escapeHtml(formatReservationTableNumber(res.requestedTableNumber))}</div>` : ''}
-          ${!res.tableNumber && statusLower !== 'cancelled' && !localOnly ? `
-            <div class="reservation-table-assignment">
-              <select id="reservation-table-${escapeHtml(res.id)}" aria-label="Chọn bàn cho ${escapeHtml(guestName)}">
-                <option value="">Chọn bàn</option>
-                ${Array.from({ length: 20 }, (_, index) => String(index + 1).padStart(2, '0')).map(tableNumber => `
-                  <option value="${tableNumber}" ${getAdminTableCapacity(tableNumber) < Number(res.guests || 2) ? 'disabled' : ''} ${res.requestedTableNumber === tableNumber && getAdminTableCapacity(tableNumber) >= Number(res.guests || 2) ? 'selected' : ''}>B${tableNumber}</option>
-                `).join('')}
-              </select>
-              <button type="button" class="btn-action btn-action--approve" data-assign-reservation="${escapeHtml(res.id)}">Gán bàn</button>
-            </div>
-          ` : ''}
-        </td>
         <td style="font-weight: 600; text-align: center;">
           ${res.guests || 2}
         </td>
@@ -1440,11 +1299,6 @@ function renderTable() {
     `;
   }).join('');
 
-  if (typeof tbody.querySelectorAll === 'function') {
-    tbody.querySelectorAll('[data-assign-reservation]').forEach(button => {
-      button.addEventListener('click', () => window.assignReservationTable(button.getAttribute('data-assign-reservation')));
-    });
-  }
 }
 
 function getStatusLabel(status) {
@@ -1622,12 +1476,19 @@ window.deleteBooking = async function(id) {
         let preservedVisit = null;
         if (visitSnapshot.exists) {
           const existingVisit = visitSnapshot.data() || {};
+          if (existingVisit.reservationId && existingVisit.reservationId !== reservationId) {
+            throw Object.assign(new Error('Visit record does not match its document ID'), { code: 'failed-precondition' });
+          }
           preservedVisit = { ...existingVisit, id: reservationId, reservationId };
           if (!isVisitCustomerSnapshotValid(existingVisit.customer)) {
             transactionStep = 'preserve-visit-customer';
-            transactionOperations.push({ action: 'update', path: visitRef.path, fields: ['customer'] });
+            const visitUpdate = {
+              customer: buildVisitCustomerSnapshot(reservationSnapshot.data() || {}, reservationId)
+            };
+            if (!existingVisit.reservationId) visitUpdate.reservationId = reservationId;
+            transactionOperations.push({ action: 'update', path: visitRef.path, fields: Object.keys(visitUpdate).sort() });
             preservedVisit.customer = buildVisitCustomerSnapshot(reservationSnapshot.data() || {}, reservationId);
-            transaction.update(visitRef, { customer: preservedVisit.customer });
+            transaction.update(visitRef, visitUpdate);
           }
         }
         transactionStep = 'delete-reservation';

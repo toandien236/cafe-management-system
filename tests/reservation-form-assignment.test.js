@@ -16,7 +16,7 @@ const end = mainSource.indexOf('function sendEmailJS(', start);
 assert.ok(start >= 0 && end > start, 'reservation form source exists');
 const reservationSource = mainSource.slice(start, end);
 
-function createFormHarness({ commitBehavior = null, storedRequestId = null, storedRequestHash = null, existingRequests = [], sessionStorageAvailable = true, requestedTableNumber = '05' } = {}) {
+function createFormHarness({ commitBehavior = null, storedRequestId = null, storedRequestHash = null, existingRequests = [], sessionStorageAvailable = true } = {}) {
   const events = {
     commits: 0,
     writes: [],
@@ -100,7 +100,6 @@ function createFormHarness({ commitBehavior = null, storedRequestId = null, stor
     'form-success': success,
     'res-submit': submitButton,
     'form-success-message': { textContent: '' },
-    'form-success-table': { textContent: '' },
     'res-name': { value: 'Guest One' },
     'res-email': { value: 'guest@example.com', checkValidity: () => true },
     'res-date': { value: '2099-01-01', min: '' },
@@ -108,7 +107,6 @@ function createFormHarness({ commitBehavior = null, storedRequestId = null, stor
     'res-guests': { value: '2' },
     'res-phone': { value: '0901234567' },
     'res-notes': { value: '' },
-    'res-requested-table-number': { value: requestedTableNumber },
     'res-another-btn': { addEventListener() {} }
   };
   const localStorage = {
@@ -182,7 +180,6 @@ test('writes an unassigned reservation and shows success only after Firestore ac
   assert.equal(harness.events.commits, 1);
   assert.equal(harness.success.hidden, false);
   assert.match(harness.elements['form-success-message'].textContent, /đặt bàn đã được lưu thành công/i);
-  assert.match(harness.elements['form-success-table'].textContent, /số bàn sẽ được xác nhận sau/i);
   assert.equal(harness.events.toasts.at(-1).type, 'success');
   assert.equal(harness.events.openedModalData.reservationId, [...harness.reservations.keys()][0]);
   assert.equal(harness.events.openedModalData.tableNumber, undefined);
@@ -194,9 +191,7 @@ test('writes an unassigned reservation and shows success only after Firestore ac
   assert.equal(reservation.status, 'pending');
   assert.equal(reservation.emailStatus, 'Pending');
   assert.equal(reservation.tableNumber, undefined);
-  assert.equal(reservation.requestedTableNumber, '05');
-  assert.match(harness.elements['form-success-table'].textContent, /ghi nhận mong muốn bàn B05; số bàn sẽ được xác nhận sau/i);
-  assert.match(harness.events.openedModalData.requestedTableNumber, /^05$/);
+  assert.equal(Object.hasOwn(reservation, 'requestedTableNumber'), false);
   assert.equal(marker.reservationId, reservation.reservationId);
   assert.match(marker.payloadHash, /^[0-9a-f]{64}$/);
   assert.equal(harness.events.storage.key, 'mocha_reservations');
@@ -217,7 +212,6 @@ test('Firestore write failure keeps form values and does not show success', asyn
   assert.equal(harness.elements['res-name'].value, 'Guest One');
   assert.equal(harness.elements['res-email'].value, 'guest@example.com');
   assert.equal(harness.elements['res-date'].value, '2099-01-01');
-  assert.equal(harness.elements['res-requested-table-number'].value, '05');
   assert.equal(harness.submitButton.disabled, false);
   assert.match(harness.events.toasts.at(-1).message, /Rules của \/reservations và \/reservationRequests/i);
   assert.ok(harness.events.sessionValues.get('mocha_reservation_request_id'));
@@ -250,35 +244,6 @@ test('retry after a failed write reuses the same ID and creates only one reserva
   assert.equal(harness.reservations.size, 1);
   assert.equal(harness.requestMarkers.size, 1);
   assert.equal([...harness.reservations.keys()][0], requestId);
-  assert.equal(harness.success.hidden, false);
-});
-
-test('changing the requested table after a failed attempt uses a new request ID', async () => {
-  const harness = createFormHarness({
-    commitBehavior: async ({ events }) => {
-      if (events.commits === 1) throw Object.assign(new Error('offline'), { code: 'unavailable' });
-    }
-  });
-  await submit(harness);
-  const failedRequestId = harness.events.sessionValues.get('mocha_reservation_request_id');
-  harness.elements['res-requested-table-number'].value = '06';
-  await submit(harness);
-
-  assert.equal(harness.reservations.size, 1);
-  assert.equal(harness.requestMarkers.size, 1);
-  assert.notEqual([...harness.reservations.keys()][0], failedRequestId);
-  assert.equal([...harness.reservations.values()][0].requestedTableNumber, '06');
-  assert.equal([...harness.reservations.values()][0].tableNumber, undefined);
-  assert.equal(harness.success.hidden, false);
-});
-
-test('requested table is omitted when the guest chooses no preference', async () => {
-  const harness = createFormHarness({ requestedTableNumber: '' });
-  await submit(harness);
-
-  const reservation = [...harness.reservations.values()][0];
-  assert.equal(Object.hasOwn(reservation, 'requestedTableNumber'), false);
-  assert.equal(reservation.tableNumber, undefined);
   assert.equal(harness.success.hidden, false);
 });
 
@@ -319,18 +284,16 @@ test('confirms an ambiguous commit only after the idempotency marker is readable
   assert.equal(harness.requestMarkers.size, 1);
 });
 
-test('client avoids Cloud Functions and offers only a requested table preference', () => {
+test('client avoids Cloud Functions and does not ask guests to choose a table', () => {
   assert.doesNotMatch(mainSource, /httpsCallable|createReservationWithTable/);
   assert.doesNotMatch(firebaseSource, /firebaseFunctions|\.functions\(/);
   assert.doesNotMatch(indexHtml, /firebase-functions-compat|res-table-number|tableNumber/);
-  assert.match(indexHtml, /id="res-requested-table-number"/);
-  for (let number = 1; number <= 20; number++) {
-    assert.match(indexHtml, new RegExp(`<option value="${String(number).padStart(2, '0')}">B${String(number).padStart(2, '0')}</option>`));
-  }
-  assert.match(indexHtml, /Bàn mong muốn \(không bắt buộc\)/);
-  assert.match(indexHtml, /quán sẽ kiểm tra và xác nhận số bàn sau/);
+  assert.doesNotMatch(indexHtml, /res-requested-table-number|Bàn mong muốn/);
+  assert.doesNotMatch(mainSource, /requestedTableNumber|res-requested-table-number/);
   assert.match(indexHtml, /firebase\.js\?v=4/);
-  assert.match(indexHtml, /main\.js\?v=7/);
+  assert.match(indexHtml, /main\.js\?v=8/);
+  assert.doesNotMatch(indexHtml, /form-success-table|modal-res-table/);
+  assert.doesNotMatch(mainSource, /form-success-table|modal-res-table|formatAssignedTableNumber/);
   assert.match(rulesSource, /allow create: if isValidPublicReservation\(reservation\)/);
   assert.match(rulesSource, /requestedTableNumber\.matches\('\^\(0\[1-9\]\|1\[0-9\]\|20\)\$'\)/);
   assert.match(rulesSource, /match \/reservationRequests\//);
