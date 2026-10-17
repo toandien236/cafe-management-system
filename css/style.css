@@ -2221,15 +2221,9 @@ img, video, svg, iframe {
   display: block;
 }
 
-.admin-main-column,
-.admin-sidebar-column {
+.admin-main-column {
   min-width: 0;
   width: 100%;
-}
-
-.admin-sidebar-column {
-  position: static;
-  margin-top: 24px;
 }
 
 /* Stats Cards Grid */
@@ -2284,12 +2278,8 @@ img, video, svg, iframe {
 }
 
 .admin-revenue-section {
-  margin-bottom: 0;
-  position: static;
-}
-
-.admin-revenue-heading {
-  margin-bottom: 18px;
+  margin-top: 0;
+  scroll-margin-top: 110px;
 }
 
 .admin-section-eyebrow {
@@ -2354,14 +2344,14 @@ img, video, svg, iframe {
   white-space: nowrap;
 }
 
-@media (max-width: 980px) {
-  .admin-content-grid {
-    grid-template-columns: 1fr;
-  }
+.admin-revenue-search-actions {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+}
 
-  .admin-sidebar-column {
-    order: 2;
-  }
+.admin-revenue-search-actions .admin-revenue-submit {
+  flex: 1;
 }
 
 @media (max-width: 760px) {
