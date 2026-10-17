@@ -4,32 +4,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cổng quản trị — Mocha & Miso</title>
+  <title>Doanh thu — Mocha &amp; Miso</title>
   <meta name="robots" content="noindex, nofollow" />
   <link rel="icon" type="image/jpeg" href="assets/logo_icon.jpg" />
 
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
     href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap"
     rel="stylesheet" />
 
-  <!-- GSAP CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
-
   <link rel="stylesheet" href="css/style.css" />
 </head>
 
 <body class="admin-body">
-
-  <!-- ============================================================ -->
-  <!-- 1. LOGIN SCREEN -->
-  <!-- ============================================================ -->
   <section class="admin-login-screen" id="admin-login-section">
     <div class="admin-login-card">
       <div class="admin-brand-header">
-        <img src="assets/logo_icon.jpg" alt="Mocha & Miso" class="admin-brand-logo" />
+        <img src="assets/logo_icon.jpg" alt="Mocha &amp; Miso" class="admin-brand-logo" />
         <h1 class="admin-brand-title">Cổng quản trị</h1>
         <p class="admin-brand-sub">Mocha &amp; Miso · Cà phê thủ công</p>
       </div>
@@ -51,342 +43,108 @@
         <button type="submit" class="btn btn-primary btn-full" id="admin-login-submit">
           <span class="btn-text">Đăng nhập</span>
         </button>
-
       </form>
     </div>
   </section>
 
-  <!-- ============================================================ -->
-  <!-- 2. DASHBOARD VIEW (Hidden until Auth) -->
-  <!-- ============================================================ -->
   <div id="admin-dashboard-section" hidden>
-
-    <!-- Top Header Navigation -->
     <header class="admin-header">
       <div class="container admin-header-inner">
         <div class="admin-logo-group">
           <h2 class="admin-header-title">Mocha &amp; Miso</h2>
-          <span class="admin-badge">Bảng điều khiển</span>
+          <span class="admin-badge">Doanh thu</span>
         </div>
         <div class="admin-user-info">
-          <a href="revenue.html" class="btn btn-outline admin-top-link">Trang doanh thu</a>
-          <a href="qr.html" class="btn btn-outline admin-top-link">Mã QR bàn</a>
+          <a href="admin.html" class="btn btn-outline admin-top-link">Trang quản trị</a>
           <span class="admin-email-text" id="logged-admin-email">rickmondal598@gmail.com</span>
-          <a class="btn-logout" href="hr.html">Quản lý nhân sự</a>
-          <a class="btn-logout" href="inventory.html">Quản lý kho</a>
           <button type="button" class="btn-logout" id="admin-logout-btn">Đăng xuất</button>
         </div>
       </div>
     </header>
 
-    <!-- Main Dashboard Content -->
     <main class="admin-main container">
-
-      <!-- KPI Stats Grid -->
-      <div class="admin-stats-grid">
-        <div class="stat-card">
-          <div class="stat-header">
-            <span class="stat-label">Tổng lượt đặt bàn</span>
-            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M19 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zM16 2v4M8 2v4M3 10h18" />
-            </svg>
+      <section class="admin-revenue-section" aria-labelledby="admin-revenue-title">
+        <div class="admin-section-heading">
+          <div>
+            <p class="admin-section-eyebrow">Đơn gọi món theo bàn</p>
+            <h1 class="admin-section-title" id="admin-revenue-title">Doanh thu</h1>
           </div>
-          <div class="stat-num" id="stat-total">0</div>
         </div>
 
-        <div class="stat-card">
-          <div class="stat-header">
-            <span class="stat-label">Chờ xác nhận</span>
-            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
+        <div class="admin-stats-grid admin-revenue-stats">
+          <div class="stat-card">
+            <div class="stat-label">Hôm nay</div>
+            <div class="stat-num" id="revenue-today">0 VND</div>
           </div>
-          <div class="stat-num" id="stat-pending">0</div>
+          <div class="stat-card">
+            <div class="stat-label">Tháng này</div>
+            <div class="stat-num" id="revenue-month">0 VND</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Tổng doanh thu</div>
+            <div class="stat-num" id="revenue-total">0 VND</div>
+          </div>
         </div>
 
-        <div class="stat-card">
-          <div class="stat-header">
-            <span class="stat-label">Đặt bàn đã xác nhận</span>
-            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
-              <polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
+        <form class="admin-revenue-form" id="revenue-search-form">
+          <label class="admin-revenue-field">
+            <span>Tra cứu theo ngày</span>
+            <input id="revenue-filter-day" type="date" />
+          </label>
+          <label class="admin-revenue-field">
+            <span>Tra cứu theo tháng</span>
+            <input id="revenue-filter-month" type="month" />
+          </label>
+          <label class="admin-revenue-field">
+            <span>Tra cứu theo năm</span>
+            <input id="revenue-filter-year" type="number" min="2000" max="2100" step="1" placeholder="Ví dụ: 2026" />
+          </label>
+          <div class="admin-revenue-search-actions">
+            <button class="btn btn-primary admin-revenue-submit" type="submit">Tra cứu</button>
+            <button class="btn btn-outline admin-revenue-submit" id="revenue-filter-clear" type="button">Xóa lọc</button>
           </div>
-          <div class="stat-num" id="stat-confirmed">0</div>
+        </form>
+
+        <div class="admin-stats-grid admin-revenue-stats">
+          <div class="stat-card">
+            <div class="stat-label">Kết quả tra cứu</div>
+            <div class="stat-num" id="revenue-filter-total">0 VND</div>
+            <p class="customer-profile-note" id="revenue-filter-count">0 đơn đã thanh toán</p>
+          </div>
         </div>
 
-        <div class="stat-card">
-          <div class="stat-header">
-            <span class="stat-label">Tổng số khách</span>
-            <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 00-3-3.87" />
-              <path d="M16 3.13a4 4 0 010 7.75" />
-            </svg>
+        <p class="customer-profile-note">Doanh thu được tổng hợp tự động từ các đơn gọi món đã thanh toán.</p>
+
+        <div class="admin-table-card">
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Ngày thanh toán</th>
+                  <th>Mã đơn</th>
+                  <th>Bàn</th>
+                  <th>Số tiền</th>
+                </tr>
+              </thead>
+              <tbody id="revenue-tbody">
+                <tr><td colspan="4" style="text-align:center; padding:30px;">Đang tải doanh thu…</td></tr>
+              </tbody>
+            </table>
           </div>
-          <div class="stat-num" id="stat-guests">0</div>
         </div>
-      </div>
-
-      <div class="admin-content-grid">
-        <div class="admin-main-column">
-          <!-- Controls: Filter Tabs & Search -->
-          <div class="admin-controls-bar">
-            <div class="admin-filter-group" role="tablist">
-              <button type="button" class="admin-filter-tab active" data-filter="all">Tất cả</button>
-              <button type="button" class="admin-filter-tab" data-filter="pending">Chờ xác nhận</button>
-              <button type="button" class="admin-filter-tab" data-filter="confirmed">Đã xác nhận</button>
-              <button type="button" class="admin-filter-tab" data-filter="cancelled">Đã hủy</button>
-            </div>
-
-            <input type="text" id="admin-search" class="admin-search-input"
-              placeholder="Tìm theo tên, email hoặc số điện thoại..." />
-          </div>
-
-          <!-- Table Container -->
-          <div class="admin-table-card">
-            <div class="admin-table-wrap">
-              <table class="admin-table">
-                <thead>
-                  <tr>
-                    <th>Thông tin khách</th>
-                    <th>Ngày và giờ</th>
-                    <th>Số khách</th>
-                    <th>Ghi chú đặc biệt</th>
-                    <th>Trạng thái</th>
-                    <th>Tình trạng email</th>
-                    <th>Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody id="bookings-tbody">
-                  <tr>
-                    <td colspan="7" style="text-align:center; padding: 40px; color: var(--warm-gray);">
-                      Đang tải danh sách đặt bàn...
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <section class="customer-care-section" aria-labelledby="customer-care-heading">
-            <div class="admin-section-heading">
-              <div>
-                <p class="admin-section-eyebrow">Chăm sóc khách hàng</p>
-                <h2 class="admin-section-title" id="customer-care-heading">Hồ sơ khách</h2>
-              </div>
-                <span class="admin-live-indicator" id="customer-count">Đang tải...</span>
-              <label class="customer-search-label" for="customer-search">Tìm khách
-                <input type="search" id="customer-search" class="admin-search-input"
-                  placeholder="Tên, email hoặc số điện thoại" autocomplete="off" />
-              </label>
-            </div>
-
-              <p class="customer-load-notice" id="customer-load-notice" role="status" aria-live="polite" hidden></p>
-
-            <div class="admin-table-card">
-              <div class="admin-table-wrap">
-                <table class="admin-table customer-care-table">
-                  <thead>
-                    <tr>
-                      <th>Khách hàng</th>
-                      <th>Email</th>
-                        <th>Số điện thoại</th>
-                        <th>Lượt đặt bàn</th>
-                        <th>Lượt ghé</th>
-                        <th>Lần ghé gần nhất</th>
-                        <th>Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody id="customers-tbody">
-                      <tr><td colspan="7" class="customer-care-empty">Đang tải hồ sơ khách…</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-
-          <section class="admin-orders-section" aria-labelledby="admin-orders-title">
-            <div class="admin-section-heading">
-              <div>
-                <p class="admin-section-eyebrow">Đơn tại quán</p>
-                <h2 class="admin-section-title" id="admin-orders-title">Đơn gọi món theo bàn</h2>
-              </div>
-              <a class="btn btn-outline admin-top-link" href="qr.html">Tạo mã QR bàn</a>
-            </div>
-            <div class="admin-table-card">
-              <div class="admin-table-wrap">
-                <table class="admin-table admin-orders-table">
-                  <thead>
-                    <tr>
-                      <th>Mã đơn / Bàn</th>
-                      <th>Món gọi</th>
-                      <th>Tổng tiền</th>
-                      <th>Trạng thái</th>
-                      <th>Thanh toán</th>
-                      <th>Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody id="orders-tbody">
-                    <tr><td colspan="6" style="text-align:center; padding:30px;">Đang tải đơn gọi món…</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-
-
-        </div>
-
-        <aside class="admin-sidebar-column">
-          <section class="admin-revenue-section" aria-labelledby="admin-revenue-title">
-            <div class="admin-revenue-heading">
-              <div>
-                <p class="admin-section-eyebrow">Bán hàng</p>
-                <h3 class="admin-section-title" id="admin-revenue-title">Doanh thu</h3>
-              </div>
-            </div>
-
-            <div class="admin-stats-grid admin-revenue-stats">
-              <div class="stat-card">
-                <div class="stat-label">Hôm nay</div>
-                <div class="stat-num" id="revenue-today">0 VND</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-label">Tháng này</div>
-                <div class="stat-num" id="revenue-month">0 VND</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-label">Tổng doanh thu</div>
-                <div class="stat-num" id="revenue-total">0 VND</div>
-              </div>
-            </div>
-
-            <form class="admin-revenue-form" id="admin-revenue-form">
-              <label class="admin-revenue-field">
-                <span>Số tiền (VND)</span>
-                <input id="revenue-amount" type="number" min="1" step="1" required />
-              </label>
-              <label class="admin-revenue-field">
-                <span>Ngày bán</span>
-                <input id="revenue-date" type="date" required />
-              </label>
-              <label class="admin-revenue-field admin-revenue-description">
-                <span>Ghi chú</span>
-                <input id="revenue-description" type="text" maxlength="200" placeholder="Ví dụ: Bán tại quầy" />
-              </label>
-              <button class="btn btn-primary admin-revenue-submit" id="revenue-submit" type="submit">Ghi nhận</button>
-            </form>
-
-            <div class="admin-table-card">
-              <div class="admin-table-wrap">
-                <table class="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Ngày bán</th>
-                      <th>Ghi chú</th>
-                      <th>Số tiền</th>
-                      <th>Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody id="revenue-tbody">
-                    <tr><td colspan="4" style="text-align:center; padding:30px;">Đang tải doanh thu…</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-        </aside>
-      </div>
-
+      </section>
     </main>
   </div>
 
-  <div class="admin-modal-overlay customer-profile-overlay" id="customer-profile-modal" hidden>
-    <section class="admin-modal-card customer-profile-card" role="dialog" aria-modal="true"
-      aria-labelledby="customer-profile-title" aria-describedby="customer-profile-description">
-      <div class="customer-profile-heading">
-        <div>
-          <span class="admin-section-kicker">Hồ sơ khách hàng</span>
-          <h2 class="admin-modal-title" id="customer-profile-title">Chi tiết khách hàng</h2>
-        </div>
-        <button type="button" class="customer-profile-close" id="customer-profile-close" aria-label="Đóng hồ sơ">&times;</button>
-      </div>
-      <p id="customer-profile-description" class="customer-profile-note"></p>
-      <div id="customer-profile-body"></div>
-    </section>
-  </div>
-
-  <div class="admin-modal-overlay" id="customer-history-modal" hidden>
-    <div class="admin-modal-card customer-history-card" role="dialog" aria-modal="true"
-      aria-labelledby="customer-history-title">
-      <h3 class="admin-modal-title" id="customer-history-title">Lịch sử đặt bàn</h3>
-      <div id="customer-history-content"></div>
-      <div class="admin-modal-actions">
-        <button type="button" class="btn btn-outline" id="customer-history-close">Đóng</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- 3. EMAIL REPLY MODAL -->
-  <!-- ============================================================ -->
-  <div class="admin-modal-overlay" id="reply-modal" hidden>
-    <div class="admin-modal-card">
-      <h3 class="admin-modal-title">Trả lời khách hàng</h3>
-
-      <div class="form-group" style="margin-bottom: 20px;">
-        <input type="email" id="modal-guest-email" class="form-input" readonly />
-        <label for="modal-guest-email" class="form-label form-label--up">Người nhận (email khách)</label>
-      </div>
-
-      <div class="form-group" style="margin-bottom: 20px;">
-        <input type="text" id="modal-subject" class="form-input" value="Thông tin đặt bàn tại Mocha & Miso" />
-        <label for="modal-subject" class="form-label form-label--up">Tiêu đề</label>
-      </div>
-
-      <div class="form-group" style="margin-bottom: 20px;">
-        <textarea id="modal-message" class="form-input form-textarea" rows="5"
-          placeholder="Viết lời nhắn gửi khách hàng..."></textarea>
-        <label for="modal-message" class="form-label form-label--up">Nội dung</label>
-      </div>
-
-      <div class="admin-modal-actions">
-        <button type="button" class="btn btn-outline" id="modal-cancel-btn"
-          style="font-size: 13px; padding: 8px 18px;">Đóng</button>
-        <button type="button" class="btn btn-primary" id="modal-send-btn"
-          style="font-size: 13px; padding: 8px 18px;">Gửi email</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast Container -->
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
-  <!-- EmailJS SDK — sends status update emails (Confirmed / Cancelled) from Admin Portal -->
-  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-  <script>
-    // EmailJS config — must match the credentials set in index.html
-    window.EMAILJS_CONFIG = {
-      publicKey: '7jzJ419nvCmAxeJLX',
-      serviceId: 'service_x65ekfh',
-      templateId: 'template_6uavdg3'
-    };
-    if (window.EMAILJS_CONFIG.publicKey !== 'YOUR_PUBLIC_KEY') {
-      emailjs.init({ publicKey: window.EMAILJS_CONFIG.publicKey });
-    }
-  </script>
-
-  <!-- Firebase Auth config -->
   <script src="js/firebase-config.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
   <script src="firebase.js?v=4" defer></script>
   <script src="main.js?v=8" defer></script>
-  <script src="admin.js?v=9" defer></script>
+  <script src="admin.js?v=11" defer></script>
 </body>
 
 </html>
