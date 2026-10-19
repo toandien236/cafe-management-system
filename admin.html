@@ -183,13 +183,44 @@
             <div class="orders-filter" aria-label="Lọc đơn gọi món theo ngày tạo">
               <span class="orders-filter-label">Lọc ngày tạo đơn:</span>
               <div class="orders-filter-dates">
-                <label for="orders-date-from">Từ ngày
-                  <input type="date" id="orders-date-from" aria-label="Từ ngày" onchange="applyOrdersDateFilter()" />
-                </label>
-                <span class="orders-filter-separator" aria-hidden="true">—</span>
-                <label for="orders-date-to">Đến ngày
-                  <input type="date" id="orders-date-to" aria-label="Đến ngày" onchange="applyOrdersDateFilter()" />
-                </label>
+                <div class="orders-date-field">
+                  <label for="orders-date-from-display">Từ ngày</label>
+                  <div class="orders-date-control">
+                    <input type="text" id="orders-date-from-display" placeholder="dd/mm/yyyy"
+                      aria-label="Từ ngày" readonly onclick="openOrdersDatePicker('from')" />
+                    <input type="hidden" id="orders-date-from" />
+                    <button type="button" class="orders-calendar-trigger" onclick="openOrdersDatePicker('from')"
+                      aria-label="Mở lịch chọn ngày bắt đầu">▦</button>
+                  </div>
+                </div>
+                <span class="orders-filter-separator" aria-hidden="true">đến</span>
+                <div class="orders-date-field">
+                  <label for="orders-date-to-display">Đến ngày</label>
+                  <div class="orders-date-control">
+                    <input type="text" id="orders-date-to-display" placeholder="dd/mm/yyyy"
+                      aria-label="Đến ngày" readonly onclick="openOrdersDatePicker('to')" />
+                    <input type="hidden" id="orders-date-to" />
+                    <button type="button" class="orders-calendar-trigger" onclick="openOrdersDatePicker('to')"
+                      aria-label="Mở lịch chọn ngày kết thúc">▦</button>
+                  </div>
+                </div>
+                <div class="orders-calendar" id="orders-calendar" role="dialog" aria-label="Chọn ngày" hidden>
+                  <div class="orders-calendar-heading">
+                    <button type="button" class="orders-calendar-nav" onclick="changeOrdersCalendarMonth(-1)"
+                      aria-label="Tháng trước">‹</button>
+                    <strong id="orders-calendar-month"></strong>
+                    <button type="button" class="orders-calendar-nav" onclick="changeOrdersCalendarMonth(1)"
+                      aria-label="Tháng sau">›</button>
+                  </div>
+                  <div class="orders-calendar-weekdays" aria-hidden="true">
+                    <span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span><span>CN</span>
+                  </div>
+                  <div class="orders-calendar-days" id="orders-calendar-days"></div>
+                  <div class="orders-calendar-footer">
+                    <button type="button" onclick="clearOrdersCalendarDate()">Xóa ngày</button>
+                    <button type="button" onclick="selectOrdersCalendarToday()">Hôm nay</button>
+                  </div>
+                </div>
               </div>
               <div class="orders-filter-presets" aria-label="Lọc nhanh">
                 <button type="button" class="orders-filter-button" onclick="setOrdersDatePreset('today')">Hôm nay</button>
@@ -416,7 +447,7 @@
       updateDoc: (reference, data) => reference.update(data)
     };
   </script>
-  <script src="admin.js?v=orders-date-filter-20261019" defer></script>
+  <script src="admin.js?v=orders-date-filter-vi-20261019" defer></script>
 </body>
 
 </html>

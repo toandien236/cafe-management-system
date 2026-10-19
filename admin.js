@@ -369,6 +369,8 @@ let allOrders       = [];
 let ordersUnsubscribe = null;
 const ORDERS_PER_PAGE = 15;
 let currentOrdersPage = 1;
+let ordersCalendarTarget = '';
+let ordersCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let allVisits       = [];
 let visitLoadState   = 'loading';
 let reservationLoadState = 'loading';
@@ -380,6 +382,17 @@ let reservationVisitsUnsubscribe = null;
 let reservationVisitsListenerGeneration = 0;
 
 function initAdminDashboard() {
+  document.addEventListener('click', event => {
+    if (event.target.closest('.orders-calendar') || event.target.closest('.orders-date-control')) return;
+    const calendar = document.getElementById('orders-calendar');
+    if (calendar) calendar.hidden = true;
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    const calendar = document.getElementById('orders-calendar');
+    if (calendar) calendar.hidden = true;
+  });
+
   // Filter tabs
   const tabs = document.querySelectorAll('.admin-filter-tab');
   tabs.forEach(tab => {
@@ -1279,6 +1292,96 @@ function formatOrdersDateLabel(value) {
   return `${day}/${month}/${year}`;
 }
 
+function updateOrdersDateDisplay(target) {
+  const dateInput = document.getElementById(`orders-date-${target}`);
+  const displayInput = document.getElementById(`orders-date-${target}-display`);
+  if (displayInput) displayInput.value = dateInput && dateInput.value
+    ? formatOrdersDateLabel(dateInput.value)
+    : '';
+}
+
+function renderOrdersCalendar() {
+  const monthLabel = document.getElementById('orders-calendar-month');
+  const daysContainer = document.getElementById('orders-calendar-days');
+  if (!monthLabel || !daysContainer) return;
+
+  const monthTitle = new Intl.DateTimeFormat('vi-VN', {
+    month: 'long',
+    year: 'numeric'
+  }).format(ordersCalendarMonth);
+  monthLabel.textContent = monthTitle.charAt(0).toLocaleUpperCase('vi') + monthTitle.slice(1);
+
+  const selectedValue = String(document.getElementById(`orders-date-${ordersCalendarTarget}`)?.value || '');
+  const firstDay = new Date(ordersCalendarMonth.getFullYear(), ordersCalendarMonth.getMonth(), 1);
+  const firstCellDate = new Date(
+    firstDay.getFullYear(),
+    firstDay.getMonth(),
+    1 - ((firstDay.getDay() + 6) % 7)
+  );
+  daysContainer.innerHTML = Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(firstCellDate.getFullYear(), firstCellDate.getMonth(), firstCellDate.getDate() + index);
+    const dateValue = getLocalDateKey(day);
+    const classes = [
+      'orders-calendar-day',
+      day.getMonth() !== ordersCalendarMonth.getMonth() ? 'orders-calendar-day--outside' : '',
+      dateValue === selectedValue ? 'orders-calendar-day--selected' : ''
+    ].filter(Boolean).join(' ');
+    return `<button type="button" class="${classes}" onclick="selectOrdersCalendarDate('${dateValue}')"
+      aria-label="${day.getDate()} tháng ${day.getMonth() + 1} năm ${day.getFullYear()}"
+      ${dateValue === selectedValue ? 'aria-pressed="true"' : ''}>${day.getDate()}</button>`;
+  }).join('');
+}
+
+window.openOrdersDatePicker = function(target) {
+  if (!['from', 'to'].includes(target)) return;
+  ordersCalendarTarget = target;
+  const selectedValue = String(document.getElementById(`orders-date-${target}`)?.value || '');
+  if (selectedValue) {
+    const [year, month] = selectedValue.split('-').map(Number);
+    ordersCalendarMonth = new Date(year, month - 1, 1);
+  } else {
+    const now = new Date();
+    ordersCalendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  const calendar = document.getElementById('orders-calendar');
+  if (calendar) calendar.hidden = false;
+  renderOrdersCalendar();
+};
+
+window.changeOrdersCalendarMonth = function(offset) {
+  ordersCalendarMonth = new Date(
+    ordersCalendarMonth.getFullYear(),
+    ordersCalendarMonth.getMonth() + Number(offset),
+    1
+  );
+  renderOrdersCalendar();
+};
+
+window.selectOrdersCalendarDate = function(value) {
+  if (!['from', 'to'].includes(ordersCalendarTarget)) return;
+  const input = document.getElementById(`orders-date-${ordersCalendarTarget}`);
+  if (!input) return;
+  input.value = value;
+  updateOrdersDateDisplay(ordersCalendarTarget);
+  const calendar = document.getElementById('orders-calendar');
+  if (calendar) calendar.hidden = true;
+  window.applyOrdersDateFilter();
+};
+
+window.clearOrdersCalendarDate = function() {
+  if (!['from', 'to'].includes(ordersCalendarTarget)) return;
+  const input = document.getElementById(`orders-date-${ordersCalendarTarget}`);
+  if (input) input.value = '';
+  updateOrdersDateDisplay(ordersCalendarTarget);
+  const calendar = document.getElementById('orders-calendar');
+  if (calendar) calendar.hidden = true;
+  window.applyOrdersDateFilter();
+};
+
+window.selectOrdersCalendarToday = function() {
+  window.selectOrdersCalendarDate(getLocalDateKey(new Date()));
+};
+
 window.applyOrdersDateFilter = function() {
   currentOrdersPage = 1;
   renderOrders();
@@ -1305,6 +1408,10 @@ window.setOrdersDatePreset = function(preset) {
   } else {
     return;
   }
+  updateOrdersDateDisplay('from');
+  updateOrdersDateDisplay('to');
+  const calendar = document.getElementById('orders-calendar');
+  if (calendar) calendar.hidden = true;
   window.applyOrdersDateFilter();
 };
 

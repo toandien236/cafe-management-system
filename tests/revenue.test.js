@@ -242,3 +242,36 @@ test('order date presets select today, month, and year boundaries', () => {
   assert.equal(elements.get('orders-date-from').value, `${now.getFullYear()}-01-01`);
   assert.equal(elements.get('orders-date-to').value, `${now.getFullYear()}-12-31`);
 });
+
+test('custom order date picker uses Vietnamese month labels and formats selected dates', () => {
+  const { context, elements } = loadAdminScript();
+
+  context.window.openOrdersDatePicker('from');
+  const monthLabel = elements.get('orders-calendar-month').textContent;
+  assert.match(monthLabel, /^Tháng \d+ năm \d{4}$/);
+  assert.equal(elements.get('orders-calendar').hidden, false);
+  assert.equal((elements.get('orders-calendar-days').innerHTML.match(/class="orders-calendar-day/g) || []).length, 42);
+
+  context.window.changeOrdersCalendarMonth(-1);
+  assert.match(elements.get('orders-calendar-month').textContent, /^Tháng \d+ năm \d{4}$/);
+  context.window.selectOrdersCalendarDate('2026-10-19');
+
+  assert.equal(elements.get('orders-date-from').value, '2026-10-19');
+  assert.equal(elements.get('orders-date-from-display').value, '19/10/2026');
+  assert.equal(elements.get('orders-calendar').hidden, true);
+
+  context.window.openOrdersDatePicker('to');
+  context.window.selectOrdersCalendarToday();
+  const today = [
+    new Date().getFullYear(),
+    String(new Date().getMonth() + 1).padStart(2, '0'),
+    String(new Date().getDate()).padStart(2, '0')
+  ].join('-');
+  assert.equal(elements.get('orders-date-to').value, today);
+  assert.equal(elements.get('orders-date-to-display').value, today.split('-').reverse().join('/'));
+
+  context.window.openOrdersDatePicker('from');
+  context.window.clearOrdersCalendarDate();
+  assert.equal(elements.get('orders-date-from').value, '');
+  assert.equal(elements.get('orders-date-from-display').value, '');
+});
