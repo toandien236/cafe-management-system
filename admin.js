@@ -13,7 +13,8 @@ function bootAdmin() {
   // Firebase SDKs are loaded with defer, so poll until ready
   const waitForFirebase = setInterval(() => {
     const authInstance = window.firebaseAuth || window.auth || (typeof firebase !== 'undefined' ? firebase.auth() : null);
-    if (authInstance && typeof authInstance.onAuthStateChanged === 'function') {
+    if (authInstance && (typeof authInstance.onAuthStateChanged === 'function'
+      || typeof window.firebaseAuthMethods?.onAuthStateChanged === 'function')) {
       clearInterval(waitForFirebase);
       initAdminAuth(authInstance);
       initAdminDashboard();
@@ -45,6 +46,42 @@ let adminSessionActive = false;
 
 function normalizeAdminEmail(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function observeFirebaseAuth(authInstance, callback) {
+  if (typeof authInstance?.onAuthStateChanged === 'function') {
+    return authInstance.onAuthStateChanged(callback);
+  }
+  const methods = window.firebaseAuthMethods;
+  if (typeof methods?.onAuthStateChanged === 'function') {
+    return methods.onAuthStateChanged(authInstance, callback);
+  }
+  throw new Error('Firebase Auth observer is unavailable.');
+}
+
+function firebaseSignIn(authInstance, email, password) {
+  if (typeof authInstance?.signInWithEmailAndPassword === 'function') {
+    return authInstance.signInWithEmailAndPassword(email, password);
+  }
+  const method = window.firebaseAuthMethods?.signInWithEmailAndPassword;
+  if (typeof method === 'function') return method(authInstance, email, password);
+  throw new Error('Firebase sign-in method is unavailable.');
+}
+
+function firebaseSignOut(authInstance) {
+  if (typeof authInstance?.signOut === 'function') return authInstance.signOut();
+  const method = window.firebaseAuthMethods?.signOut;
+  if (typeof method === 'function') return method(authInstance);
+  throw new Error('Firebase sign-out method is unavailable.');
+}
+
+function firebasePasswordReset(authInstance, email) {
+  if (typeof authInstance?.sendPasswordResetEmail === 'function') {
+    return authInstance.sendPasswordResetEmail(email);
+  }
+  const method = window.firebaseAuthMethods?.sendPasswordResetEmail;
+  if (typeof method === 'function') return method(authInstance, email);
+  throw new Error('Firebase password reset method is unavailable.');
 }
 
 function firestoreErrorCode(error) {
@@ -151,7 +188,7 @@ function initAdminAuth(authInstance) {
   const forgotPasswordBtn = document.getElementById('admin-forgot-password');
 
   // ── Session state driven by Firebase Auth ──────────────────
-  authInstance.onAuthStateChanged(async (user) => {
+  observeFirebaseAuth(authInstance, async (user) => {
     // This client check only controls the admin UI; Firestore Rules remain authoritative.
     if (user && normalizeAdminEmail(user.email) === ADMIN_EMAIL) {
       // Authenticated: show dashboard
@@ -198,7 +235,7 @@ function initAdminAuth(authInstance) {
       if (ordersBody) ordersBody.textContent = '';
 
       if (user) {
-        await authInstance.signOut();
+        await firebaseSignOut(authInstance);
         showLoginError('Tài khoản này không có quyền truy cập cổng quản trị.');
       }
     }
@@ -215,7 +252,9 @@ function initAdminAuth(authInstance) {
       const btnText    = submitBtn ? submitBtn.querySelector('.btn-text') : null;
 
       const email = normalizeAdminEmail(emailInput ? emailInput.value : '');
-      const pass  = passInput  ? passInput.value.trim()  : '';
+      // Passwords are opaque strings; trimming can silently change a valid
+      // Firebase password that intentionally starts or ends with spaces.
+      const pass  = passInput ? passInput.value : '';
 
       // Clear previous error
       const existingErr = loginForm.querySelector('.form-error');
@@ -237,7 +276,7 @@ function initAdminAuth(authInstance) {
 
       try {
         // Firebase Auth is the ONLY authentication gate
-        await authInstance.signInWithEmailAndPassword(email, pass);
+        await firebaseSignIn(authInstance, email, pass);
         // onAuthStateChanged above handles the view switch
       } catch (err) {
         // Map Firebase error codes to friendly messages
@@ -273,7 +312,7 @@ function initAdminAuth(authInstance) {
         return;
       }
       try {
-        await authInstance.sendPasswordResetEmail(email);
+        await firebasePasswordReset(authInstance, email);
         showLoginError('Đã gửi liên kết đặt lại mật khẩu đến email quản trị. Hãy kiểm tra cả thư mục Spam.');
       } catch (err) {
         console.error('[Admin Password Reset Error]', err.code, err.message);
@@ -286,7 +325,7 @@ function initAdminAuth(authInstance) {
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
       try {
-        await authInstance.signOut();
+        await firebaseSignOut(authInstance);
         // onAuthStateChanged above will flip back to login view
         if (loginForm) loginForm.reset();
       } catch (err) {

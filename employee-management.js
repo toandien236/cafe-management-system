@@ -73,8 +73,8 @@
     if (!notice) return;
     const localOnly = storageMode === 'local';
     notice.textContent = localOnly
-      ? 'Đang lưu trên thiết bị này; chưa đồng bộ Supabase.'
-      : 'Đang đồng bộ với Supabase.';
+      ? 'Đang lưu trên thiết bị này; chưa đồng bộ Firebase.'
+      : 'Đang đồng bộ với Firebase.';
     notice.classList.toggle('employee-storage-note--local', localOnly);
   }
 
@@ -163,7 +163,7 @@
     const saveButton = document.getElementById('employee-save-btn');
     saveButton.disabled = true;
     try {
-      if (!client || storageMode === 'local') throw new Error('Supabase chưa sẵn sàng');
+      if (!client || storageMode === 'local') throw new Error('Firebase chưa sẵn sàng');
       const payload = rowData(employee);
       let result;
       if (id && oldEmployee && !oldEmployee.pending_sync) {
@@ -182,7 +182,7 @@
       showEmployeeToast(id ? 'Đã cập nhật nhân viên.' : 'Đã thêm nhân viên.', 'success');
     } catch (error) {
       if (client && error?.code) {
-        showEmployeeToast(`Không lưu được nhân viên: ${error.message || 'lỗi từ Supabase'}`, 'error');
+        showEmployeeToast(`Không lưu được nhân viên: ${error.message || 'lỗi từ Firebase'}`, 'error');
         return;
       }
       storageMode = 'local';
@@ -199,7 +199,7 @@
       event.target.reset();
       renderEmployees();
       setStorageNotice();
-      showEmployeeToast('Đã lưu trên thiết bị này; Supabase sẽ đồng bộ khi kết nối lại.', 'info');
+      showEmployeeToast('Đã lưu trên thiết bị này; Firebase sẽ đồng bộ khi kết nối lại.', 'info');
     } finally {
       saveButton.disabled = false;
     }
@@ -210,20 +210,20 @@
     if (!employee || !confirm(`Xóa hồ sơ nhân viên ${employee.name || ''}?`)) return;
     const client = window.supabaseClient || window.supabaseDb;
     try {
-      if (!client || storageMode === 'local' || employee.pending_sync) throw new Error('Supabase chưa sẵn sàng');
+      if (!client || storageMode === 'local' || employee.pending_sync) throw new Error('Firebase chưa sẵn sàng');
       const { error } = await client.from('employees').delete().eq('id', id);
       if (error) throw error;
       showEmployeeToast('Đã xóa nhân viên.', 'success');
     } catch (error) {
       if (client && error?.code) {
-        showEmployeeToast(`Không xóa được nhân viên: ${error.message || 'lỗi từ Supabase'}`, 'error');
+        showEmployeeToast(`Không xóa được nhân viên: ${error.message || 'lỗi từ Firebase'}`, 'error');
         return;
       }
       storageMode = 'local';
       const ids = readDeletions();
       if (!String(id).startsWith('local_') && !ids.includes(id)) ids.push(id);
       writeDeletions(ids);
-      showEmployeeToast('Đã xóa trên thiết bị này; Supabase sẽ đồng bộ khi kết nối lại.', 'info');
+      showEmployeeToast('Đã xóa trên thiết bị này; Firebase sẽ đồng bộ khi kết nối lại.', 'info');
     }
     employees = employees.filter(item => item.id !== id);
     writeEmployees();
@@ -275,7 +275,7 @@
         const refreshed = await client.from('employees').select('*').order('name', { ascending: true });
         if (refreshed.error) throw refreshed.error;
         employees = refreshed.data || [];
-        showEmployeeToast('Đã đồng bộ dữ liệu nhân viên với Supabase.', 'success');
+        showEmployeeToast('Đã đồng bộ dữ liệu nhân viên với Firebase.', 'success');
       }
       storageMode = 'supabase';
       writeEmployees();
@@ -287,7 +287,7 @@
       employees = readEmployees();
       setStorageNotice();
       renderEmployees();
-      showEmployeeToast('Chưa tải được nhân viên từ Supabase. Dữ liệu local vẫn được giữ.', 'error');
+      showEmployeeToast(`Chưa tải được nhân viên từ Firebase: ${error.message || 'lỗi kết nối'}. Dữ liệu trên thiết bị vẫn được giữ.`, 'error');
       console.error('Employee Supabase error:', error);
     }
   }

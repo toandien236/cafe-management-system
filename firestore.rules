@@ -233,5 +233,20 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // HR records are private business data. Only the configured admin may
+    // read or change employee profiles, schedules, attendance, and payroll.
+    match /employees/{employeeId} {
+      allow read, write: if isAdmin();
+    }
+    match /employee_shifts/{shiftId} {
+      allow read, write: if isAdmin();
+    }
+    match /employee_attendance/{attendanceId} {
+      allow read, write: if isAdmin();
+    }
+    match /employee_payroll/{payrollId} {
+      allow read, write: if isAdmin();
+    }
+
   }
 }
