@@ -1024,7 +1024,7 @@ function initReservationForm() {
     // Async dispatch to Supabase / PostgreSQL
     const client = window.supabaseClient || window.supabaseDb || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
     if (client && typeof client.from === 'function') {
-      client.from('reservations').insert([{
+      client.from('reservations').insert({
         reservation_id: resId,
         name: reservationData.name,
         email: reservationData.email,
@@ -1035,31 +1035,22 @@ function initReservationForm() {
         notes: reservationData.notes,
         status: 'pending',
         email_status: 'Pending'
-      }]).select().single().then(({ data, error }) => {
+      }).then(({ error }) => {
         if (error) throw error;
-        const recordId = data ? data.id : resId;
-        reservationData.id = recordId;
-        sendEmailJS(reservationData, 'confirmation', recordId);
+        reservationData.id = resId;
+        sendEmailJS(reservationData, 'confirmation', null);
         showToast('Đã tạo yêu cầu đặt bàn! Email xác nhận đang được gửi đến bạn.', 'success');
         showSuccessView();
         openSuccessModal(reservationData);
       }).catch((error) => {
-        console.warn('Supabase reservation write failed:', error);
-        // Fallback: reservation is in local storage & email is sent
-        sendEmailJS(reservationData, 'confirmation', null);
-        showToast('Đã ghi nhận yêu cầu đặt bàn!', 'success');
-        showSuccessView();
-        openSuccessModal(reservationData);
+        console.error('[Supabase] Reservation write failed:', error);
+        showToast('Yêu cầu được lưu tạm trên thiết bị nhưng chưa gửi tới quán. Vui lòng thử lại khi có kết nối.', 'error');
       }).finally(() => {
         if (submit) submit.disabled = false;
         if (btnText) btnText.textContent = 'Xác nhận đặt bàn';
       });
     } else {
-      // Fallback if client is offline or not configured yet
-      sendEmailJS(reservationData, 'confirmation', null);
-      showToast('Đã lưu yêu cầu đặt bàn cục bộ.', 'success');
-      showSuccessView();
-      openSuccessModal(reservationData);
+      showToast('Chưa kết nối được Supabase nên yêu cầu chưa được gửi tới quán. Vui lòng thử lại sau.', 'error');
       if (submit) submit.disabled = false;
       if (btnText) btnText.textContent = 'Xác nhận đặt bàn';
     }

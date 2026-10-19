@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "scripts": {
+    "migrate:firebase": "node scripts/migrate-firebase-to-supabase.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0"
+  }
+}

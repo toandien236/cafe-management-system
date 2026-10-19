@@ -69,7 +69,7 @@
           <span class="admin-badge">Bảng điều khiển</span>
         </div>
         <div class="admin-user-info">
-          <a href="revenue.html" class="btn btn-outline admin-top-link">Trang doanh thu</a>
+          <a href="#admin-revenue-title" class="btn btn-outline admin-top-link">Doanh thu</a>
           <a href="qr.html" class="btn btn-outline admin-top-link">Mã QR bàn</a>
           <span class="admin-email-text" id="logged-admin-email">rickmondal598@gmail.com</span>
           <a class="btn-logout" href="hr.html">Quản lý nhân sự</a>
@@ -264,31 +264,15 @@
               </div>
             </div>
 
-            <form class="admin-revenue-form" id="admin-revenue-form">
-              <label class="admin-revenue-field">
-                <span>Số tiền (VND)</span>
-                <input id="revenue-amount" type="number" min="1" step="1" required />
-              </label>
-              <label class="admin-revenue-field">
-                <span>Ngày bán</span>
-                <input id="revenue-date" type="date" required />
-              </label>
-              <label class="admin-revenue-field admin-revenue-description">
-                <span>Ghi chú</span>
-                <input id="revenue-description" type="text" maxlength="200" placeholder="Ví dụ: Bán tại quầy" />
-              </label>
-              <button class="btn btn-primary admin-revenue-submit" id="revenue-submit" type="submit">Ghi nhận</button>
-            </form>
-
             <div class="admin-table-card">
               <div class="admin-table-wrap">
                 <table class="admin-table">
                   <thead>
                     <tr>
-                      <th>Ngày bán</th>
-                      <th>Ghi chú</th>
+                      <th>Ngày thanh toán</th>
+                      <th>Mã đơn / Bàn</th>
                       <th>Số tiền</th>
-                      <th>Thao tác</th>
+                      <th>Trạng thái</th>
                     </tr>
                   </thead>
                   <tbody id="revenue-tbody">
@@ -364,12 +348,24 @@
     }
   </script>
 
-  <!-- Firebase Auth config -->
   <script src="js/firebase-config.js"></script>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getFirestore, collection, onSnapshot, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    import {
+      getAuth,
+      onAuthStateChanged,
+      signInWithEmailAndPassword,
+      signOut,
+      sendPasswordResetEmail
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import {
+      getFirestore,
+      collection,
+      onSnapshot,
+      doc,
+      updateDoc,
+      deleteDoc
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
     const config = window.FIREBASE_CONFIG || {};
     if (config.apiKey && config.authDomain && config.projectId) {
@@ -379,15 +375,20 @@
       window.firebaseApp = app;
       window.firebaseAuth = auth;
       window.firebaseDb = db;
-      window.firebaseAuthMethods = { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail };
-      window.firebaseFirestoreMethods = { collection, onSnapshot, doc, updateDoc };
+      window.firebaseAuthMethods = {
+        onAuthStateChanged,
+        signInWithEmailAndPassword,
+        signOut,
+        sendPasswordResetEmail
+      };
+      window.firebaseFirestoreMethods = { collection, onSnapshot, doc, updateDoc, deleteDoc };
     } else {
       console.error('[Firebase Config] Missing required Firebase web app configuration.');
       window.firebaseAuth = null;
       window.firebaseDb = null;
     }
   </script>
-  <script src="admin.js" defer></script>
+  <script src="admin.js?v=firebase-firestore" defer></script>
 </body>
 
 </html>

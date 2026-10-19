@@ -27,7 +27,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS employees_employee_code_unique
 ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS authenticated_employees_all ON public.employees;
 CREATE POLICY authenticated_employees_all ON public.employees
-    FOR ALL TO authenticated USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+    FOR ALL TO authenticated
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+    WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.employees TO authenticated;
 
 CREATE TABLE IF NOT EXISTS public.employee_shifts (
@@ -78,15 +80,21 @@ ALTER TABLE public.employee_payroll ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS authenticated_employee_shifts_all ON public.employee_shifts;
 CREATE POLICY authenticated_employee_shifts_all ON public.employee_shifts
-    FOR ALL TO authenticated USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+    FOR ALL TO authenticated
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+    WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 DROP POLICY IF EXISTS authenticated_employee_attendance_all ON public.employee_attendance;
 CREATE POLICY authenticated_employee_attendance_all ON public.employee_attendance
-    FOR ALL TO authenticated USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+    FOR ALL TO authenticated
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+    WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 DROP POLICY IF EXISTS authenticated_employee_payroll_all ON public.employee_payroll;
 CREATE POLICY authenticated_employee_payroll_all ON public.employee_payroll
-    FOR ALL TO authenticated USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+    FOR ALL TO authenticated
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+    WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.employee_shifts TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.employee_attendance TO authenticated;

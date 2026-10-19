@@ -4,8 +4,23 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-function loadAdminScript() {
+function loadAdminScript(reservations = []) {
   const elements = new Map();
+  const firebaseFirestoreMethods = {
+    collection(db, collectionName) {
+      assert.equal(collectionName, 'reservations');
+      return { db, collectionName };
+    },
+    onSnapshot(collection, onData) {
+      onData({
+        docs: reservations.map(reservation => ({
+          id: reservation.id,
+          data: () => reservation
+        }))
+      });
+      return () => {};
+    }
+  };
   const document = {
     readyState: 'loading',
     addEventListener() {},
@@ -16,17 +31,17 @@ function loadAdminScript() {
   };
   const context = vm.createContext({
     document,
-    window: {},
+    window: { firebaseDb: {}, firebaseFirestoreMethods },
     console,
-    localStorage: { getItem: () => '[]', setItem() {}, removeItem() {} },
+    localStorage: { getItem: () => JSON.stringify(reservations), setItem() {}, removeItem() {} },
     setTimeout,
     setInterval,
     clearInterval,
     clearTimeout,
     confirm: () => true
   });
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'admin.js'), 'utf8');
-  vm.runInContext(source, context, { filename: 'js/admin.js' });
+  const source = fs.readFileSync(path.join(__dirname, '..', 'admin.js'), 'utf8');
+  vm.runInContext(source, context, { filename: 'admin.js' });
   return { context, elements };
 }
 
@@ -82,4 +97,16 @@ test('customer directory renders counts, supports search, and escapes table valu
   vm.runInContext('customerSearchQuery = "missing"', context);
   context.renderCustomers();
   assert.match(elements.get('customers-tbody').innerHTML, /Không tìm thấy/);
+});
+
+test('loading Firestore reservations populates the customer directory', () => {
+  const { context, elements } = loadAdminScript([
+    { id: 'reservation-1', name: 'Mai', email: 'mai@example.com', date: '2026-10-19', createdAt: '2026-10-18T09:00:00Z' }
+  ]);
+
+  context.loadReservations();
+
+  assert.equal(elements.get('care-customer-count').textContent, '1');
+  assert.equal(elements.get('care-reservation-count').textContent, '1');
+  assert.match(elements.get('customers-tbody').innerHTML, /mai@example\.com/);
 });

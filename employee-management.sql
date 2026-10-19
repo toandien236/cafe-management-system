@@ -21,5 +21,5 @@ CREATE POLICY authenticated_employees_all
     ON public.employees
     FOR ALL
     TO authenticated
-    USING (auth.uid() IS NOT NULL)
-    WITH CHECK (auth.uid() IS NOT NULL);
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+    WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');

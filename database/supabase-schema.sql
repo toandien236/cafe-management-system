@@ -21,6 +21,7 @@ DROP TABLE IF EXISTS public.menu_items CASCADE;
 -- ============================================================
 CREATE TABLE public.reservations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_firebase_id TEXT UNIQUE,
     reservation_id VARCHAR(50) UNIQUE,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
@@ -41,6 +42,7 @@ CREATE TABLE public.reservations (
 -- ============================================================
 CREATE TABLE public.orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_firebase_id TEXT UNIQUE,
     order_id VARCHAR(50) NOT NULL UNIQUE,
     table_number VARCHAR(10) NOT NULL,
     items JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -113,6 +115,103 @@ CREATE TABLE public.menu_items (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Customer orders are inserted through this server-side function so prices
+-- and item names always come from the database menu, not browser input.
+CREATE OR REPLACE FUNCTION public.create_order(
+    p_order_id TEXT,
+    p_table_number TEXT,
+    p_items JSONB,
+    p_note TEXT DEFAULT ''
+)
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    created_order public.orders;
+    requested_count INTEGER;
+    matched_count INTEGER;
+BEGIN
+    IF p_order_id IS NULL OR p_order_id !~ '^ORD-[A-Za-z0-9-]{1,45}$' THEN
+        RAISE EXCEPTION 'Invalid order reference';
+    END IF;
+    IF p_table_number IS NULL OR p_table_number !~ '^[0-9]{2}$' THEN
+        RAISE EXCEPTION 'Invalid table number';
+    END IF;
+    IF p_table_number::INTEGER NOT BETWEEN 1 AND 99 THEN
+        RAISE EXCEPTION 'Invalid table number';
+    END IF;
+    IF jsonb_typeof(p_items) IS DISTINCT FROM 'array' THEN
+        RAISE EXCEPTION 'Invalid order items';
+    END IF;
+    IF jsonb_array_length(p_items) NOT BETWEEN 1 AND 50 THEN
+        RAISE EXCEPTION 'Invalid order items';
+    END IF;
+    IF EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(p_items) AS line(item)
+        WHERE jsonb_typeof(line.item -> 'id') IS DISTINCT FROM 'string'
+            OR COALESCE(line.item ->> 'quantity', '') !~ '^[1-9][0-9]?$'
+    ) THEN
+        RAISE EXCEPTION 'Invalid order item quantity or id';
+    END IF;
+
+    SELECT count(*) INTO requested_count
+    FROM (
+        SELECT item ->> 'id' AS item_id
+        FROM jsonb_array_elements(p_items) AS line(item)
+        GROUP BY item ->> 'id'
+    ) requested;
+
+    WITH requested AS (
+        SELECT item ->> 'id' AS item_id, sum((item ->> 'quantity')::INTEGER) AS quantity
+        FROM jsonb_array_elements(p_items) AS line(item)
+        GROUP BY item ->> 'id'
+    )
+    SELECT count(*) INTO matched_count FROM requested WHERE quantity > 99;
+    IF matched_count > 0 THEN
+        RAISE EXCEPTION 'Requested item quantity exceeds the limit';
+    END IF;
+
+    WITH requested AS (
+        SELECT item ->> 'id' AS item_id, sum((item ->> 'quantity')::INTEGER) AS quantity
+        FROM jsonb_array_elements(p_items) AS line(item)
+        GROUP BY item ->> 'id'
+    )
+    SELECT
+        count(*),
+        jsonb_agg(jsonb_build_object(
+            'id', menu.id,
+            'name', menu.name,
+            'price', menu.price,
+            'quantity', requested.quantity
+        ) ORDER BY menu.category, menu.name),
+        sum(menu.price * requested.quantity)
+    INTO matched_count, created_order.items, created_order.total
+    FROM requested
+    JOIN public.menu_items AS menu
+        ON menu.id = requested.item_id AND menu.is_available = true;
+
+    IF matched_count <> requested_count THEN
+        RAISE EXCEPTION 'One or more menu items are unavailable';
+    END IF;
+
+    INSERT INTO public.orders (
+        order_id, table_number, items, total, note, status, payment_status
+    ) VALUES (
+        p_order_id, p_table_number, created_order.items, created_order.total,
+        left(COALESCE(p_note, ''), 1000), 'new', 'unpaid'
+    )
+    RETURNING * INTO created_order;
+
+    RETURN created_order.order_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.create_order(TEXT, TEXT, JSONB, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.create_order(TEXT, TEXT, JSONB, TEXT) TO anon, authenticated;
+
 -- ============================================================
 -- INDEXES
 -- ============================================================
@@ -155,19 +254,15 @@ CREATE TRIGGER trg_menu_items_updated_at
 -- ============================================================
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 
-GRANT SELECT, INSERT ON public.reservations TO anon;
+GRANT INSERT ON public.reservations TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.reservations TO authenticated;
 
-GRANT SELECT, INSERT ON public.orders TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.orders TO authenticated;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.inventory TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.inventory TO authenticated;
 
-GRANT SELECT, INSERT ON public.stock_imports TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.stock_imports TO authenticated;
 
-GRANT SELECT, INSERT ON public.stock_exports TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.stock_exports TO authenticated;
 
 GRANT SELECT ON public.menu_items TO anon;
@@ -185,66 +280,49 @@ ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY;
 
 -- RESERVATIONS RLS
 CREATE POLICY "anon_can_insert_reservations"
-    ON public.reservations FOR INSERT TO anon WITH CHECK (true);
-
-CREATE POLICY "anon_can_select_reservations"
-    ON public.reservations FOR SELECT TO anon USING (true);
+    ON public.reservations FOR INSERT TO anon
+    WITH CHECK (
+        length(trim(name)) BETWEEN 1 AND 255
+        AND length(trim(email)) BETWEEN 3 AND 255
+        AND guests BETWEEN 1 AND 50
+        AND status = 'pending'
+        AND email_status = 'Pending'
+    );
 
 CREATE POLICY "auth_all_reservations"
-    ON public.reservations FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
--- ORDERS RLS
-CREATE POLICY "anon_can_insert_orders"
-    ON public.orders FOR INSERT TO anon WITH CHECK (true);
-
-CREATE POLICY "anon_can_select_orders"
-    ON public.orders FOR SELECT TO anon USING (true);
+    ON public.reservations FOR ALL TO authenticated
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+    WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 CREATE POLICY "auth_all_orders"
-    ON public.orders FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    ON public.orders FOR ALL TO authenticated
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+    WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- INVENTORY RLS
-CREATE POLICY "anon_can_select_inventory"
-    ON public.inventory FOR SELECT TO anon USING (true);
-
-CREATE POLICY "anon_can_insert_inventory"
-    ON public.inventory FOR INSERT TO anon WITH CHECK (true);
-
-CREATE POLICY "anon_can_update_inventory"
-    ON public.inventory FOR UPDATE TO anon USING (true) WITH CHECK (true);
-
-CREATE POLICY "anon_can_delete_inventory"
-    ON public.inventory FOR DELETE TO anon USING (true);
-
 CREATE POLICY "auth_all_inventory"
-    ON public.inventory FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
--- STOCK IMPORTS RLS
-CREATE POLICY "anon_can_select_stock_imports"
-    ON public.stock_imports FOR SELECT TO anon USING (true);
-
-CREATE POLICY "anon_can_insert_stock_imports"
-    ON public.stock_imports FOR INSERT TO anon WITH CHECK (true);
+    ON public.inventory FOR ALL TO authenticated
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+    WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 CREATE POLICY "auth_all_stock_imports"
-    ON public.stock_imports FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
--- STOCK EXPORTS RLS
-CREATE POLICY "anon_can_select_stock_exports"
-    ON public.stock_exports FOR SELECT TO anon USING (true);
-
-CREATE POLICY "anon_can_insert_stock_exports"
-    ON public.stock_exports FOR INSERT TO anon WITH CHECK (true);
+    ON public.stock_imports FOR ALL TO authenticated
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+    WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 CREATE POLICY "auth_all_stock_exports"
-    ON public.stock_exports FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    ON public.stock_exports FOR ALL TO authenticated
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+    WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- MENU ITEMS RLS
 CREATE POLICY "anon_can_select_menu_items"
     ON public.menu_items FOR SELECT TO anon USING (true);
 
 CREATE POLICY "auth_all_menu_items"
-    ON public.menu_items FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    ON public.menu_items FOR ALL TO authenticated
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+    WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ============================================================
 -- SUPABASE REALTIME

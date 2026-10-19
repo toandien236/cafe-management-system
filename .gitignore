@@ -8,8 +8,13 @@ firestore-debug.log
 ui-debug.log
 
 # Environment variables (keep secrets off GitHub!)
+.env
+.env.*
+!.env.example
 functions/.env
 functions/.env.local
+*service-account*.json
+firebase-adminsdk-*.json
 
 # OS files
 .DS_Store

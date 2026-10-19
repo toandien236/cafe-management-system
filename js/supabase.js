@@ -22,7 +22,7 @@ function hasValidSupabaseConfig() {
 
 function initSupabase() {
   if (!hasValidSupabaseConfig()) {
-    console.warn('[Supabase Init Notice] Missing/placeholder Supabase credentials. Falling back to local admin mode.');
+    console.warn('[Supabase Init Notice] Missing/placeholder Supabase URL or anon key; cloud authentication and data are unavailable.');
     window.supabaseClient = null;
     window.supabaseDb = null;
     window.db = null;
@@ -43,9 +43,17 @@ function initSupabase() {
       window.db = supabaseClient; // compatibility alias
       return supabaseClient;
     } catch (e) {
-      console.warn('[Supabase Init Notice]', e.message);
+      console.error('[Supabase Init Error] Could not initialize the configured Supabase client.', e);
+      window.supabaseClient = null;
+      window.supabaseDb = null;
+      window.db = null;
       return null;
     }
+  } else {
+    console.error('[Supabase Init Error] Supabase JS SDK did not load; check CDN/network access.');
+    window.supabaseClient = null;
+    window.supabaseDb = null;
+    window.db = null;
   }
   return null;
 }

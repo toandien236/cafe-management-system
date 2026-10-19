@@ -117,7 +117,7 @@ async function submitOrder() {
     return { id: item.id, name: item.name, price: item.price, quantity: line.quantity };
   });
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const orderId = `ORD-${Date.now().toString().slice(-8)}`;
+  const orderId = `ORD-${Date.now().toString().slice(-8)}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
   const orderNote = document.getElementById('order-note') ? document.getElementById('order-note').value.trim() : '';
 
   try {

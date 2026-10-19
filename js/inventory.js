@@ -325,11 +325,13 @@ async function loadInventory() {
             inventoryItems = data || [];
             renderInventory();
         } catch (err) {
-            console.warn("Lỗi tải kho:", err);
-            renderInventory();
+            console.error("Không thể tải kho từ Supabase:", err);
+            showMessage("Không thể tải kho. Đăng nhập bằng tài khoản admin và kiểm tra RLS Supabase.", true);
+            showTableMessage("Không thể tải kho; hãy đăng nhập quản trị rồi thử lại.");
         }
     } else {
-        renderInventory();
+        showMessage("Chưa cấu hình Supabase; dữ liệu kho chưa thể tải.", true);
+        showTableMessage("Chưa cấu hình Supabase.");
     }
 }
 
@@ -363,7 +365,15 @@ async function loadHistory(tableName, tbodyElement, createRowFn) {
             tbodyElement.appendChild(createRowFn(record));
         });
     } catch (e) {
-        console.warn("Lỗi tải lịch sử " + tableName, e);
+        console.error("Không thể tải lịch sử " + tableName + " từ Supabase:", e);
+        showMessage("Không thể tải lịch sử kho. Đăng nhập bằng tài khoản admin và kiểm tra RLS Supabase.", true);
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 5;
+        cell.style.textAlign = "center";
+        cell.textContent = "Không thể tải lịch sử; hãy đăng nhập quản trị rồi thử lại.";
+        row.appendChild(cell);
+        tbodyElement.replaceChildren(row);
     }
 }
 

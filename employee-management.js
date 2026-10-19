@@ -2,7 +2,7 @@
   const EMPLOYEE_STORAGE_KEY = 'mocha_employees';
   const EMPLOYEE_DELETIONS_KEY = 'mocha_employee_deletions';
   let employees = [];
-  let storageMode = 'supabase';
+  let storageMode = 'firebase';
   let syncing = false;
 
   function escapeEmployeeHtml(value) {
@@ -73,8 +73,8 @@
     if (!notice) return;
     const localOnly = storageMode === 'local';
     notice.textContent = localOnly
-      ? 'Đang lưu trên thiết bị này; chưa đồng bộ Supabase.'
-      : 'Đang đồng bộ với Supabase.';
+      ? 'Đang lưu trên thiết bị này; chưa đồng bộ Firebase.'
+      : 'Đang đồng bộ với Firebase.';
     notice.classList.toggle('employee-storage-note--local', localOnly);
   }
 
@@ -143,7 +143,8 @@
 
   async function saveEmployee(event) {
     event.preventDefault();
-    const client = window.supabaseClient || window.supabaseDb;
+    const db = window.firebaseDb;
+    const methods = window.firebaseFirestoreMethods;
     const id = document.getElementById('employee-id').value;
     const oldEmployee = employees.find(item => item.id === id);
     const employee = {
@@ -160,29 +161,33 @@
       created_at: oldEmployee?.created_at || new Date().toISOString()
     };
     if (!employee.employee_code || !employee.name || !employee.position) return;
+    const duplicateCode = employees.find(item => item.id !== id && item.employee_code === employee.employee_code);
+    if (duplicateCode) {
+      showEmployeeToast('Mã nhân viên đã được sử dụng. Vui lòng nhập mã khác.', 'error');
+      return;
+    }
     const saveButton = document.getElementById('employee-save-btn');
     saveButton.disabled = true;
     try {
-      if (!client || storageMode === 'local') throw new Error('Supabase chưa sẵn sàng');
+      if (!db || !methods) throw new Error('Firebase chưa sẵn sàng');
       const payload = rowData(employee);
-      let result;
       if (id && oldEmployee && !oldEmployee.pending_sync) {
-        result = await client.from('employees').update(payload).eq('id', id).select().single();
+        await methods.updateDoc(methods.doc(db, 'employees', id), payload);
+        employee.id = id;
       } else {
-        result = await client.from('employees').insert({ ...payload, created_at: employee.created_at }).select().single();
+        const result = await methods.addDoc(methods.collection(db, 'employees'), { ...payload, created_at: employee.created_at });
+        employee.id = result.id;
       }
-      if (result.error) throw result.error;
-      const saved = result.data;
       employees = employees.filter(item => item.id !== id);
-      employees.push(saved);
+      employees.push(employee);
       writeEmployees();
       document.getElementById('employee-modal').hidden = true;
       event.target.reset();
       renderEmployees();
       showEmployeeToast(id ? 'Đã cập nhật nhân viên.' : 'Đã thêm nhân viên.', 'success');
     } catch (error) {
-      if (client && error?.code) {
-        showEmployeeToast(`Không lưu được nhân viên: ${error.message || 'lỗi từ Supabase'}`, 'error');
+      if (db && error?.code) {
+        showEmployeeToast(`Không lưu được nhân viên lên Firebase: ${error.message || 'lỗi từ Firestore'}`, 'error');
         return;
       }
       storageMode = 'local';
@@ -199,7 +204,7 @@
       event.target.reset();
       renderEmployees();
       setStorageNotice();
-      showEmployeeToast('Đã lưu trên thiết bị này; Supabase sẽ đồng bộ khi kết nối lại.', 'info');
+      showEmployeeToast('Đã lưu trên thiết bị này; Firebase sẽ đồng bộ khi kết nối lại.', 'info');
     } finally {
       saveButton.disabled = false;
     }
@@ -208,22 +213,28 @@
   async function deleteEmployee(id) {
     const employee = employees.find(item => item.id === id);
     if (!employee || !confirm(`Xóa hồ sơ nhân viên ${employee.name || ''}?`)) return;
-    const client = window.supabaseClient || window.supabaseDb;
+    const db = window.firebaseDb;
+    const methods = window.firebaseFirestoreMethods;
     try {
-      if (!client || storageMode === 'local' || employee.pending_sync) throw new Error('Supabase chưa sẵn sàng');
-      const { error } = await client.from('employees').delete().eq('id', id);
-      if (error) throw error;
+      if (!db || !methods || employee.pending_sync) throw new Error('Firebase chưa sẵn sàng');
+      const related = await Promise.all(['employee_shifts', 'employee_attendance', 'employee_payroll']
+        .map(name => methods.getDocs(methods.collection(db, name))));
+      if (related.some(snapshot => snapshot.docs.some(item => item.data().employee_id === id))) {
+        showEmployeeToast('Không thể xóa nhân viên đã có lịch ca, chấm công hoặc bảng lương.', 'error');
+        return;
+      }
+      await methods.deleteDoc(methods.doc(db, 'employees', id));
       showEmployeeToast('Đã xóa nhân viên.', 'success');
     } catch (error) {
-      if (client && error?.code) {
-        showEmployeeToast(`Không xóa được nhân viên: ${error.message || 'lỗi từ Supabase'}`, 'error');
+      if (db && error?.code) {
+        showEmployeeToast(`Không xóa được nhân viên trên Firebase: ${error.message || 'lỗi từ Firestore'}`, 'error');
         return;
       }
       storageMode = 'local';
       const ids = readDeletions();
       if (!String(id).startsWith('local_') && !ids.includes(id)) ids.push(id);
       writeDeletions(ids);
-      showEmployeeToast('Đã xóa trên thiết bị này; Supabase sẽ đồng bộ khi kết nối lại.', 'info');
+      showEmployeeToast('Đã xóa trên thiết bị này; Firebase sẽ đồng bộ khi kết nối lại.', 'info');
     }
     employees = employees.filter(item => item.id !== id);
     writeEmployees();
@@ -231,53 +242,54 @@
     setStorageNotice();
   }
 
-  async function syncPending(client, localEmployees, deletedIds) {
+  async function syncPending(db, methods, localEmployees, deletedIds) {
     for (const id of deletedIds) {
-      const { error } = await client.from('employees').delete().eq('id', id);
-      if (error) throw error;
+      await methods.deleteDoc(methods.doc(db, 'employees', id));
     }
     for (const employee of localEmployees) {
       const payload = rowData(employee);
       if (employee.has_remote_record) {
-        const { error } = await client.from('employees').update(payload).eq('id', employee.id);
-        if (error) throw error;
+        await methods.setDoc(methods.doc(db, 'employees', employee.id), { ...payload, created_at: employee.created_at }, { merge: true });
       } else {
-        const { error } = await client.from('employees').insert({ ...payload, created_at: employee.created_at });
-        if (error) throw error;
+        await methods.setDoc(methods.doc(db, 'employees', employee.id), { ...payload, created_at: employee.created_at });
+        employee.pending_sync = false;
       }
     }
     writeDeletions([]);
   }
 
   async function loadEmployees() {
-    const client = window.supabaseClient || window.supabaseDb;
+    const db = window.firebaseDb;
+    const methods = window.firebaseFirestoreMethods;
     employees = readEmployees();
     renderEmployees();
-    if (!client || typeof client.from !== 'function') {
+    if (!db || !methods) {
       storageMode = 'local';
       setStorageNotice();
       return;
     }
     try {
-      const { data, error } = await client.from('employees').select('*').order('name', { ascending: true });
-      if (error) throw error;
+      const snapshot = await methods.getDocs(methods.collection(db, 'employees'));
+      const data = snapshot.docs.map(item => ({ ...item.data(), id: item.id }));
       const localPending = readEmployees().filter(item => item.pending_sync);
       const deletedIds = readDeletions();
       const deleted = new Set(deletedIds);
-      const remote = (data || []).filter(item => !deleted.has(item.id));
+      const remote = data.filter(item => !deleted.has(item.id));
       const remoteIds = new Set(remote.map(item => item.id));
       employees = remote.concat(localPending.filter(item => !remoteIds.has(item.id)));
       if (localPending.length || deletedIds.length) {
         if (syncing) return;
         syncing = true;
-        await syncPending(client, localPending, deletedIds);
-        syncing = false;
-        const refreshed = await client.from('employees').select('*').order('name', { ascending: true });
-        if (refreshed.error) throw refreshed.error;
-        employees = refreshed.data || [];
-        showEmployeeToast('Đã đồng bộ dữ liệu nhân viên với Supabase.', 'success');
+        try {
+          await syncPending(db, methods, localPending, deletedIds);
+          const refreshed = await methods.getDocs(methods.collection(db, 'employees'));
+          employees = refreshed.docs.map(item => ({ ...item.data(), id: item.id }));
+          showEmployeeToast('Đã đồng bộ dữ liệu nhân viên với Firebase.', 'success');
+        } finally {
+          syncing = false;
+        }
       }
-      storageMode = 'supabase';
+      storageMode = 'firebase';
       writeEmployees();
       setStorageNotice();
       renderEmployees();
@@ -287,8 +299,8 @@
       employees = readEmployees();
       setStorageNotice();
       renderEmployees();
-      showEmployeeToast('Chưa tải được nhân viên từ Supabase. Dữ liệu local vẫn được giữ.', 'error');
-      console.error('Employee Supabase error:', error);
+      showEmployeeToast('Chưa tải được nhân viên từ Firebase. Dữ liệu local vẫn được giữ.', 'error');
+      console.error('Employee Firebase error:', error);
     }
   }
 
@@ -316,20 +328,37 @@
       if (button.dataset.employeeAction === 'edit') openEmployeeForm(button.dataset.employeeId);
       if (button.dataset.employeeAction === 'delete') deleteEmployee(button.dataset.employeeId);
     });
-    const client = window.supabaseClient || window.supabaseDb;
-    const setUser = email => {
-      const allowed = Boolean(email);
+    const auth = window.firebaseAuth;
+    const authMethods = window.firebaseAuthMethods;
+    const setUser = user => {
+      const allowed = user?.email?.toLowerCase() === 'lehwangduong@gmail.com';
       section.hidden = !allowed;
       if (allowed) loadEmployees();
     };
-    if (client?.auth) {
-      client.auth.getSession().then(({ data }) => setUser(data?.session?.user?.email));
-      client.auth.onAuthStateChange((_event, session) => setUser(session?.user?.email));
-    } else {
-      setUser(localStorage.getItem('mocha_admin_session'));
+    if (auth && authMethods) {
+      authMethods.onAuthStateChanged(auth, setUser, error => {
+        console.error('Employee Firebase session error:', error);
+        showEmployeeToast('Không thể xác minh phiên Firebase cho hồ sơ nhân viên.', 'error');
+      });
+    } else if (document.getElementById('employees-storage-note')) {
+      document.getElementById('employees-storage-note').textContent = 'Chưa cấu hình Firebase; hồ sơ nhân viên chưa thể tải.';
     }
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize);
-  else initialize();
+  function waitForFirebase() {
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      if (window.firebaseAuth && window.firebaseAuthMethods) {
+        clearInterval(timer);
+        initialize();
+      } else if (window.firebaseInitError || attempts >= 200) {
+        clearInterval(timer);
+        initialize();
+      }
+    }, 50);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', waitForFirebase, { once: true });
+  else waitForFirebase();
 })();

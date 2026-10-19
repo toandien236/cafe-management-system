@@ -8,7 +8,8 @@
   let payroll = [];
   let active = false;
 
-  const client = () => window.supabaseClient || window.supabaseDb;
+  const firestore = () => window.firebaseFirestoreMethods;
+  const db = () => window.firebaseDb;
   const today = () => new Date().toLocaleDateString('en-CA');
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const toast = (message, type = 'info') => window.showToast?.(message, type);
@@ -118,21 +119,25 @@
   }
 
   async function loadAll() {
-    const db = client();
-    if (!db?.from) return;
-    const results = await Promise.all([
-      db.from('employees').select('id, employee_code, name, status').order('name'),
-      db.from('employee_shifts').select('*').order('work_date', { ascending: false }),
-      db.from('employee_attendance').select('*').order('work_date', { ascending: false }),
-      db.from('employee_payroll').select('*').order('pay_month', { ascending: false })
-    ]);
-    const failed = results.find(result => result.error);
-    if (failed) {
-      toast(`Không tải được dữ liệu nhân sự: ${failed.error.message}`, 'error');
+    const methods = firestore();
+    const database = db();
+    if (!database || !methods) {
+      toast('Firebase chưa sẵn sàng để tải dữ liệu nhân sự.', 'error');
       return;
     }
-    [employees, schedules, attendance, payroll] = results.map(result => result.data || []);
-    render();
+    try {
+      const names = ['employees', 'employee_shifts', 'employee_attendance', 'employee_payroll'];
+      const snapshots = await Promise.all(names.map(name => methods.getDocs(methods.collection(database, name))));
+      const results = snapshots.map(snapshot => snapshot.docs.map(item => ({ ...item.data(), id: item.id })));
+      employees = results[0].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      schedules = results[1].sort((a, b) => (b.work_date || '').localeCompare(a.work_date || ''));
+      attendance = results[2].sort((a, b) => (b.work_date || '').localeCompare(a.work_date || ''));
+      payroll = results[3].sort((a, b) => (b.pay_month || '').localeCompare(a.pay_month || ''));
+      render();
+    } catch (error) {
+      console.error('Staff operations Firestore error:', error);
+      toast(`Không tải được dữ liệu nhân sự từ Firebase: ${error.message || 'lỗi Firestore'}`, 'error');
+    }
   }
 
   function setPanel(panel) {
@@ -143,21 +148,51 @@
   async function submitSchedule(event) {
     event.preventDefault();
     const row = { work_date: document.getElementById('staff-shift-date').value, shift: document.getElementById('staff-shift-type').value, employee_id: document.getElementById('staff-shift-employee').value, status: 'scheduled' };
-    const { error } = await client().from('employee_shifts').upsert(row, { onConflict: 'employee_id,work_date,shift' });
-    if (error) return toast(`Không lưu được ca làm: ${error.message}`, 'error');
-    event.target.reset();
-    document.getElementById('staff-shift-date').value = today();
-    await loadAll();
-    toast('Đã phân ca cho nhân viên.', 'success');
+    try {
+      const methods = firestore();
+      const database = db();
+      if (!database || !methods) throw new Error('Firebase chưa sẵn sàng.');
+      const existing = schedules.find(item => item.employee_id === row.employee_id && item.work_date === row.work_date && item.shift === row.shift);
+      const id = existing?.id || `${row.employee_id}__${row.work_date}__${row.shift}`;
+      await methods.setDoc(methods.doc(database, 'employee_shifts', id), { ...row, updated_at: new Date().toISOString() }, { merge: true });
+      event.target.reset();
+      document.getElementById('staff-shift-date').value = today();
+      await loadAll();
+      toast('Đã phân ca cho nhân viên.', 'success');
+    } catch (error) {
+      console.error('Schedule save error:', error);
+      toast(`Không lưu được ca làm: ${error.message || 'lỗi Firebase'}`, 'error');
+    }
   }
 
   async function changeShift(id) {
     const row = schedules.find(item => item.id === id);
     if (!row) return;
     const shift = SHIFT_ORDER[(SHIFT_ORDER.indexOf(row.shift) + 1) % SHIFT_ORDER.length];
-    const { error } = await client().from('employee_shifts').update({ shift }).eq('id', id);
-    if (error) return toast(`Không đổi được ca: ${error.message}`, 'error');
-    await loadAll();
+    const targetId = `${row.employee_id}__${row.work_date}__${shift}`;
+    try {
+      const methods = firestore();
+      const database = db();
+      if (!database || !methods) throw new Error('Firebase chưa sẵn sàng.');
+      const oldRef = methods.doc(database, 'employee_shifts', id);
+      const targetRef = methods.doc(database, 'employee_shifts', targetId);
+      await methods.runTransaction(database, async transaction => {
+        const target = await transaction.get(targetRef);
+        if (target.exists()) throw new Error('Nhân viên đã có ca này trong ngày đã chọn.');
+        transaction.set(targetRef, {
+          work_date: row.work_date,
+          employee_id: row.employee_id,
+          shift,
+          status: row.status,
+          updated_at: new Date().toISOString()
+        });
+        transaction.delete(oldRef);
+      });
+      await loadAll();
+    } catch (error) {
+      console.error('Schedule update error:', error);
+      toast(`Không đổi được ca: ${error.message || 'lỗi Firebase'}`, 'error');
+    }
   }
 
   async function submitAttendance(event) {
@@ -173,12 +208,20 @@
     const expected = shift ? parseTime(SHIFT_STARTS[shift.shift]) : null;
     const status = expected !== null && start > expected + 10 ? 'late' : 'present';
     const row = { employee_id: employeeId, work_date: date, check_in: checkIn, check_out: checkOut || null, status };
-    const { error } = await client().from('employee_attendance').upsert(row, { onConflict: 'employee_id,work_date' });
-    if (error) return toast(`Không lưu được chấm công: ${error.message}`, 'error');
-    event.target.reset();
-    document.getElementById('staff-attendance-date').value = today();
-    await loadAll();
-    toast('Đã lưu chấm công.', 'success');
+    try {
+      const methods = firestore();
+      const database = db();
+      if (!database || !methods) throw new Error('Firebase chưa sẵn sàng.');
+      const id = `${employeeId}__${date}`;
+      await methods.setDoc(methods.doc(database, 'employee_attendance', id), { ...row, updated_at: new Date().toISOString() }, { merge: true });
+      event.target.reset();
+      document.getElementById('staff-attendance-date').value = today();
+      await loadAll();
+      toast('Đã lưu chấm công.', 'success');
+    } catch (error) {
+      console.error('Attendance save error:', error);
+      toast(`Không lưu được chấm công: ${error.message || 'lỗi Firebase'}`, 'error');
+    }
   }
 
   async function submitPayroll(event) {
@@ -195,10 +238,18 @@
     const gross = type === 'monthly' ? monthlySalary : hours * hourlyRate;
     const overtimePay = overtime * hourlyRate * 1.5;
     const row = { employee_id: employeeId, pay_month: month, pay_type: type, total_hours: hours, hourly_rate: hourlyRate, monthly_salary: monthlySalary, overtime_hours: overtime, overtime_pay: overtimePay, bonus, penalty, net_pay: Math.max(0, gross + overtimePay + bonus - penalty) };
-    const { error } = await client().from('employee_payroll').upsert(row, { onConflict: 'employee_id,pay_month' });
-    if (error) return toast(`Không lưu được bảng lương: ${error.message}`, 'error');
-    await loadAll();
-    toast('Đã lưu bảng lương.', 'success');
+    try {
+      const methods = firestore();
+      const database = db();
+      if (!database || !methods) throw new Error('Firebase chưa sẵn sàng.');
+      const id = `${employeeId}__${month}`;
+      await methods.setDoc(methods.doc(database, 'employee_payroll', id), { ...row, updated_at: new Date().toISOString() }, { merge: true });
+      await loadAll();
+      toast('Đã lưu bảng lương.', 'success');
+    } catch (error) {
+      console.error('Payroll save error:', error);
+      toast(`Không lưu được bảng lương: ${error.message || 'lỗi Firebase'}`, 'error');
+    }
   }
 
   function fillPayrollHours() {
@@ -249,18 +300,35 @@
     document.getElementById('staff-schedule-rows').addEventListener('click', event => { const button = event.target.closest('[data-shift-change]'); if (button) changeShift(button.dataset.shiftChange); });
     document.getElementById('staff-export-report').addEventListener('click', exportCsv);
     ['staff-attendance-filter', 'staff-payroll-filter', 'staff-report-month', 'staff-report-day'].forEach(id => document.getElementById(id).addEventListener('change', render));
-    const db = client();
-    const setUser = session => {
-      active = Boolean(session?.user);
+    const auth = window.firebaseAuth;
+    const authMethods = window.firebaseAuthMethods;
+    const setUser = user => {
+      active = user?.email?.toLowerCase() === 'lehwangduong@gmail.com';
       section.hidden = !active;
       if (active) loadAll();
     };
-    if (db?.auth) {
-      db.auth.getSession().then(({ data }) => setUser(data?.session));
-      db.auth.onAuthStateChange((_event, session) => setUser(session));
+    if (auth && authMethods) {
+      authMethods.onAuthStateChanged(auth, setUser, error => {
+        console.error('Staff operations Firebase session error:', error);
+        toast('Không thể xác minh phiên Firebase cho nghiệp vụ nhân sự.', 'error');
+      });
     }
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize);
-  else initialize();
+  function waitForFirebase() {
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      if (window.firebaseAuth && window.firebaseAuthMethods) {
+        clearInterval(timer);
+        initialize();
+      } else if (window.firebaseInitError || attempts >= 200) {
+        clearInterval(timer);
+        initialize();
+      }
+    }, 50);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', waitForFirebase, { once: true });
+  else waitForFirebase();
 })();

@@ -23,6 +23,7 @@ function loadOrderScript(firebaseFirestoreReady, alert) {
     URLSearchParams,
     Intl,
     Date,
+    Math,
     console: { error() {} },
     alert
   });
@@ -56,6 +57,9 @@ test('table order submission writes a Firebase order with normalized table and V
   assert.equal(savedOrder.note, 'Ít đá');
   assert.equal(savedOrder.status, 'new');
   assert.equal(savedOrder.paymentStatus, 'unpaid');
+  assert.ok(savedOrder.createdAt);
+  assert.equal(savedOrder.updatedAt, savedOrder.createdAt);
+  assert.equal(elements.get('success-order-id').textContent, savedOrder.orderId);
   assert.equal(elements.get('order-success').hidden, false);
 });
 
@@ -68,7 +72,7 @@ test('table order submission does not show success when Firebase is unavailable'
   assert.equal(elements.get('order-success').hidden, true);
   assert.equal(elements.get('submit-order').disabled, false);
   assert.equal(elements.get('submit-order').textContent, 'Gửi đơn gọi món');
-  assert.match(messages[0], /lên Firebase/);
+  assert.match(messages[0], /Firebase/);
 });
 
 test('table order submission explains when Firestore rules deny a customer order', async () => {
@@ -88,5 +92,5 @@ test('table order submission explains when Firestore rules deny a customer order
 
   assert.equal(elements.get('order-success').hidden, true);
   assert.equal(elements.get('submit-order').disabled, false);
-  assert.match(messages[0], /Firestore > orders/);
+  assert.equal(messages[0], 'Firebase chưa cho phép nhận đơn từ QR. Vui lòng nhờ chủ dự án kiểm tra quyền ghi vào Firestore > orders.');
 });

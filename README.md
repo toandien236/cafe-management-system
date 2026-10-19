@@ -1,192 +1,105 @@
-# ☕ Mocha & Miso — Website & Hệ Thống Quản Lý Quán Cà Phê
+# Mocha & Miso — Hệ thống quản lý quán cà phê
 
-<div align="center">
+Website giới thiệu thương hiệu và bộ công cụ vận hành quán cà phê: đặt bàn, gọi món QR, quản lý đơn và doanh thu, kho, cùng hồ sơ nhân sự.
 
-![Mocha & Miso](./assets/logo.jpg)
+![Giao diện Mocha & Miso](./screenshots/hero.png)
 
-**Hệ thống quản lý quán cà phê phong cách Japandi với Backend PostgreSQL & Supabase.**
+## Tính năng
 
-</div>
+| Phân hệ | Chức năng chính | Trang |
+|---|---|---|
+| Website khách hàng | Giới thiệu, xem thực đơn, gửi yêu cầu đặt bàn | [`index.html`](./index.html) |
+| Quản trị | Đăng nhập Firebase, duyệt đặt bàn/đơn Firestore, cập nhật thanh toán, xem doanh thu | [`admin.html`](./admin.html) |
+| Gọi món QR | Chọn món theo bàn, thêm ghi chú, gửi đơn | [`order.html`](./order.html?table=01) |
+| Quản lý kho | Theo dõi nguyên liệu, tồn thấp, phiếu nhập và xuất | [`inventory.html`](./inventory.html) |
+| Nhân sự | Hồ sơ nhân viên, ca, chấm công và bảng lương | [`hr.html`](./hr.html) |
+| Mã QR | Tạo mã QR theo số bàn | [`qr.html`](./qr.html) |
 
----
+## Kiến trúc hiện tại
 
-## 📑 Mục Lục
-1. [Giới thiệu](#-giới-thiệu)
-2. [Kiến Trúc Công Nghệ](#️-kiến-trúc-công-nghệ)
-3. [Cấu Trúc Thư Mục Dự Án](#-cấu-trúc-thư-mục-dự-án)
-4. [Hướng Dẫn Chạy Hệ Thống Ở Local](#-hướng-dẫn-chạy-hệ-thống-ở-local-để-phát-triển)
-5. [Hướng Dẫn Thiết Lập Supabase & PostgreSQL](#-hướng-dẫn-thiết-lập-supabase--postgresql)
-6. [Tạo Tài Khoản Quản Trị Viên (Admin)](#-tạo-tài-khoản-quản-trị-viên-admin)
-7. [Kiểm Tra Kết Nối Tự Động (Health Check)](#-kiểm-tra-kết-nối-tự-động-health-check)
-8. [Các Phân Hệ & Đường Dẫn Sử Dụng](#-các-phân-hệ--đường-dẫn-sử-dụng)
+- **Frontend:** HTML, CSS và JavaScript thuần; Firebase và Supabase SDK được tải từ CDN.
+- **Cổng quản trị:** Firebase Authentication xác thực tài khoản quản trị cũ; đặt bàn, đơn và doanh thu trong cổng này đọc/ghi qua Cloud Firestore.
+- **Nhân sự:** Firebase Authentication và Cloud Firestore dùng chung project với cổng quản trị; hồ sơ, ca, chấm công và bảng lương nằm trong các collection `employees`, `employee_shifts`, `employee_attendance` và `employee_payroll`.
+- **Các phân hệ đang dùng Supabase:** Website đặt bàn và quản lý kho vẫn dùng Supabase Auth/PostgreSQL; cần project URL/anon key và schema/RLS đã được cấu hình.
+- **Gọi món QR và quản trị đơn:** Trang QR ghi đơn vào Firestore; cổng quản trị cũng đọc/cập nhật đơn từ Firestore để doanh thu nhận đúng đơn đã thanh toán.
+- **Trạng thái chuyển đổi:** Website đặt bàn và kho chưa đồng bộ trực tiếp với Firestore. Đặt bàn mới từ website chưa tự xuất hiện trong dashboard Firebase. HR dùng Firebase từ nay; dữ liệu HR cũ trong Supabase chưa được tự động di chuyển và vẫn còn nguyên ở nguồn.
+- EmailJS là tích hợp tùy chọn phía client. Không đưa service-role key hoặc Firebase service-account vào trình duyệt.
 
----
+## Chạy local
 
-## 📖 Giới thiệu
+Yêu cầu: Python 3 hoặc Node.js 18+. Mở PowerShell tại thư mục dự án:
 
-**Mocha & Miso** là giải pháp toàn diện cho quán cà phê gồm:
-* **Website thương hiệu:** Trải nghiệm thị giác cao cấp, hiệu ứng mượt mà (GSAP, Lenis), xem menu và đặt bàn trực tuyến.
-* **Gọi món QR tại bàn (Mobile App):** Khách quét QR theo số bàn, chọn món, ghi chú và gửi đơn trực tiếp không cần tải ứng dụng.
-* **Cổng quản trị (Admin Dashboard):** Quản lý đơn đặt bàn và đơn gọi món theo thời gian thực (Realtime), duyệt đơn, cập nhật thanh toán.
-* **Quản trị kho nguyên vật liệu:** Quản lý tồn kho, định mức an toàn, tạo phiếu nhập/xuất kho tự động tính toán số dư.
-
----
-
-## 🛠️ Kiến Trúc Công Nghệ
-
-| Thành phần | Công nghệ sử dụng |
-|---|---|
-| **Cơ sở dữ liệu chính** | **PostgreSQL** (Tables, Foreign Keys, UUIDs, Triggers, RLS, Realtime) |
-| **Backend as a Service** | **Supabase** (Auth, PostgREST API, Realtime Channels, Storage) |
-| **Frontend UI** | HTML5, CSS3 hiện đại (Flexbox/Grid), JavaScript thuần (Vanilla ES6+) |
-| **Hiệu ứng & Chuyển động** | GSAP 3, ScrollTrigger, SplitType, Lenis Smooth Scroll |
-| **SDK & Thư viện** | `@supabase/supabase-js v2`, `QRCode.js`, `EmailJS` |
-
----
-
-## 📁 Cấu Trúc Thư Mục Dự Án
-
-Codebase được tổ chức phân tầng rõ ràng theo chuẩn module để dễ dàng mở rộng và bảo trì:
-
-```
-cafe-management-system/
-├── assets/                     # Tài nguyên tĩnh (Hình ảnh sản phẩm, logo, banner)
-├── css/                        # Tất cả các file Stylesheet
-│   ├── style.css               # Giao diện chính (Website khách, Cổng Admin, Quản lý kho)
-│   └── order.css               # Giao diện tối ưu Mobile cho ứng dụng Gọi món QR tại bàn
-├── js/                         # Tất cả các file JavaScript xử lý logic
-│   ├── supabase.js             # Khởi tạo Supabase Client & Cấu hình kết nối API
-│   ├── main.js                 # Hiệu ứng Website, Form đặt bàn & gửi EmailJS
-│   ├── admin.js                # Logic Cổng quản trị: Auth, Quản lý đơn & Realtime Listener
-│   ├── order.js                # Logic Giỏ hàng, Menu & Gửi đơn gọi món PostgreSQL
-│   └── inventory.js            # Logic Quản lý Kho: CRUD nguyên liệu, Nhập/Xuất kho
-├── database/                   # Cơ sở dữ liệu
-│   └── supabase-schema.sql     # Script khởi tạo toàn bộ Bảng, Indexes, Triggers, RLS & Seed data
-├── scripts/                    # Các script tiện ích hỗ trợ phát triển & kiểm thử
-│   └── check-supabase.js       # Script kiểm tra tự động kết nối & hoạt động của Supabase
-├── screenshots/                # Hình ảnh minh họa giao diện trong tài liệu
-├── index.html                  # Giao diện Website thương hiệu & Đặt bàn Online
-├── admin.html                  # Giao diện Cổng Quản trị Viên (Dashboard)
-├── order.html                  # Giao diện Gọi món tại bàn bằng mã QR
-├── inventory.html              # Giao diện Quản trị Kho nguyên vật liệu
-├── qr.html                     # Công cụ tạo & in mã QR cho từng bàn
-└── README.md                   # Tài liệu hướng dẫn sử dụng & phát triển
-```
-
----
-
-## 💻 Hướng Dẫn Chạy Hệ Thống Ở Local Để Phát Triển
-
-### Yêu cầu môi trường
-* Đã cài đặt [Python 3.x](https://www.python.org/) **hoặc** [Node.js](https://nodejs.org/) (phiên bản 18+).
-
-### Cách chạy nhanh Local Server
-
-#### 👉 Cách 1: Sử dụng Python (Tích hợp sẵn, không cần cài thêm thư viện)
-Mở Terminal / PowerShell tại thư mục dự án và chạy:
 ```powershell
 python -m http.server 5500
 ```
 
-#### 👉 Cách 2: Sử dụng Node.js `serve` hoặc `http-server`
-```powershell
-npx serve . -p 5500
-# Hoặc
-npx http-server -p 5500
-```
+Sau đó mở:
 
-#### 👉 Cách 3: Sử dụng Live Server trong Visual Studio Code
-1. Cài Extension **Live Server** (`ritwickdey.LiveServer`) trên VS Code.
-2. Nhấp chuột phải vào file `index.html` chọn **Open with Live Server**.
+| Mục đích | Địa chỉ |
+|---|---|
+| Website khách | <http://localhost:5500/index.html> |
+| Quản trị | <http://localhost:5500/admin.html> |
+| Gọi món bàn 01 | <http://localhost:5500/order.html?table=01> |
+| Quản lý kho | <http://localhost:5500/inventory.html> |
+| Nhân sự | <http://localhost:5500/hr.html> |
+| Tạo mã QR | <http://localhost:5500/qr.html> |
 
----
+## Cấu hình Supabase
 
-## 🗄️ Hướng Dẫn Thiết Lập Supabase & PostgreSQL
+Các bước dưới đây chỉ áp dụng cho website đặt bàn và quản lý kho. Gọi món QR, quản trị đơn và HR hiện dùng Firebase/Firestore như mô tả ở trên.
 
-Nếu bạn muốn kết nối với một Project Supabase mới của riêng mình:
+1. Tạo project Supabase và cấu hình Project URL cùng anon key trong [`js/supabase.js`](./js/supabase.js), hoặc đặt `window.ENV_SUPABASE_URL` / `window.ENV_SUPABASE_ANON_KEY` trước khi khởi tạo client. Không đặt service-role key trong HTML, JavaScript client hoặc Git.
+2. Với project **mới**, chạy [`database/supabase-schema.sql`](./database/supabase-schema.sql). Tập lệnh khởi tạo này có `DROP TABLE`; chỉ chạy trên project trống hoặc sau bản sao lưu và phê duyệt xóa dữ liệu.
+3. Với project **đã có schema/dữ liệu**, không chạy tập lệnh có `DROP TABLE`. Chạy tập lệnh tăng dần [`database/firebase-to-supabase.sql`](./database/firebase-to-supabase.sql) chỉ khi cần chuẩn bị schema cho các luồng Supabase/migration; gọi món QR hiện tại không gọi RPC Supabase `create_order`.
+4. Dữ liệu menu trong `seed-data.sql` phục vụ bảng Supabase/luồng RPC tương ứng, không cung cấp menu cho trang QR hiện tại (menu QR đang khai báo trong `js/order.js`). Phần còn lại của script thêm dữ liệu mẫu kho/đặt bàn/đơn; không chạy phần dữ liệu mẫu trên dữ liệu thật.
+5. Tạo user trong Supabase Authentication và gán vai trò admin trong SQL Editor (dùng cho trang quản lý kho):
 
-1. **Tạo Project mới:**
-   * Truy cập [https://supabase.com](https://supabase.com) và tạo một project.
-2. **Khởi tạo Database Schema:**
-   * Vào mục **SQL Editor** trong Supabase Dashboard.
-   * Sao chép toàn bộ nội dung file [`database/supabase-schema.sql`](database/supabase-schema.sql), dán vào ô nhập liệu và bấm **Run**.
-   * Script sẽ tự động tạo:
-     * `reservations` (Đơn đặt bàn)
-     * `orders` (Đơn gọi món tại bàn)
-     * `inventory` (Kho nguyên liệu)
-     * `stock_imports` (Phiếu nhập kho)
-     * `stock_exports` (Phiếu xuất kho)
-     * `menu_items` (Danh mục thực đơn mẫu)
-     * Cấu hình RLS Policies cho phép khách tạo đơn và nhân viên quản trị.
-     * Bật Realtime publication cho tất cả các bảng.
-3. **Cấu hình thông tin API:**
-   * Vào **Project Settings** ➔ **API** trên Supabase Dashboard.
-   * Lấy **Project URL** và **anon public key**, sau đó cập nhật vào file [`js/supabase.js`](js/supabase.js):
-   ```javascript
-   const SUPABASE_CONFIG = {
-     url: "https://<your-project-id>.supabase.co",
-     anonKey: "<your-anon-key>"
-   };
+   ```sql
+   UPDATE auth.users
+   SET raw_app_meta_data =
+     COALESCE(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
+   WHERE email = 'admin@example.com';
    ```
 
----
+   Thay email mẫu bằng email thực. Đăng xuất rồi đăng nhập lại sau khi thay role để JWT nhận metadata mới. HR không sử dụng tài khoản Supabase; đăng nhập bằng tài khoản Firebase quản trị hiện có.
 
-## 🔐 Tạo Tài Khoản Quản Trị Viên (Admin)
+`employee-hr.sql` là schema Supabase cũ, không cần chạy cho HR hiện tại. Dữ liệu HR đã lưu tại Supabase không bị ứng dụng mới sửa hoặc xóa, nhưng cần một bước migration riêng nếu muốn đưa các bản ghi đó sang Firestore. Chưa có migration HR tự động.
 
-Để đăng nhập vào Cổng Quản trị ([admin.html](admin.html)):
+## Chuyển dữ liệu Firestore hiện có
 
-1. Truy cập Supabase Dashboard ➔ Chọn mục **Authentication** ➔ **Users**.
-2. Nhấn nút **Add user** ➔ chọn **Create user**.
-3. Nhập Email (ví dụ: `admin@mochaandmiso.com`) và Mật khẩu quản trị.
-4. Mở [http://localhost:5500/admin.html](http://localhost:5500/admin.html) và đăng nhập bằng tài khoản vừa tạo.
+Tập lệnh nhập **chỉ** hai collection `reservations` và `orders`. Nó ánh xạ camelCase sang snake_case, lưu document ID gốc trong `source_firebase_id`, upsert theo ID này để có thể chạy lại an toàn, và không xóa hay sửa dữ liệu Firebase. Các tài khoản/mật khẩu Firebase không được chuyển.
 
----
+1. Sao lưu Firestore và chạy schema Supabase ở trên trước. Sau đó thiết lập thông tin trong PowerShell; đường dẫn service-account phải nằm ngoài repository:
 
-## 🌱 Nạp Dữ Liệu Mẫu (Seed Data)
+   ```powershell
+   npm install
+   $env:FIREBASE_PROJECT_ID = "firebase-project-id"
+   $env:GOOGLE_APPLICATION_CREDENTIALS = "C:\secure\firebase-service-account.json"
+   $env:SUPABASE_URL = "https://your-project.supabase.co"
+   $env:SUPABASE_SERVICE_ROLE_KEY = "your-service-role-key"
+   $env:MIGRATION_DRY_RUN = "1"
+   npm run migrate:firebase
+   ```
 
-Dự án cung cấp 2 phương thức nạp dữ liệu mẫu hoàn chỉnh:
+2. Xem số lượng bản ghi đã kiểm tra và sửa các bản ghi thiếu/không hợp lệ ở nguồn trước khi ghi. Khi đã xác nhận project đích, chạy:
 
-### 👉 Cách 1: Chạy script Node.js (Tự động nạp qua REST API)
-```powershell
-node scripts/seed-data.js
-```
+   ```powershell
+   $env:MIGRATION_DRY_RUN = "0"
+   npm run migrate:firebase
+   ```
 
-### 👉 Cách 2: Chạy file SQL trực tiếp trên Supabase
-Mở SQL Editor trên Supabase Dashboard và thực thi file: [`database/seed-data.sql`](database/seed-data.sql).
+3. So sánh số bản ghi Firestore với các dòng có `source_firebase_id` trong Supabase, kiểm tra đặt bàn/đơn mẫu, RLS và đăng nhập admin. Chỉ chuyển traffic sau khi xác minh; giữ bản sao Firestore cho tới khi đối soát hoàn tất.
 
-**Dữ liệu mẫu bao gồm:**
-* 🍱 **15 món thực đơn** (`menu_items`) đầy đủ hình ảnh, giá và mô tả.
-* 📦 **15 nguyên vật liệu kho** (`inventory`) với tồn kho và mức an toàn.
-* 📥 **5 phiếu nhập kho** (`stock_imports`) có thông tin nhà cung cấp và giá nhập.
-* 📤 **4 phiếu xuất kho** (`stock_exports`) với lý do sử dụng quầy Bar / Làm bánh.
-* 🪑 **5 lượt đặt bàn mẫu** (`reservations`) với các trạng thái Chờ duyệt / Đã xác nhận / Đã hủy.
-* 🍽️ **4 đơn gọi món mẫu tại bàn** (`orders`) với các trạng thái Mới / Đang làm / Đã mang ra / Hoàn tất.
+Service-role key và Firebase service-account chỉ dùng trên máy chạy migration; không dán vào chat, không commit, và xóa khỏi biến môi trường sau khi dùng (`Remove-Item Env:SUPABASE_SERVICE_ROLE_KEY`, `Remove-Item Env:GOOGLE_APPLICATION_CREDENTIALS`).
 
----
+## EmailJS
 
-## ✅ Kiểm Tra Kết Nối Tự Động (Health Check)
+Email đặt bàn chỉ hoạt động khi Service ID, Template ID và Public Key được cấu hình trong `EMAILJS_CONFIG` tại [`index.html`](./index.html). Đây là public key phía trình duyệt; không đưa private key hoặc thông tin bí mật vào client.
 
-Dự án có sẵn script kiểm tra toàn diện hoạt động của Supabase và PostgreSQL. Chỉ cần chạy lệnh:
+## Kiểm thử
 
 ```powershell
-node scripts/check-supabase.js
+node --test tests/customer-care.test.js tests/table-orders.test.js tests/revenue.test.js tests/hr-auth.test.js tests/admin-auth.test.js tests/firebase-migration.test.js
 ```
 
-Script sẽ kiểm tra:
-* Kết nối API Supabase
-* Quyền truy cập các bảng (`reservations`, `orders`, `inventory`, `stock_imports`, `stock_exports`)
-* Kiểm tra thử nghiệm tạo đơn và tự động dọn dẹp bản ghi test.
-
----
-
-## 🌐 Các Phân Hệ & Đường Dẫn Sử Dụng
-
-Khi server đang chạy tại port `5500`:
-
-| Phân hệ | Đường dẫn Local | Mô tả |
-|---|---|---|
-| **🌐 Website Khách hàng** | [http://localhost:5500/index.html](http://localhost:5500/index.html) | Giới thiệu thương hiệu, Menu, Form đặt bàn online |
-| **📱 Gọi món QR tại bàn** | [http://localhost:5500/order.html?table=01](http://localhost:5500/order.html?table=01) | Gọi món theo bàn (Bàn 01, 02... đổi tham số `?table=XX`) |
-| **🔐 Cổng Quản trị (Admin)** | [http://localhost:5500/admin.html](http://localhost:5500/admin.html) | Xem thống kê, nhận đơn món Realtime, duyệt đặt bàn |
-| **📦 Quản lý Kho** | [http://localhost:5500/inventory.html](http://localhost:5500/inventory.html) | Quản lý nguyên vật liệu, lập phiếu nhập kho & xuất kho |
-| **🖨️ In mã QR bàn** | [http://localhost:5500/qr.html](http://localhost:5500/qr.html) | Sinh mã QR hàng loạt theo số lượng bàn của quán để in |
+Các test kiểm tra Firebase Auth của cổng quản trị và HR, ghi đơn QR vào Firestore, hồ sơ khách, tổng hợp doanh thu và mapping migration.
