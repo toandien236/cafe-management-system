@@ -1201,6 +1201,7 @@ function loadOrders() {
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
   if (!dbInstance || typeof dbInstance.collection !== 'function') {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px;">Chưa kết nối được hệ thống đơn gọi món.</td></tr>';
+    renderRevenueLoadMessage('Chưa kết nối được hệ thống đơn gọi món.');
     return;
   }
 
@@ -1211,11 +1212,18 @@ function loadOrders() {
     snapshot.forEach(doc => allOrders.push({ id: doc.id, ...doc.data() }));
     allOrders.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     renderOrders();
+    renderRevenue();
   }, (error) => {
     if (!adminSessionActive) return;
     console.warn('Orders snapshot notice:', error);
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px;">Không thể tải đơn gọi món.</td></tr>';
+    renderRevenueLoadMessage('Không thể tải dữ liệu doanh thu từ Firestore.');
   });
+}
+
+function renderRevenueLoadMessage(message) {
+  const tbody = document.getElementById('revenue-tbody');
+  if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:30px;">${escapeHtml(message)}</td></tr>`;
 }
 
 function getOrderAmountVnd(value, items) {

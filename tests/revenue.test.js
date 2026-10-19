@@ -68,3 +68,53 @@ test('revenue totals only paid orders and groups them by payment date', () => {
   assert.match(elements.get('revenue-tbody').innerHTML, /ORD-OLD · Bàn 02/);
   assert.doesNotMatch(elements.get('revenue-tbody').innerHTML, /unpaid/);
 });
+
+test('Firestore order snapshots refresh revenue totals and payment history', () => {
+  const { context, elements } = loadAdminScript();
+  const paidAt = new Date();
+  const orders = [
+    {
+      id: 'paid-order',
+      orderId: 'ORD-PAID',
+      tableNumber: '03',
+      total: 125000,
+      paymentStatus: 'paid',
+      paidAt: paidAt.toISOString()
+    },
+    {
+      id: 'unpaid-order',
+      orderId: 'ORD-UNPAID',
+      tableNumber: '04',
+      total: 80000,
+      paymentStatus: 'unpaid'
+    }
+  ];
+  context.window.firebaseDb = {
+    collection(name) {
+      assert.equal(name, 'orders');
+      return {
+        onSnapshot(onData) {
+          onData({
+            forEach(callback) {
+              orders.forEach(order => callback({ id: order.id, data: () => order }));
+            }
+          });
+          return () => {};
+        }
+      };
+    }
+  };
+
+  vm.runInContext('adminSessionActive = true; loadOrders()', context);
+
+  const expectedRevenue = new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0
+  }).format(125000);
+  assert.equal(elements.get('revenue-today').textContent, expectedRevenue);
+  assert.equal(elements.get('revenue-month').textContent, expectedRevenue);
+  assert.equal(elements.get('revenue-total').textContent, expectedRevenue);
+  assert.match(elements.get('revenue-tbody').innerHTML, /ORD-PAID · Bàn 03/);
+  assert.doesNotMatch(elements.get('revenue-tbody').innerHTML, /ORD-UNPAID/);
+});
