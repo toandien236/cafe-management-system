@@ -2,57 +2,250 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email.trim().lower() == 'lehwangduong@gmail.com';
+    }
+
+    function isValidVisitCustomerSnapshot(customer) {
+      return customer is map
+        && customer.keys().hasAll(['key', 'name', 'email', 'phone', 'phoneNormalized'])
+        && customer.keys().hasOnly(['key', 'name', 'email', 'phone', 'phoneNormalized'])
+        && customer.key is string
+        && customer.key.size() > 0
+        && customer.key.size() <= 300
+        && customer.name is string
+        && customer.name.size() <= 500
+        && customer.email is string
+        && customer.email.size() <= 512
+        && customer.phone is string
+        && customer.phone.size() <= 100
+        && customer.phoneNormalized is string
+        && customer.phoneNormalized.size() <= 40;
+    }
+
+    function isValidReservationRequestId(value) {
+      return value is string
+        && value.matches('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$');
+    }
+
+    function isValidPublicReservation(reservationId) {
+      return request.resource.data.keys().hasAll([
+          'reservationId', 'requestId', 'customerName', 'name', 'email', 'phone',
+          'date', 'time', 'guests', 'specialRequest', 'notes', 'status', 'emailStatus', 'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'reservationId', 'requestId', 'customerName', 'name', 'email', 'phone',
+          'date', 'time', 'guests', 'specialRequest', 'notes', 'status', 'emailStatus', 'createdAt',
+          'requestedTableNumber'
+        ])
+        && isValidReservationRequestId(reservationId)
+        && request.resource.data.reservationId == reservationId
+        && request.resource.data.requestId == reservationId
+        && request.resource.data.customerName is string
+        && request.resource.data.customerName.trim().size() >= 1
+        && request.resource.data.customerName.size() <= 120
+        && request.resource.data.customerName == request.resource.data.customerName.trim()
+        && request.resource.data.name == request.resource.data.customerName
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.email == request.resource.data.email.lower()
+        && request.resource.data.email.matches('^[^@ ]+@[^@ ]+\\.[^@ ]+$')
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() <= 40
+        && request.resource.data.date is string
+        && request.resource.data.date.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && request.resource.data.time in [
+          '0730', '0800', '0830', '0900', '0930', '1000', '1030', '1200',
+          '1230', '1300', '1330', '1400', '1830', '1900', '1930', '2000'
+        ]
+        && request.resource.data.guests is int
+        && request.resource.data.guests >= 1
+        && request.resource.data.guests <= 12
+        && request.resource.data.specialRequest is string
+        && request.resource.data.specialRequest.size() <= 1000
+        && request.resource.data.notes == request.resource.data.specialRequest
+        && (!request.resource.data.keys().hasAny(['requestedTableNumber'])
+          || (request.resource.data.requestedTableNumber is string
+            && request.resource.data.requestedTableNumber.matches('^(0[1-9]|1[0-9]|20)$')))
+        && request.resource.data.status == 'pending'
+        && request.resource.data.emailStatus == 'Pending'
+        && request.resource.data.createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/reservationRequests/$(reservationId))
+        && getAfter(/databases/$(database)/documents/reservationRequests/$(reservationId)).data.requestId == reservationId
+        && getAfter(/databases/$(database)/documents/reservationRequests/$(reservationId)).data.reservationId == reservationId;
+    }
+
     match /reservations/{reservation} {
 
       // ── READ ──────────────────────────────────────────────────────────────
       // Only authenticated admins can read reservation data.
       // Public visitors cannot enumerate or read customer bookings.
-      allow read: if request.auth != null;
+      allow read: if isAdmin();
 
-      // ── CREATE ────────────────────────────────────────────────────────────
-      // Public can create a reservation (from the customer form) but all
-      // fields are strictly validated server-side:
-      //  • name, email, date, time — required non-empty strings
-      //  • email — must contain '@' (basic format check)
-      //  • guests — integer between 1 and 20
-      //  • status — must be 'pending' on creation (clients cannot self-confirm)
-      //  • No extra unexpected fields beyond the defined schema
-      allow create: if
-        // name: non-empty string
-        request.resource.data.name is string
-        && request.resource.data.name.size() >= 1
-
-        // email: non-empty string containing '@'
-        && request.resource.data.email is string
-        && request.resource.data.email.size() >= 3
-        && request.resource.data.email.matches('.*@.*')
-
-        // date: non-empty string
-        && request.resource.data.date is string
-        && request.resource.data.date.size() >= 1
-
-        // time: non-empty string
-        && request.resource.data.time is string
-        && request.resource.data.time.size() >= 1
-
-        // guests: integer 1–20
-        && request.resource.data.guests is int
-        && request.resource.data.guests >= 1
-        && request.resource.data.guests <= 20
-
-        // status: must be 'pending' on creation — clients cannot self-confirm
-        && request.resource.data.status == 'pending';
+      // Public clients can create only a pending, unassigned reservation in
+      // the same atomic batch as its minimal idempotency marker.
+      allow create: if isValidPublicReservation(reservation);
 
       // ── UPDATE ────────────────────────────────────────────────────────────
-      // Only authenticated admins can update reservations (e.g., confirm/cancel).
-      // The status field must be one of the three allowed values.
+      // Only admins can change a reservation's workflow status. A pending
+      // booking can be confirmed or cancelled; confirmed/cancelled bookings
+      // cannot be reopened or moved to the other terminal state.
       allow update: if
-        request.auth != null
-        && request.resource.data.status in ['pending', 'confirmed', 'cancelled'];
+        isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'emailStatus', 'updatedAt', 'tableNumber'])
+        && request.resource.data.status in ['pending', 'confirmed', 'cancelled', 'Pending', 'Confirmed', 'Cancelled']
+        && (!request.resource.data.keys().hasAny(['emailStatus'])
+          || request.resource.data.emailStatus in ['Pending', 'Sent', 'Failed', 'pending', 'sent', 'failed'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['tableNumber'])
+          || (!resource.data.keys().hasAny(['tableNumber'])
+            && request.resource.data.status in ['pending', 'confirmed', 'Pending', 'Confirmed']
+            && request.resource.data.tableNumber is string
+            && request.resource.data.tableNumber.matches('^(0[1-9]|1[0-9]|20)$')))
+        && (
+          (!resource.data.keys().hasAny(['status'])
+            && request.resource.data.status in ['pending', 'confirmed', 'cancelled', 'Pending', 'Confirmed', 'Cancelled'])
+          || (resource.data.status in ['pending', 'Pending']
+            && request.resource.data.status in ['pending', 'confirmed', 'cancelled', 'Pending', 'Confirmed', 'Cancelled'])
+          || (resource.data.status in ['confirmed', 'Confirmed']
+            && request.resource.data.status in ['confirmed', 'Confirmed'])
+          || (resource.data.status in ['cancelled', 'Cancelled']
+            && request.resource.data.status in ['cancelled', 'Cancelled'])
+        )
+        && (!(request.resource.data.status in ['cancelled', 'Cancelled'])
+          || !existsAfter(/databases/$(database)/documents/reservationVisits/$(reservation)));
 
       // ── DELETE ────────────────────────────────────────────────────────────
-      // Only authenticated admins can delete reservations.
-      allow delete: if request.auth != null;
+      // A linked visit may remain after its reservation is removed only when
+      // its immutable customer snapshot will still identify the customer.
+      allow delete: if isAdmin()
+        && (!existsAfter(/databases/$(database)/documents/reservationVisits/$(reservation))
+          || isValidVisitCustomerSnapshot(
+            getAfter(/databases/$(database)/documents/reservationVisits/$(reservation)).data.customer
+          ));
+    }
+
+    match /reservationRequests/{requestId} {
+      // The marker contains only a random request ID and a one-way payload
+      // hash, so clients can confirm retries without reading customer data.
+      allow get: if isAdmin()
+        || !exists(/databases/$(database)/documents/reservationRequests/$(requestId))
+        || (exists(/databases/$(database)/documents/reservations/$(requestId))
+          && resource.data.requestId == requestId
+          && resource.data.reservationId == requestId
+          && resource.data.payloadHash is string
+          && resource.data.payloadHash.matches('^[0-9a-f]{64}$'));
+      allow list: if isAdmin();
+
+      allow create: if isValidReservationRequestId(requestId)
+        && request.resource.data.keys().hasAll(['requestId', 'reservationId', 'payloadHash', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['requestId', 'reservationId', 'payloadHash', 'createdAt'])
+        && request.resource.data.requestId == requestId
+        && request.resource.data.reservationId == requestId
+        && request.resource.data.payloadHash is string
+        && request.resource.data.payloadHash.matches('^[0-9a-f]{64}$')
+        && request.resource.data.createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/reservations/$(requestId))
+        && getAfter(/databases/$(database)/documents/reservations/$(requestId)).data.requestId == requestId
+        && getAfter(/databases/$(database)/documents/reservations/$(requestId)).data.createdAt == request.time;
+
+      allow update, delete: if false;
+    }
+
+    match /reservationVisits/{reservationId} {
+      // Visit records contain customer activity and are only visible to admins.
+      allow read: if isAdmin();
+
+      // A single immutable visit can be created only for a reservation that was
+      // already confirmed before the transaction and remains confirmed after it.
+      // Its document ID is the reservation ID, making repeats fail.
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll(['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer'])
+        && request.resource.data.keys().hasOnly(['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer'])
+        && isValidVisitCustomerSnapshot(request.resource.data.customer)
+        && request.resource.data.reservationId == reservationId
+        && request.resource.data.recordedAt == request.time
+        && request.resource.data.recordedBy == request.auth.uid
+        && request.resource.data.source == 'staff-confirmed'
+        && exists(/databases/$(database)/documents/reservations/$(reservationId))
+        && get(/databases/$(database)/documents/reservations/$(reservationId)).data.status in ['confirmed', 'Confirmed']
+        && existsAfter(/databases/$(database)/documents/reservations/$(reservationId))
+        && getAfter(/databases/$(database)/documents/reservations/$(reservationId)).data.status in ['confirmed', 'Confirmed'];
+
+      // A legacy visit without a valid customer snapshot may be enriched only
+      // in the same transaction that removes its reservation. Keep every
+      // existing field immutable; legacy documents may have additional fields.
+      allow update: if isAdmin()
+        && (!resource.data.keys().hasAny(['reservationId'])
+          || resource.data.reservationId == null
+          || resource.data.reservationId == ''
+          || resource.data.reservationId == reservationId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customer', 'reservationId'])
+        && request.resource.data.reservationId == reservationId
+        && (!resource.data.keys().hasAny(['customer'])
+          || !isValidVisitCustomerSnapshot(resource.data.customer))
+        && isValidVisitCustomerSnapshot(request.resource.data.customer)
+        && !existsAfter(/databases/$(database)/documents/reservations/$(reservationId));
+      allow delete: if false;
+    }
+
+    match /orders/{order} {
+      // Guests may submit a new order from a table QR code, but cannot read
+      // other orders or change an order after submission.
+      allow create: if
+        request.resource.data.orderId is string
+        && request.resource.data.orderId.size() >= 8
+        && request.resource.data.tableNumber is string
+        && request.resource.data.tableNumber.matches('^[0-9]{2}$')
+        && request.resource.data.items is list
+        && request.resource.data.items.size() >= 1
+        && request.resource.data.items.size() <= 20
+        && request.resource.data.total is number
+        && request.resource.data.total >= 0
+        && request.resource.data.status == 'new'
+        && request.resource.data.paymentStatus == 'unpaid';
+
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /tableAllocationDays/{date} {
+      // Admin assignments increment a per-day revision inside a transaction.
+      // Competing admin sessions then conflict instead of assigning the same
+      // table from stale availability data.
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll(['date', 'revision', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['date', 'revision', 'updatedAt'])
+        && request.resource.data.date == date
+        && date.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && request.resource.data.revision is int
+        && request.resource.data.revision == 1
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin()
+        && request.resource.data.keys().hasAll(['date', 'revision', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['date', 'revision', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revision', 'updatedAt'])
+        && request.resource.data.date == resource.data.date
+        && request.resource.data.revision is int
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // HR records are private business data. Only the configured admin may
+    // read or change employee profiles, schedules, attendance, and payroll.
+    match /employees/{employeeId} {
+      allow read, write: if isAdmin();
+    }
+    match /employee_shifts/{shiftId} {
+      allow read, write: if isAdmin();
+    }
+    match /employee_attendance/{attendanceId} {
+      allow read, write: if isAdmin();
+    }
+    match /employee_payroll/{payrollId} {
+      allow read, write: if isAdmin();
     }
 
   }

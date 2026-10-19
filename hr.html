@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quản lý nhân sự — Mocha &amp; Miso</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/jpeg" href="assets/logo_icon.jpg" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+
+  <!-- Firebase config and SDK -->
+  <script src="js/firebase-config.js"></script>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import { getFirestore, collection, getDocs, query, orderBy, addDoc, doc, updateDoc, deleteDoc, where, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+    const config = window.FIREBASE_CONFIG || {};
+    if (config.apiKey && config.authDomain && config.projectId) {
+      const app = initializeApp(config);
+      const auth = getAuth(app);
+      const firestore = getFirestore(app);
+      window.firebaseApp = app;
+      window.firebaseAuth = auth;
+      window.firebaseAuthMethods = { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail };
+      // HR screens use the same authenticated Firebase project as this page.
+      // This small adapter preserves the existing .from(...)-style HR calls.
+      const execute = async (table, operation, payload, filters, sort, conflict) => {
+        try {
+          const base = collection(firestore, table);
+          let constraints = (filters || []).filter(([field]) => field !== 'id').map(([field, value]) => where(field, '==', value));
+          if (sort) constraints.push(orderBy(sort.field, sort.ascending ? 'asc' : 'desc'));
+          const snapshot = await getDocs(constraints.length ? query(base, ...constraints) : base);
+          let matches = snapshot.docs;
+          for (const [field, value] of (filters || []).filter(([name]) => name === 'id')) {
+            matches = matches.filter(item => item.id === value);
+          }
+          if (operation === 'upsert' && conflict) {
+            const fields = conflict.split(',').map(field => field.trim());
+            matches = snapshot.docs.filter(item => fields.every(field => item.data()[field] === payload[field]));
+          }
+          if (operation === 'select') return { data: matches.map(item => ({ id: item.id, ...item.data() })), error: null };
+          if (operation === 'insert') {
+            const rows = Array.isArray(payload) ? payload : [payload];
+            const data = await Promise.all(rows.map(async row => {
+              const { id, ...values } = row;
+              const ref = id ? doc(firestore, table, id) : await addDoc(base, values);
+              if (id) await setDoc(ref, values);
+              return { id: ref.id, ...values };
+            }));
+            return { data: data[0], error: null };
+          }
+          if (operation === 'upsert') {
+            if (matches.length) {
+              await updateDoc(matches[0].ref, payload);
+              return { data: { id: matches[0].id, ...matches[0].data(), ...payload }, error: null };
+            }
+            const ref = await addDoc(base, payload);
+            return { data: { id: ref.id, ...payload }, error: null };
+          }
+          if (operation === 'update') {
+            await Promise.all(matches.map(item => updateDoc(item.ref, payload)));
+            return { data: matches.length ? { id: matches[0].id, ...matches[0].data(), ...payload } : null, error: null };
+          }
+          if (operation === 'delete') {
+            await Promise.all(matches.map(item => deleteDoc(item.ref)));
+            return { data: null, error: null };
+          }
+          return { data: null, error: new Error('Thao tác dữ liệu không hợp lệ.') };
+        } catch (error) { return { data: null, error }; }
+      };
+      const client = {
+        auth: {
+          getSession: async () => new Promise(resolve => {
+            const unsubscribe = onAuthStateChanged(auth, user => { unsubscribe(); resolve({ data: { session: user ? { user } : null } }); });
+          }),
+          onAuthStateChange: callback => ({ data: { subscription: { unsubscribe: onAuthStateChanged(auth, user => callback('SIGNED_IN', user ? { user } : null)) } } })
+        },
+        from: table => {
+          let operation = 'select', payload = null, filters = [], sort = null, conflict = null;
+          const builder = {
+            select: () => { if (operation === 'insert' || operation === 'update') return builder; operation = 'select'; return builder; },
+            order: (field, options = {}) => { sort = { field, ascending: options.ascending !== false }; return builder; },
+            insert: value => { operation = 'insert'; payload = value; return builder; },
+            update: value => { operation = 'update'; payload = value; return builder; },
+            delete: () => { operation = 'delete'; return builder; },
+            upsert: (value, options = {}) => { operation = 'upsert'; payload = value; conflict = options.onConflict || null; return builder; },
+            eq: (field, value) => { filters.push([field, value]); return builder; },
+            single: async () => { const result = await execute(table, operation, payload, filters, sort, conflict); return { ...result, data: Array.isArray(result.data) ? result.data[0] || null : result.data }; },
+            then: (resolve, reject) => execute(table, operation, payload, filters, sort, conflict).then(resolve, reject)
+          };
+          return builder;
+        }
+      };
+      window.supabaseClient = window.supabaseDb = client;
+    } else {
+      console.error('[Firebase Config] Missing required Firebase web app configuration.');
+      window.firebaseAuth = null;
+    }
+  </script>
+
+  <!-- GSAP CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body class="admin-body">
+
+  <!-- ============================================================ -->
+  <!-- 1. LOGIN SCREEN -->
+  <!-- ============================================================ -->
+  <section class="admin-login-screen" id="admin-login-section">
+    <div class="admin-login-card">
+      <div class="admin-brand-header">
+        <img src="assets/logo_icon.jpg" alt="Mocha & Miso" class="admin-brand-logo" />
+        <h1 class="admin-brand-title">Cổng quản lý nhân sự</h1>
+        <p class="admin-brand-sub">Mocha &amp; Miso · Cà phê thủ công</p>
+      </div>
+
+      <form class="reservation-form" id="admin-login-form" novalidate>
+        <div class="form-group">
+          <input type="email" id="admin-email" class="form-input" placeholder=" " required autocomplete="username" />
+          <label for="admin-email" class="form-label form-label--up">Email quản trị</label>
+          <span class="form-line"></span>
+        </div>
+
+        <div class="form-group">
+          <input type="password" id="admin-password" class="form-input" placeholder=" " required
+            autocomplete="current-password" />
+          <label for="admin-password" class="form-label form-label--up">Mật khẩu</label>
+          <span class="form-line"></span>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="admin-login-submit">
+          <span class="btn-text">Đăng nhập</span>
+        </button>
+        <button type="button" class="admin-forgot-password" id="admin-forgot-password">Quên mật khẩu?</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 2. DASHBOARD VIEW (Hidden until Auth) -->
+  <!-- ============================================================ -->
+  <div id="admin-dashboard-section" hidden>
+
+    <!-- Top Header Navigation -->
+    <header class="admin-header">
+      <div class="container admin-header-inner">
+        <div class="admin-logo-group">
+          <h2 class="admin-header-title">Mocha &amp; Miso</h2>
+          <span class="admin-badge">Quản lý nhân sự</span>
+        </div>
+        <div class="admin-user-info">
+          <a class="btn-logout" href="admin.html">Trang quản trị</a>
+          <span class="admin-email-text" id="logged-admin-email">lehwangduong@gmail.com</span>
+          <a class="btn-logout" href="inventory.html">Quản lý kho</a>
+          <button type="button" class="btn-logout" id="admin-logout-btn">Đăng xuất</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Nội dung riêng của trang nhân sự -->
+    <main class="admin-main container">
+      <div data-hr-mount></div>
+    </main>
+  </div>
+
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <!-- Scripts -->
+  <script src="js/main.js" defer></script>
+  <script src="admin.js" defer></script>
+  <script src="employee-management.js" defer></script>
+  <script src="staff-operations.js" defer></script>
+</body>
+
+</html>
