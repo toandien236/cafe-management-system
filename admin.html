@@ -217,6 +217,7 @@
               <div class="stat-card"><span class="stat-label">Lượt đặt bàn</span><strong id="care-reservation-count">0</strong></div>
               <div class="stat-card"><span class="stat-label">Đặt bàn gần nhất</span><strong id="care-last-reservation">Chưa có</strong></div>
             </div>
+            <p id="customer-load-notice" class="customer-load-notice" role="status" hidden></p>
 
             <div class="admin-table-card">
               <div class="admin-table-wrap">
@@ -348,47 +349,43 @@
     }
   </script>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="js/firebase-config.js"></script>
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import {
-      getAuth,
-      onAuthStateChanged,
-      signInWithEmailAndPassword,
-      signOut,
-      sendPasswordResetEmail
-    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import {
-      getFirestore,
-      collection,
-      onSnapshot,
-      doc,
-      updateDoc,
-      deleteDoc
-    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-
+  <script>
     const config = window.FIREBASE_CONFIG || {};
     if (config.apiKey && config.authDomain && config.projectId) {
-      const app = initializeApp(config);
-      const auth = getAuth(app);
-      const db = getFirestore(app);
-      window.firebaseApp = app;
-      window.firebaseAuth = auth;
-      window.firebaseDb = db;
-      window.firebaseAuthMethods = {
-        onAuthStateChanged,
-        signInWithEmailAndPassword,
-        signOut,
-        sendPasswordResetEmail
-      };
-      window.firebaseFirestoreMethods = { collection, onSnapshot, doc, updateDoc, deleteDoc };
+      try {
+        const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(config);
+        window.firebaseApp = app;
+        window.firebaseAuth = firebase.auth(app);
+        window.firebaseDb = firebase.firestore(app);
+        window.db = window.firebaseDb;
+      } catch (error) {
+        console.error('[Firebase Admin Setup Error]', error);
+        window.firebaseAuth = null;
+        window.firebaseDb = null;
+        window.db = null;
+      }
     } else {
       console.error('[Firebase Config] Missing required Firebase web app configuration.');
       window.firebaseAuth = null;
       window.firebaseDb = null;
+      window.db = null;
     }
+    window.firebaseAuthMethods = {
+      onAuthStateChanged: (auth, callback, onError) => auth.onAuthStateChanged(callback, onError),
+      signInWithEmailAndPassword: (auth, email, password) => auth.signInWithEmailAndPassword(email, password),
+      signOut: auth => auth.signOut(),
+      sendPasswordResetEmail: (auth, email) => auth.sendPasswordResetEmail(email)
+    };
+    window.firebaseFirestoreMethods = {
+      doc: (db, collectionName, id) => db.collection(collectionName).doc(id),
+      updateDoc: (reference, data) => reference.update(data)
+    };
   </script>
-  <script src="admin.js?v=auth-view-switch" defer></script>
+  <script src="admin.js?v=firestore-compat-customer-care-20261019" defer></script>
 </body>
 
 </html>

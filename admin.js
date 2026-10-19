@@ -646,7 +646,15 @@ function getCustomerReservationPhone(reservation) {
 function getReservationSortKey(reservation) {
   const date = String(reservation.date || '');
   const time = String(reservation.time || '').replace(':', '').padStart(4, '0');
-  return `${date}T${time}|${String(reservation.createdAt || '')}`;
+  return `${date}T${time}|${String(getReservationCreatedAt(reservation)).padStart(16, '0')}`;
+}
+
+function getReservationCreatedAt(reservation) {
+  const value = reservation && (reservation.createdAt || reservation.created_at);
+  if (!value) return 0;
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function addReservationToCustomer(profile, reservation) {
@@ -800,6 +808,7 @@ function buildCustomerProfiles() {
 
   return Array.from(profilesByKey.values()).map(profile => {
     profile.reservations.sort((a, b) => getReservationSortKey(b).localeCompare(getReservationSortKey(a)));
+    profile.latestReservation = profile.reservations[0] || null;
     const names = Array.from(new Set([
       ...profile.reservations.map(getCustomerReservationName),
       ...profile.customerSnapshots.map(customer => String(customer.name || '').trim())
@@ -861,7 +870,9 @@ function getVisitLoadMessage() {
 
 function renderCustomers() {
   const tbody = document.getElementById('customers-tbody');
-  const countEl = document.getElementById('customer-count');
+  const customerCountEl = document.getElementById('care-customer-count');
+  const reservationCountEl = document.getElementById('care-reservation-count');
+  const latestReservationEl = document.getElementById('care-last-reservation');
   const noticeEl = document.getElementById('customer-load-notice');
   if (!tbody) return;
 
@@ -875,16 +886,38 @@ function renderCustomers() {
     if (visitLoadState === 'error') notices.push('Không tải được lịch sử lượt ghé.');
     noticeEl.textContent = notices.join(' ');
     noticeEl.hidden = notices.length === 0;
-    noticeEl.classList.toggle('customer-load-notice--error', reservationLoadState === 'error' || visitLoadState === 'error');
+    if (noticeEl.classList) {
+      noticeEl.classList.toggle('customer-load-notice--error', reservationLoadState === 'error' || visitLoadState === 'error');
+    }
   }
 
   if (reservationLoadState === 'loading') {
-    if (countEl) countEl.textContent = 'Đang tải...';
-    tbody.innerHTML = '<tr><td colspan="7" class="customer-empty-state">Đang tải hồ sơ khách hàng...</td></tr>';
+    if (customerCountEl) customerCountEl.textContent = '…';
+    if (reservationCountEl) reservationCountEl.textContent = '…';
+    if (latestReservationEl) latestReservationEl.textContent = 'Đang tải…';
+    tbody.innerHTML = '<tr><td colspan="6" class="customer-care-empty">Đang tải hồ sơ khách…</td></tr>';
     return;
   }
 
   const profiles = buildCustomerProfiles();
+  const reservationCount = allReservations.length;
+  const latestReservation = allReservations.reduce((latest, reservation) => (
+    !latest || getReservationCreatedAt(reservation) > getReservationCreatedAt(latest)
+      ? reservation
+      : latest
+  ), null);
+  if (customerCountEl) {
+    customerCountEl.textContent = reservationLoadState === 'local'
+      ? `${profiles.length} · trên thiết bị`
+      : String(profiles.length);
+  }
+  if (reservationCountEl) reservationCountEl.textContent = String(reservationCount);
+  if (latestReservationEl) {
+    latestReservationEl.textContent = latestReservation
+      ? String(latestReservation.date || 'Chưa có ngày')
+      : 'Chưa có';
+  }
+
   const normalizedQuery = normalizeCustomerSearch(customerSearchQuery);
   const queryDigits = normalizeCustomerPhone(customerSearchQuery);
   const filtered = profiles.filter(profile => {
@@ -895,11 +928,6 @@ function renderCustomers() {
     return textMatch || phoneMatch;
   });
 
-  if (countEl) {
-    countEl.textContent = reservationLoadState === 'local'
-      ? `${profiles.length} khách hàng · trên thiết bị`
-      : `${profiles.length} khách hàng`;
-  }
   if (filtered.length === 0) {
     let message = 'Không tìm thấy khách hàng phù hợp.';
     if (!profiles.length) {
@@ -909,7 +937,7 @@ function renderCustomers() {
           ? 'Chưa có dữ liệu đặt bàn trên thiết bị này.'
           : 'Chưa có dữ liệu đặt bàn để tổng hợp hồ sơ.';
     }
-    tbody.innerHTML = `<tr><td colspan="7" class="customer-empty-state">${message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="customer-care-empty">${message}</td></tr>`;
   } else {
     tbody.innerHTML = filtered.map(profile => {
       const emails = profile.emails.length
@@ -918,9 +946,6 @@ function renderCustomers() {
       const phones = profile.phones.length
         ? profile.phones.map(phone => `<span class="customer-contact-line">${escapeHtml(phone)}</span>`).join('')
         : '<span class="customer-contact-line">Chưa cung cấp</span>';
-      const latestVisit = visitLoadState === 'ready'
-        ? (profile.latestVisit ? formatVisitDate(profile.latestVisit) : 'Chưa ghi nhận')
-        : getVisitLoadMessage();
       const duplicateHint = profile.ambiguousPhoneMatch
         ? '<span class="customer-contact-line">Số điện thoại có hồ sơ email khác; chưa tự gộp</span>'
         : '';
@@ -930,8 +955,7 @@ function renderCustomers() {
           <td>${emails}</td>
           <td>${phones}</td>
           <td>${profile.reservations.length}</td>
-          <td>${visitLoadState === 'ready' ? profile.visits.length : '—'}</td>
-          <td>${escapeHtml(latestVisit)}</td>
+          <td>${escapeHtml(profile.latestReservation && profile.latestReservation.date || 'Chưa có')}</td>
           <td><button type="button" class="customer-open-profile" data-customer-key="${escapeHtml(profile.key)}">Xem hồ sơ</button></td>
         </tr>
       `;

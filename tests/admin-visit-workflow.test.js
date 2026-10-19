@@ -578,7 +578,9 @@ test('keeps the admin rule private and normalizes the email claim', () => {
 });
 
 test('admin actions have click handlers and the page loads the current script version', () => {
-  assert.match(adminHtml, /admin\.js\?v=auth-view-switch/);
+  assert.match(adminHtml, /firebase-firestore-compat\.js/);
+  assert.match(adminHtml, /firebase\.firestore\(app\)/);
+  assert.match(adminHtml, /admin\.js\?v=firestore-compat-customer-care-20261019/);
   assert.match(adminSource, /bookingsBody\.addEventListener\('click'/);
   assert.match(adminSource, /customersBody\.addEventListener\('click'/);
   assert.match(adminSource, /closest\('\[data-visit-res-id\]'\)/);
