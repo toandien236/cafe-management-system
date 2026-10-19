@@ -169,7 +169,7 @@
     const saveButton = document.getElementById('employee-save-btn');
     saveButton.disabled = true;
     try {
-      if (!db || !methods) throw new Error('Firebase chưa sẵn sàng');
+      if (!db || !methods || storageMode === 'local') throw new Error('Firebase chưa sẵn sàng');
       const payload = rowData(employee);
       if (id && oldEmployee && !oldEmployee.pending_sync) {
         await methods.updateDoc(methods.doc(db, 'employees', id), payload);
@@ -187,7 +187,7 @@
       showEmployeeToast(id ? 'Đã cập nhật nhân viên.' : 'Đã thêm nhân viên.', 'success');
     } catch (error) {
       if (db && error?.code) {
-        showEmployeeToast(`Không lưu được nhân viên lên Firebase: ${error.message || 'lỗi từ Firestore'}`, 'error');
+        showEmployeeToast(`Không lưu được nhân viên: ${error.message || 'lỗi từ Firebase'}`, 'error');
         return;
       }
       storageMode = 'local';
@@ -216,7 +216,7 @@
     const db = window.firebaseDb;
     const methods = window.firebaseFirestoreMethods;
     try {
-      if (!db || !methods || employee.pending_sync) throw new Error('Firebase chưa sẵn sàng');
+      if (!db || !methods || storageMode === 'local' || employee.pending_sync) throw new Error('Firebase chưa sẵn sàng');
       const related = await Promise.all(['employee_shifts', 'employee_attendance', 'employee_payroll']
         .map(name => methods.getDocs(methods.collection(db, name))));
       if (related.some(snapshot => snapshot.docs.some(item => item.data().employee_id === id))) {
@@ -227,7 +227,7 @@
       showEmployeeToast('Đã xóa nhân viên.', 'success');
     } catch (error) {
       if (db && error?.code) {
-        showEmployeeToast(`Không xóa được nhân viên trên Firebase: ${error.message || 'lỗi từ Firestore'}`, 'error');
+        showEmployeeToast(`Không xóa được nhân viên: ${error.message || 'lỗi từ Firebase'}`, 'error');
         return;
       }
       storageMode = 'local';
@@ -284,10 +284,10 @@
           await syncPending(db, methods, localPending, deletedIds);
           const refreshed = await methods.getDocs(methods.collection(db, 'employees'));
           employees = refreshed.docs.map(item => ({ ...item.data(), id: item.id }));
-          showEmployeeToast('Đã đồng bộ dữ liệu nhân viên với Firebase.', 'success');
         } finally {
           syncing = false;
         }
+        showEmployeeToast('Đã đồng bộ dữ liệu nhân viên với Firebase.', 'success');
       }
       storageMode = 'firebase';
       writeEmployees();
@@ -299,7 +299,7 @@
       employees = readEmployees();
       setStorageNotice();
       renderEmployees();
-      showEmployeeToast('Chưa tải được nhân viên từ Firebase. Dữ liệu local vẫn được giữ.', 'error');
+      showEmployeeToast(`Chưa tải được nhân viên từ Firebase: ${error.message || 'lỗi kết nối'}. Dữ liệu trên thiết bị vẫn được giữ.`, 'error');
       console.error('Employee Firebase error:', error);
     }
   }

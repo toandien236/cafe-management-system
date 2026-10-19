@@ -28,9 +28,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
 
-  <!-- Supabase JS Client SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase.js" defer></script>
+  <!-- Firebase SDKs (Compat version for global firebase object) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
 
   <!-- GSAP + ScrollTrigger + SplitType + Lenis CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
@@ -822,18 +823,18 @@
         <div class="reservation-form-wrap reveal-up">
           <form class="reservation-form" id="reservation-form" novalidate aria-label="Biểu mẫu đặt bàn">
             <div class="form-group">
-              <input type="text" id="res-name" name="name" class="form-input" placeholder=" " required autocomplete="name" />
+              <input type="text" id="res-name" name="name" class="form-input" placeholder=" " required maxlength="120" autocomplete="name" />
               <label for="res-name" class="form-label">Họ và tên</label>
               <span class="form-line"></span>
             </div>
             <div class="form-row">
               <div class="form-group">
-                <input type="email" id="res-email" name="email" class="form-input" placeholder=" " required autocomplete="email" />
+                <input type="email" id="res-email" name="email" class="form-input" placeholder=" " required maxlength="254" autocomplete="email" />
                 <label for="res-email" class="form-label">Địa chỉ email</label>
                 <span class="form-line"></span>
               </div>
               <div class="form-group">
-                <input type="tel" id="res-phone" name="phone" class="form-input" placeholder=" " autocomplete="tel" />
+                <input type="tel" id="res-phone" name="phone" class="form-input" placeholder=" " maxlength="40" autocomplete="tel" />
                 <label for="res-phone" class="form-label">Số điện thoại (không bắt buộc)</label>
                 <span class="form-line"></span>
               </div>
@@ -880,7 +881,7 @@
               <input type="hidden" id="res-guests" name="guests" value="2" />
             </div>
             <div class="form-group">
-              <textarea id="res-notes" name="notes" class="form-input form-textarea" placeholder=" " rows="3"></textarea>
+              <textarea id="res-notes" name="notes" class="form-input form-textarea" placeholder=" " rows="3" maxlength="1000"></textarea>
               <label for="res-notes" class="form-label">Yêu cầu thêm (không bắt buộc)</label>
               <span class="form-line"></span>
             </div>
@@ -894,7 +895,7 @@
           <div class="form-success" id="form-success" hidden aria-live="polite">
             <div class="form-success-icon" aria-hidden="true">✓</div>
             <h3>Đã nhận yêu cầu đặt bàn!</h3>
-            <p>Cảm ơn bạn. Chúng tôi sẽ xác nhận bàn trong vòng 30 phút. Hẹn sớm gặp bạn.</p>
+            <p id="form-success-message">Yêu cầu đặt bàn đã được lưu thành công.</p>
             <button type="button" class="btn btn-outline" id="res-another-btn" style="margin-top:24px; font-size:13px; padding:10px 22px;">Đặt thêm bàn</button>
           </div>
         </div>
@@ -1062,8 +1063,10 @@
     }
   </script>
 
-  <!-- Main JS -->
-  <script src="js/main.js" defer></script>
+  <!-- Firebase configuration and customer reservation workflow -->
+  <script src="js/firebase-config.js"></script>
+  <script src="firebase.js?v=4" defer></script>
+  <script src="main.js?v=8" defer></script>
 
 </body>
 </html>

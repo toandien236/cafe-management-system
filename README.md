@@ -96,10 +96,16 @@ Service-role key và Firebase service-account chỉ dùng trên máy chạy migr
 
 Email đặt bàn chỉ hoạt động khi Service ID, Template ID và Public Key được cấu hình trong `EMAILJS_CONFIG` tại [`index.html`](./index.html). Đây là public key phía trình duyệt; không đưa private key hoặc thông tin bí mật vào client.
 
+## Chăm sóc khách hàng và lượt ghé
+
+- Hướng dẫn sử dụng hồ sơ khách hàng và ghi nhận lượt ghé: [CUSTOMER_CARE_GUIDE.md](./CUSTOMER_CARE_GUIDE.md)
+- Các tình huống kiểm thử và giới hạn tích hợp: [CUSTOMER_CARE_TEST_PLAN.md](./CUSTOMER_CARE_TEST_PLAN.md)
+- Quy tắc Firestore cho đặt bàn và lượt ghé nằm trong [firestore.rules](./firestore.rules).
+
 ## Kiểm thử
 
 ```powershell
-node --test tests/customer-care.test.js tests/table-orders.test.js tests/revenue.test.js tests/hr-auth.test.js tests/admin-auth.test.js tests/firebase-migration.test.js
+node --test tests/*.test.js
 ```
 
-Các test kiểm tra Firebase Auth của cổng quản trị và HR, ghi đơn QR vào Firestore, hồ sơ khách, tổng hợp doanh thu và mapping migration.
+Các test bao gồm xác thực Firebase, nghiệp vụ khách hàng, gọi món QR, doanh thu, HR và các luồng phân bàn/chăm sóc khách hàng. Chúng dùng mock/offline; không thay thế kiểm thử quyền truy cập trên Firebase/Supabase thật.
