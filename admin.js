@@ -255,11 +255,11 @@ function initAdminAuth(authInstance) {
       allReservations = [];
       allVisits = [];
       allOrders = [];
+      currentOrdersPage = 1;
       updateStats();
       renderTable();
       renderCustomers();
-      const ordersBody = document.getElementById('orders-tbody');
-      if (ordersBody) ordersBody.textContent = '';
+      renderOrders();
 
       if (user) {
         await firebaseSignOut(authInstance);
@@ -367,6 +367,8 @@ let activeFilter    = 'all';
 let searchQuery     = '';
 let allOrders       = [];
 let ordersUnsubscribe = null;
+const ORDERS_PER_PAGE = 15;
+let currentOrdersPage = 1;
 let allVisits       = [];
 let visitLoadState   = 'loading';
 let reservationLoadState = 'loading';
@@ -1200,7 +1202,10 @@ function loadOrders() {
   if (!tbody) return;
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
   if (!dbInstance || typeof dbInstance.collection !== 'function') {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px;">Chưa kết nối được hệ thống đơn gọi món.</td></tr>';
+    allOrders = [];
+    currentOrdersPage = 1;
+    renderOrders();
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px;">Chưa kết nối được hệ thống đơn gọi món.</td></tr>';
     renderRevenueLoadMessage('Chưa kết nối được hệ thống đơn gọi món.');
     return;
   }
@@ -1210,13 +1215,17 @@ function loadOrders() {
     if (!adminSessionActive) return;
     allOrders = [];
     snapshot.forEach(doc => allOrders.push({ id: doc.id, ...doc.data() }));
-    allOrders.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    allOrders.sort((a, b) => getOrderCreatedAt(b) - getOrderCreatedAt(a));
     renderOrders();
     renderRevenue();
   }, (error) => {
     if (!adminSessionActive) return;
     console.warn('Orders snapshot notice:', error);
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px;">Không thể tải đơn gọi món.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px;">Không thể tải đơn gọi món.</td></tr>';
+    const summary = document.getElementById('orders-summary');
+    const pagination = document.getElementById('orders-pagination');
+    if (summary) summary.textContent = 'Không thể tải danh sách đơn gọi món.';
+    if (pagination) pagination.hidden = true;
     renderRevenueLoadMessage('Không thể tải dữ liệu doanh thu từ Firestore.');
   });
 }
@@ -1235,6 +1244,14 @@ function getOrderAmountVnd(value, items) {
     ? itemPrices.every(price => Math.abs(price) < 1000)
     : Math.abs(amount) < 1000;
   return amountUsesThousands ? amount * 1000 : amount;
+}
+
+function getOrderCreatedAt(order) {
+  const value = order && (order.createdAt || order.created_at);
+  if (!value) return 0;
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function formatVnd(amount) {
@@ -1318,6 +1335,14 @@ function renderRevenue() {
     }).join('');
 }
 
+window.changeOrdersPage = function(direction) {
+  const nextPage = currentOrdersPage + Number(direction);
+  const pageCount = Math.ceil(allOrders.length / ORDERS_PER_PAGE);
+  if (nextPage < 1 || nextPage > pageCount) return;
+  currentOrdersPage = nextPage;
+  renderOrders();
+};
+
 function getOrderStatusLabel(status) {
   return { new: 'Mới', preparing: 'Đang làm', served: 'Đã phục vụ', completed: 'Hoàn tất', cancelled: 'Đã hủy' }[status] || status;
 }
@@ -1325,17 +1350,38 @@ function getOrderStatusLabel(status) {
 function renderOrders() {
   const tbody = document.getElementById('orders-tbody');
   if (!tbody) return;
+  const summary = document.getElementById('orders-summary');
+  const pagination = document.getElementById('orders-pagination');
+  const pageLabel = document.getElementById('orders-page-label');
+  const previousButton = document.getElementById('orders-previous-page');
+  const nextButton = document.getElementById('orders-next-page');
+  const activeOrderCount = allOrders.filter(order => {
+    const status = String(order.status || 'new').toLowerCase();
+    return status === 'new' || status === 'preparing' || status === 'in_progress';
+  }).length;
+  if (summary) {
+    summary.textContent = `Đơn đang xử lý: ${activeOrderCount} · Tổng đơn: ${allOrders.length}`;
+  }
+
   if (allOrders.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--warm-gray);">Chưa có đơn gọi món.</td></tr>';
+    currentOrdersPage = 1;
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--warm-gray);">Chưa có đơn gọi món.</td></tr>';
+    if (pagination) pagination.hidden = true;
     return;
   }
 
-  tbody.innerHTML = allOrders.map(order => {
+  const orderedOrders = [...allOrders].sort((a, b) => getOrderCreatedAt(b) - getOrderCreatedAt(a));
+  const pageCount = Math.ceil(orderedOrders.length / ORDERS_PER_PAGE);
+  currentOrdersPage = Math.min(Math.max(1, currentOrdersPage), pageCount);
+  const firstOrderNumber = (currentOrdersPage - 1) * ORDERS_PER_PAGE;
+  const pageOrders = orderedOrders.slice(firstOrderNumber, firstOrderNumber + ORDERS_PER_PAGE);
+  tbody.innerHTML = pageOrders.map((order, index) => {
     const items = Array.isArray(order.items) ? order.items : [];
     const status = order.status || 'new';
     const paymentStatus = order.paymentStatus || 'unpaid';
     return `
       <tr>
+        <td>${firstOrderNumber + index + 1}</td>
         <td><strong>${escapeHtml(order.orderId || order.id)}</strong><br><span class="order-table-number">Bàn ${escapeHtml(order.tableNumber || '--')}</span></td>
         <td>${items.map(item => `<div>${escapeHtml(item.name)} <strong>×${Number(item.quantity) || 0}</strong></div>`).join('')}${order.note ? `<small class="order-note">${escapeHtml(order.note)}</small>` : ''}</td>
         <td><strong>${formatOrderMoney(order.total, items)}</strong></td>
@@ -1349,6 +1395,15 @@ function renderOrders() {
         </div></td>
       </tr>`;
   }).join('');
+  if (pagination) pagination.hidden = pageCount <= 1;
+  if (pageLabel) {
+    const lastOrderNumber = Math.min(firstOrderNumber + ORDERS_PER_PAGE, orderedOrders.length);
+    pageLabel.textContent = `${firstOrderNumber + 1}–${lastOrderNumber} / ${orderedOrders.length} đơn · Trang ${currentOrdersPage}/${pageCount}`;
+  }
+  if (previousButton) previousButton.disabled = currentOrdersPage === 1;
+  if (nextButton) nextButton.disabled = currentOrdersPage === pageCount;
+  const scrollContainer = document.getElementById('orders-scroll-container');
+  if (scrollContainer) scrollContainer.scrollTop = 0;
 }
 
 window.updateOrderStatus = function(id, status) {

@@ -176,14 +176,17 @@
               <div>
                 <p class="admin-section-eyebrow">Đơn tại quán</p>
                 <h2 class="admin-section-title" id="admin-orders-title">Đơn gọi món theo bàn</h2>
+                <p class="admin-orders-summary" id="orders-summary" aria-live="polite">Đang tải đơn gọi món…</p>
               </div>
               <a class="btn btn-outline admin-top-link" href="qr.html">Tạo mã QR bàn</a>
             </div>
             <div class="admin-table-card">
-              <div class="admin-table-wrap">
+              <div class="admin-table-wrap orders-scroll-container" id="orders-scroll-container" tabindex="0"
+                aria-label="Danh sách đơn gọi món, cuộn để xem tối đa 15 đơn trên trang">
                 <table class="admin-table admin-orders-table">
                   <thead>
                     <tr>
+                      <th scope="col">STT</th>
                       <th>Mã đơn / Bàn</th>
                       <th>Món gọi</th>
                       <th>Tổng tiền</th>
@@ -193,10 +196,19 @@
                     </tr>
                   </thead>
                   <tbody id="orders-tbody">
-                    <tr><td colspan="6" style="text-align:center; padding:30px;">Đang tải đơn gọi món…</td></tr>
+                    <tr><td colspan="7" style="text-align:center; padding:30px;">Đang tải đơn gọi món…</td></tr>
                   </tbody>
                 </table>
               </div>
+              <nav class="orders-pagination" id="orders-pagination" aria-label="Phân trang đơn gọi món" hidden>
+                <span id="orders-page-label" aria-live="polite"></span>
+                <div class="orders-pagination-controls">
+                  <button type="button" id="orders-previous-page" class="btn btn-outline orders-page-button"
+                    onclick="changeOrdersPage(-1)" aria-label="Trang đơn trước">Trước</button>
+                  <button type="button" id="orders-next-page" class="btn btn-outline orders-page-button"
+                    onclick="changeOrdersPage(1)" aria-label="Trang đơn tiếp theo">Tiếp</button>
+                </div>
+              </nav>
             </div>
           </section>
 
@@ -385,7 +397,7 @@
       updateDoc: (reference, data) => reference.update(data)
     };
   </script>
-  <script src="admin.js?v=revenue-live-update-20261019" defer></script>
+  <script src="admin.js?v=orders-pagination-20261019" defer></script>
 </body>
 
 </html>

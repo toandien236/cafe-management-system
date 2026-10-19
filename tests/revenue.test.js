@@ -118,3 +118,48 @@ test('Firestore order snapshots refresh revenue totals and payment history', () 
   assert.match(elements.get('revenue-tbody').innerHTML, /ORD-PAID · Bàn 03/);
   assert.doesNotMatch(elements.get('revenue-tbody').innerHTML, /ORD-UNPAID/);
 });
+
+test('table orders show 15 numbered orders per scrollable page and count active orders', () => {
+  const { context, elements } = loadAdminScript();
+  context.ordersForTest = Array.from({ length: 32 }, (_, index) => {
+    const number = index + 1;
+    const status = {
+      32: 'new',
+      31: 'preparing',
+      30: 'in_progress',
+      29: 'served',
+      28: 'completed',
+      27: 'cancelled'
+    }[number] || 'completed';
+    return {
+      id: `order-${number}`,
+      orderId: `ORD-${number}`,
+      status,
+      createdAt: new Date(2026, 0, 1, 0, number).toISOString()
+    };
+  });
+  vm.runInContext('allOrders = ordersForTest; renderOrders()', context);
+
+  const rowsOnPage = () => (elements.get('orders-tbody').innerHTML.match(/<tr>/g) || []).length;
+  assert.equal(rowsOnPage(), 15);
+  assert.match(elements.get('orders-tbody').innerHTML, /<td>1<\/td>\s*<td><strong>ORD-32<\/strong>/);
+  assert.match(elements.get('orders-tbody').innerHTML, /<td>15<\/td>\s*<td><strong>ORD-18<\/strong>/);
+  assert.equal(elements.get('orders-summary').textContent, 'Đơn đang xử lý: 3 · Tổng đơn: 32');
+  assert.equal(elements.get('orders-page-label').textContent, '1–15 / 32 đơn · Trang 1/3');
+  assert.equal(elements.get('orders-previous-page').disabled, true);
+  assert.equal(elements.get('orders-next-page').disabled, false);
+
+  context.window.changeOrdersPage(1);
+  assert.equal(rowsOnPage(), 15);
+  assert.match(elements.get('orders-tbody').innerHTML, /<td>16<\/td>\s*<td><strong>ORD-17<\/strong>/);
+  assert.equal(elements.get('orders-page-label').textContent, '16–30 / 32 đơn · Trang 2/3');
+
+  context.window.changeOrdersPage(1);
+  assert.equal(rowsOnPage(), 2);
+  assert.match(elements.get('orders-tbody').innerHTML, /<td>31<\/td>\s*<td><strong>ORD-2<\/strong>/);
+  assert.equal(elements.get('orders-page-label').textContent, '31–32 / 32 đơn · Trang 3/3');
+  assert.equal(elements.get('orders-next-page').disabled, true);
+
+  context.window.changeOrdersPage(-1);
+  assert.equal(elements.get('orders-page-label').textContent, '16–30 / 32 đơn · Trang 2/3');
+});
