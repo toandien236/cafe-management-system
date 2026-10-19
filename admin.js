@@ -371,6 +371,7 @@ const ORDERS_PER_PAGE = 15;
 let currentOrdersPage = 1;
 let ordersCalendarTarget = '';
 let ordersCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let customerSearchDate = '';
 let allVisits       = [];
 let visitLoadState   = 'loading';
 let reservationLoadState = 'loading';
@@ -421,6 +422,14 @@ function initAdminDashboard() {
     });
   }
 
+  const customerDateFilter = document.getElementById('customer-date-filter');
+  if (customerDateFilter) {
+    customerDateFilter.addEventListener('change', (e) => {
+      customerSearchDate = e.target.value;
+      renderCustomers();
+    });
+  }
+
   const customersBody = document.getElementById('customers-tbody');
   if (customersBody) {
     customersBody.addEventListener('click', (event) => {
@@ -433,6 +442,8 @@ function initAdminDashboard() {
       if (visitButton) recordReservationVisit(visitButton.dataset.visitResId);
     });
   }
+
+  window.addEventListener('resize', updateCustomerListViewport);
 
   const bookingsBody = document.getElementById('bookings-tbody');
   if (bookingsBody) {
@@ -658,6 +669,39 @@ function getCustomerReservationPhone(reservation) {
   return String(reservation.phone || '').trim();
 }
 
+function getReservationDateKey(value) {
+  if (value && typeof value.toDate === 'function') value = value.toDate();
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.getTime())) return '';
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+  }
+
+  const text = String(value || '').trim();
+  const yearFirst = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (yearFirst) {
+    return formatReservationDateKey(Number(yearFirst[1]), Number(yearFirst[2]), Number(yearFirst[3]));
+  }
+
+  const dayFirst = text.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:$|[ T])/);
+  if (dayFirst) {
+    let first = Number(dayFirst[1]);
+    let second = Number(dayFirst[2]);
+    const year = Number(dayFirst[3]);
+    if (first <= 12 && second > 12) [first, second] = [second, first];
+    return formatReservationDateKey(year, second, first);
+  }
+
+  const parsed = new Date(text);
+  if (!Number.isFinite(parsed.getTime())) return '';
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+}
+
+function formatReservationDateKey(year, month, day) {
+  const parsed = new Date(year, month - 1, day);
+  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return '';
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 function getReservationSortKey(reservation) {
   const date = String(reservation.date || '');
   const time = String(reservation.time || '').replace(':', '').padStart(4, '0');
@@ -693,6 +737,48 @@ function buildVisitCustomerSnapshot(reservation, reservationId) {
     phone,
     phoneNormalized
   };
+}
+
+function buildVisitReservationSnapshot(reservation) {
+  const guests = Number(reservation && reservation.guests);
+  return {
+    date: String((reservation && reservation.date) || '').slice(0, 30),
+    time: String((reservation && reservation.time) || '').slice(0, 20),
+    guests: Number.isInteger(guests) && guests >= 0 && guests <= 12 ? guests : 0,
+    notes: String((reservation && (reservation.specialRequest || reservation.notes)) || '').slice(0, 1000),
+    status: String((reservation && reservation.status) || 'confirmed').slice(0, 30)
+  };
+}
+
+function isValidVisitReservationSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return false;
+  const keys = Object.keys(snapshot).sort();
+  const allowedKeys = ['date', 'guests', 'notes', 'status', 'time'];
+  return keys.length === allowedKeys.length
+    && allowedKeys.every((key, index) => keys[index] === key)
+    && typeof snapshot.date === 'string' && snapshot.date.length <= 30
+    && typeof snapshot.time === 'string' && snapshot.time.length <= 20
+    && Number.isInteger(snapshot.guests) && snapshot.guests >= 0 && snapshot.guests <= 12
+    && typeof snapshot.notes === 'string' && snapshot.notes.length <= 1000
+    && typeof snapshot.status === 'string' && snapshot.status.length <= 30;
+}
+
+function getVisitDateKey(visit) {
+  const timestamp = getVisitDate(visit);
+  if (!timestamp) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'
+  }).formatToParts(new Date(timestamp));
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function getVisitTime(visit) {
+  const timestamp = getVisitDate(visit);
+  if (!timestamp) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Ho_Chi_Minh'
+  }).format(new Date(timestamp));
 }
 
 function isVisitCustomerSnapshotValid(customer) {
@@ -767,6 +853,7 @@ function buildCustomerProfiles() {
       reservations.forEach((reservation, index) => {
         const key = `reservation:${reservation.id || `ambiguous-phone-${phone}-${index}`}`;
         addReservationToCustomer(ensureProfile(key, true), reservation);
+  const visitProfileKeyById = new Map();
         if (reservation.id) reservationProfileKeyById.set(String(reservation.id), key);
       });
       return;
@@ -802,6 +889,7 @@ function buildCustomerProfiles() {
     if (!key && email) {
       key = `email:${email}`;
     } else if (!key && phone.length >= 7) {
+    visitProfileKeyById.set(reservationId, key);
       const owners = emailGroupsByPhone.get(phone) || new Set();
       if (owners.size === 1) {
         key = Array.from(owners)[0];
@@ -819,6 +907,40 @@ function buildCustomerProfiles() {
     const profile = ensureProfile(key, ambiguousPhoneMatch);
     profile.visits.push({ ...visit, id: visit.id || reservationId, reservationId });
     if (customer) profile.customerSnapshots.push(customer);
+  });
+
+  // Keep visit-only records discoverable in customer history after an older
+  // version of the delete action removed their reservation document.
+  visitsByReservationId.forEach((visit, reservationId) => {
+    if (reservationsById.has(reservationId)) return;
+    const customer = visit.customer && typeof visit.customer === 'object' ? visit.customer : {};
+    const storedHistory = visit.reservationHistory && typeof visit.reservationHistory === 'object'
+      ? visit.reservationHistory
+      : null;
+    const hasStoredHistory = Boolean(storedHistory && getReservationDateKey(storedHistory.date));
+    const date = hasStoredHistory
+      ? String(storedHistory.date)
+      : getVisitDateKey(visit);
+    if (!date) return;
+    const key = visitProfileKeyById.get(reservationId);
+    const profile = key && profilesByKey.get(key);
+    if (!profile) return;
+    const snapshot = hasStoredHistory ? storedHistory : {};
+    profile.reservations.push({
+      id: reservationId,
+      reservationId,
+      customerName: String(customer.name || ''),
+      name: String(customer.name || ''),
+      email: String(customer.email || ''),
+      phone: String(customer.phone || ''),
+      date,
+      time: String(snapshot.time || getVisitTime(visit)),
+      guests: Number.isInteger(Number(snapshot.guests)) ? Number(snapshot.guests) : 0,
+      specialRequest: String(snapshot.notes || ''),
+      status: String(snapshot.status || 'confirmed'),
+      createdAt: visit.recordedAt || visit.visitedAt || null,
+      isVisitHistoryFallback: !hasStoredHistory
+    });
   });
 
   return Array.from(profilesByKey.values()).map(profile => {
@@ -883,6 +1005,19 @@ function getVisitLoadMessage() {
   return 'Chưa có lượt ghé được xác nhận';
 }
 
+function updateCustomerListViewport() {
+  const tbody = document.getElementById('customers-tbody');
+  const viewport = tbody && tbody.closest('.customer-care-list-scroll');
+  const table = tbody && tbody.closest('table');
+  if (!viewport || !table) return;
+
+  const headerHeight = table.tHead ? table.tHead.getBoundingClientRect().height : 0;
+  const customerRowsHeight = Array.from(tbody.rows)
+    .slice(0, 5)
+    .reduce((height, row) => height + row.getBoundingClientRect().height, 0);
+  viewport.style.maxHeight = `${headerHeight + customerRowsHeight}px`;
+}
+
 function renderCustomers() {
   const tbody = document.getElementById('customers-tbody');
   const customerCountEl = document.getElementById('care-customer-count');
@@ -896,6 +1031,7 @@ function renderCustomers() {
     if (reservationLoadState === 'error') {
       notices.push('Không tải được đặt bàn từ Firestore; dữ liệu đang hiển thị chỉ là bản sao cục bộ trên thiết bị này.');
     } else if (reservationLoadState === 'local') {
+    updateCustomerListViewport();
       notices.push('Chưa kết nối Firestore; hồ sơ chỉ gồm dữ liệu đặt bàn cục bộ trên thiết bị này.');
     }
     if (visitLoadState === 'error') notices.push('Không tải được lịch sử lượt ghé.');
@@ -915,35 +1051,47 @@ function renderCustomers() {
   }
 
   const profiles = buildCustomerProfiles();
-  const reservationCount = allReservations.length;
-  const latestReservation = allReservations.reduce((latest, reservation) => (
-    !latest || getReservationCreatedAt(reservation) > getReservationCreatedAt(latest)
-      ? reservation
-      : latest
-  ), null);
-  if (customerCountEl) {
-    customerCountEl.textContent = reservationLoadState === 'local'
-      ? `${profiles.length} · trên thiết bị`
-      : String(profiles.length);
-  }
-  if (reservationCountEl) reservationCountEl.textContent = String(reservationCount);
-  if (latestReservationEl) {
-    latestReservationEl.textContent = latestReservation
-      ? String(latestReservation.date || 'Chưa có ngày')
-      : 'Chưa có';
-  }
-
   const normalizedQuery = normalizeCustomerSearch(customerSearchQuery);
   const queryDigits = normalizeCustomerPhone(customerSearchQuery);
+  const selectedDate = customerSearchDate;
   const filtered = profiles.filter(profile => {
+    const dateMatch = !selectedDate || profile.reservations.some(reservation => (
+      getReservationDateKey(reservation.date) === selectedDate
+    )) || profile.visits.some(visit => (
+      getVisitDateKey(visit) === selectedDate
+    ));
+    if (!dateMatch) return false;
     if (!normalizedQuery) return true;
     const values = [profile.name, ...profile.names, ...profile.emails, ...profile.phones];
     const textMatch = values.some(value => normalizeCustomerSearch(value).includes(normalizedQuery));
     const phoneMatch = queryDigits.length >= 3 && profile.phones.some(phone => normalizeCustomerPhone(phone).includes(queryDigits));
     return textMatch || phoneMatch;
   });
+  const filteredProfiles = filtered.map(profile => {
+    const reservations = selectedDate
+      ? profile.reservations.filter(reservation => getReservationDateKey(reservation.date) === selectedDate)
+      : profile.reservations;
+    return { ...profile, reservations, latestReservation: reservations[0] || null };
+  });
+  const filteredReservations = filteredProfiles.flatMap(profile => profile.reservations);
+  const latestReservation = filteredReservations.reduce((latest, reservation) => (
+    !latest || getReservationCreatedAt(reservation) > getReservationCreatedAt(latest)
+      ? reservation
+      : latest
+  ), null);
+  if (customerCountEl) {
+    customerCountEl.textContent = reservationLoadState === 'local'
+      ? `${filteredProfiles.length} · trên thiết bị`
+      : String(filteredProfiles.length);
+  }
+  if (reservationCountEl) reservationCountEl.textContent = String(filteredReservations.length);
+  if (latestReservationEl) {
+    latestReservationEl.textContent = latestReservation
+      ? String(latestReservation.date || 'Chưa có ngày')
+      : 'Chưa có';
+  }
 
-  if (filtered.length === 0) {
+  if (filteredProfiles.length === 0) {
     let message = 'Không tìm thấy khách hàng phù hợp.';
     if (!profiles.length) {
       message = reservationLoadState === 'error'
@@ -951,10 +1099,12 @@ function renderCustomers() {
         : reservationLoadState === 'local'
           ? 'Chưa có dữ liệu đặt bàn trên thiết bị này.'
           : 'Chưa có dữ liệu đặt bàn để tổng hợp hồ sơ.';
+    } else if (selectedDate) {
+      message = `Không tìm thấy khách có đặt bàn ngày ${escapeHtml(selectedDate)}.`;
     }
     tbody.innerHTML = `<tr><td colspan="6" class="customer-care-empty">${message}</td></tr>`;
   } else {
-    tbody.innerHTML = filtered.map(profile => {
+    tbody.innerHTML = filteredProfiles.map(profile => {
       const emails = profile.emails.length
         ? profile.emails.map(email => `<span class="customer-contact-line">${escapeHtml(email)}</span>`).join('')
         : '<span class="customer-contact-line">Chưa cung cấp</span>';
@@ -976,6 +1126,8 @@ function renderCustomers() {
       `;
     }).join('');
   }
+
+  updateCustomerListViewport();
 
   if (selectedCustomerKey) {
     const currentProfile = profiles.find(profile => profile.key === selectedCustomerKey);
@@ -1037,7 +1189,7 @@ function renderCustomerProfile(profile) {
     return `
       <tr>
         <td>${escapeHtml(reservation.date || 'Không có ngày')}<br><span class="customer-contact-line">${escapeHtml(formatTime(String(reservation.time || '')) || 'Không có giờ')}</span></td>
-        <td>${Number.isInteger(Number(reservation.guests)) ? Number(reservation.guests) : '—'}</td>
+        <td>${!reservation.isVisitHistoryFallback && Number.isInteger(Number(reservation.guests)) && Number(reservation.guests) > 0 ? Number(reservation.guests) : '—'}</td>
         <td>${notes ? escapeHtml(notes) : '<span class="customer-contact-line">Không có ghi chú</span>'}</td>
         <td><span class="status-badge status--${escapeHtml(String(status).toLowerCase())}">${escapeHtml(getStatusLabel(status))}</span></td>
         <td>${visitControl}</td>
@@ -1053,9 +1205,13 @@ function renderCustomerProfile(profile) {
     </tr>`;
   }).join('');
 
+    ${legacyVisitHistoryNote}
   const visitHistoryText = visitLoadState === 'ready'
     ? `${profile.visits.length} lượt ghé được ghi nhận`
     : getVisitLoadMessage();
+  const legacyVisitHistoryNote = profile.reservations.some(reservation => reservation.isVisitHistoryFallback)
+    ? '<p class="customer-profile-note">Một số đặt bàn cũ đã bị xóa khỏi hệ thống. Ngày giờ đang hiển thị là ngày giờ ghi nhận khách đã đến.</p>'
+    : '';
   body.innerHTML = `
     <div class="customer-profile-summary">
       <div><strong>Email</strong><span>${escapeHtml(emailText)}</span></div>
@@ -1172,12 +1328,21 @@ async function recordReservationVisit(reservationId) {
         recordedAt: fieldValue.serverTimestamp(),
         recordedBy: user.uid,
         source: 'staff-confirmed',
-        customer
+        customer,
+        reservationHistory: buildVisitReservationSnapshot(reservationSnapshot.data() || reservation)
       });
       transactionStep = 'commit-transaction';
       return {
         created: true,
-        visit: { id: reservationId, reservationId, recordedAt: new Date(), recordedBy: user.uid, source: 'staff-confirmed', customer }
+        visit: {
+          id: reservationId,
+          reservationId,
+          recordedAt: new Date(),
+          recordedBy: user.uid,
+          source: 'staff-confirmed',
+          customer,
+          reservationHistory: buildVisitReservationSnapshot(reservationSnapshot.data() || reservation)
+        }
       };
     });
 
@@ -1370,6 +1535,7 @@ window.selectOrdersCalendarDate = function(value) {
 
 window.clearOrdersCalendarDate = function() {
   if (!['from', 'to'].includes(ordersCalendarTarget)) return;
+    if (res.archivedAt) return false;
   const input = document.getElementById(`orders-date-${ordersCalendarTarget}`);
   if (input) input.value = '';
   updateOrdersDateDisplay(ordersCalendarTarget);
@@ -1627,6 +1793,7 @@ function renderTable() {
       <tr>
         <td colspan="7" style="text-align:center; padding: 48px; color: var(--warm-gray);">
           Không tìm thấy lượt đặt bàn phù hợp.
+  let archivedReservation = false;
         </td>
       </tr>
     `;
@@ -1690,6 +1857,7 @@ function renderTable() {
         <td>
           <span class="email-badge ${emailBadgeClass}">
             ${escapeHtml(getEmailStatusLabel(emailStatus))}
+      archivedReservation = result.status === 'archived';
           </span>
         </td>
         <td>
@@ -1858,7 +2026,7 @@ window.deleteBooking = async function(id) {
     showToast('Firestore chưa sẵn sàng. Đặt bàn chưa bị xóa.', 'error');
     return;
   }
-  if (!confirm('Bạn có chắc muốn xóa lượt đặt bàn này không?')) return;
+  if (!confirm('Xóa lượt đặt bàn khỏi danh sách? Nếu khách đã được ghi nhận đã đến, lịch sử đặt bàn sẽ được giữ lại.')) return;
 
   const item = allReservations.find(r => r.id === reservationId);
 
@@ -1885,17 +2053,34 @@ window.deleteBooking = async function(id) {
           if (existingVisit.reservationId && existingVisit.reservationId !== reservationId) {
             throw Object.assign(new Error('Visit record does not match its document ID'), { code: 'failed-precondition' });
           }
-          preservedVisit = { ...existingVisit, id: reservationId, reservationId };
+          const reservationData = reservationSnapshot.data() || {};
+          if (String(reservationData.status || '').toLowerCase() !== 'confirmed') {
+            throw Object.assign(new Error('Only a confirmed reservation can be archived with a visit'), { code: 'failed-precondition' });
+          }
+          const visitUpdate = {};
           if (!isVisitCustomerSnapshotValid(existingVisit.customer)) {
-            transactionStep = 'preserve-visit-customer';
-            const visitUpdate = {
-              customer: buildVisitCustomerSnapshot(reservationSnapshot.data() || {}, reservationId)
-            };
-            if (!existingVisit.reservationId) visitUpdate.reservationId = reservationId;
+            visitUpdate.customer = buildVisitCustomerSnapshot(reservationData, reservationId);
+          }
+          if (!existingVisit.reservationId) visitUpdate.reservationId = reservationId;
+          if (!isValidVisitReservationSnapshot(existingVisit.reservationHistory)) {
+            visitUpdate.reservationHistory = buildVisitReservationSnapshot(reservationData);
+          }
+          if (Object.keys(visitUpdate).length) {
+            transactionStep = 'preserve-visit-history';
             transactionOperations.push({ action: 'update', path: visitRef.path, fields: Object.keys(visitUpdate).sort() });
             preservedVisit.customer = buildVisitCustomerSnapshot(reservationSnapshot.data() || {}, reservationId);
             transaction.update(visitRef, visitUpdate);
           }
+          preservedVisit = { ...existingVisit, ...visitUpdate, id: reservationId, reservationId };
+          transactionStep = 'archive-reservation';
+          transactionOperations.push({ action: 'update', path: reservationRef.path, fields: ['archivedAt'] });
+          const fieldValue = window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue;
+          transaction.update(reservationRef, {
+            archivedAt: fieldValue ? fieldValue.serverTimestamp() : new Date()
+          });
+          transactionStep = 'commit-transaction';
+          transactionOperations.push({ action: 'commit' });
+          return { status: 'archived', visit: preservedVisit };
         }
         transactionStep = 'delete-reservation';
         transactionOperations.push({ action: 'delete', path: reservationRef.path });
@@ -1924,7 +2109,9 @@ window.deleteBooking = async function(id) {
     }
   }
 
-  allReservations = allReservations.filter(r => r.id !== reservationId);
+  allReservations = archivedReservation
+    ? allReservations.map(r => r.id === reservationId ? { ...r, archivedAt: new Date() } : r)
+    : allReservations.filter(r => r.id !== reservationId);
 
   // Remove from localStorage
   try {
@@ -1938,7 +2125,9 @@ window.deleteBooking = async function(id) {
   updateStats();
   renderTable();
   renderCustomers();
-  if (!isLocalReservation) {
+  if (archivedReservation) {
+    showToast('Đã ẩn đặt bàn khỏi danh sách; hồ sơ khách và lịch sử đặt bàn vẫn được giữ.', 'success');
+  } else if (!isLocalReservation) {
     showToast('Đã xóa đặt bàn; lịch sử lượt ghé được giữ nguyên.', 'success');
   }
 };

@@ -25,6 +25,23 @@ service cloud.firestore {
         && customer.phoneNormalized.size() <= 40;
     }
 
+    function isValidVisitReservationSnapshot(reservation) {
+      return reservation is map
+        && reservation.keys().hasAll(['date', 'time', 'guests', 'notes', 'status'])
+        && reservation.keys().hasOnly(['date', 'time', 'guests', 'notes', 'status'])
+        && reservation.date is string
+        && reservation.date.size() <= 30
+        && reservation.time is string
+        && reservation.time.size() <= 20
+        && reservation.guests is int
+        && reservation.guests >= 0
+        && reservation.guests <= 12
+        && reservation.notes is string
+        && reservation.notes.size() <= 1000
+        && reservation.status is string
+        && reservation.status.size() <= 30;
+    }
+
     function isValidReservationRequestId(value) {
       return value is string
         && value.matches('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$');
@@ -53,7 +70,8 @@ service cloud.firestore {
         && request.resource.data.email == request.resource.data.email.lower()
         && request.resource.data.email.matches('^[^@ ]+@[^@ ]+\\.[^@ ]+$')
         && request.resource.data.phone is string
-        && request.resource.data.phone.size() <= 40
+        && request.resource.data.phone == request.resource.data.phone.trim()
+        && request.resource.data.phone.matches('^[0-9]{10}$')
         && request.resource.data.date is string
         && request.resource.data.date.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
         && request.resource.data.time in [
@@ -94,7 +112,12 @@ service cloud.firestore {
       // cannot be reopened or moved to the other terminal state.
       allow update: if
         isAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'emailStatus', 'updatedAt', 'tableNumber'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'emailStatus', 'updatedAt', 'tableNumber', 'archivedAt'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['archivedAt'])
+          || (!resource.data.keys().hasAny(['archivedAt'])
+            && request.resource.data.archivedAt is timestamp
+            && resource.data.status in ['confirmed', 'Confirmed']
+            && exists(/databases/$(database)/documents/reservationVisits/$(reservation))))
         && request.resource.data.status in ['pending', 'confirmed', 'cancelled', 'Pending', 'Confirmed', 'Cancelled']
         && (!request.resource.data.keys().hasAny(['emailStatus'])
           || request.resource.data.emailStatus in ['Pending', 'Sent', 'Failed', 'pending', 'sent', 'failed'])
@@ -162,8 +185,10 @@ service cloud.firestore {
       // Its document ID is the reservation ID, making repeats fail.
       allow create: if isAdmin()
         && request.resource.data.keys().hasAll(['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer'])
-        && request.resource.data.keys().hasOnly(['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer'])
+        && request.resource.data.keys().hasOnly(['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer', 'reservationHistory'])
         && isValidVisitCustomerSnapshot(request.resource.data.customer)
+        && (!request.resource.data.keys().hasAny(['reservationHistory'])
+          || isValidVisitReservationSnapshot(request.resource.data.reservationHistory))
         && request.resource.data.reservationId == reservationId
         && request.resource.data.recordedAt == request.time
         && request.resource.data.recordedBy == request.auth.uid
@@ -173,20 +198,26 @@ service cloud.firestore {
         && existsAfter(/databases/$(database)/documents/reservations/$(reservationId))
         && getAfter(/databases/$(database)/documents/reservations/$(reservationId)).data.status in ['confirmed', 'Confirmed'];
 
-      // A legacy visit without a valid customer snapshot may be enriched only
-      // in the same transaction that removes its reservation. Keep every
-      // existing field immutable; legacy documents may have additional fields.
+      // Legacy visit records may be enriched with missing customer and
+      // reservation history while their confirmed reservation is retained.
       allow update: if isAdmin()
         && (!resource.data.keys().hasAny(['reservationId'])
           || resource.data.reservationId == null
           || resource.data.reservationId == ''
           || resource.data.reservationId == reservationId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customer', 'reservationId'])
-        && request.resource.data.reservationId == reservationId
-        && (!resource.data.keys().hasAny(['customer'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customer', 'reservationId', 'reservationHistory'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['customer'])
+          || !resource.data.keys().hasAny(['customer'])
           || !isValidVisitCustomerSnapshot(resource.data.customer))
+        && request.resource.data.reservationId == reservationId
         && isValidVisitCustomerSnapshot(request.resource.data.customer)
-        && !existsAfter(/databases/$(database)/documents/reservations/$(reservationId));
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reservationHistory'])
+          || !resource.data.keys().hasAny(['reservationHistory'])
+          || !isValidVisitReservationSnapshot(resource.data.reservationHistory))
+        && (!request.resource.data.keys().hasAny(['reservationHistory'])
+          || isValidVisitReservationSnapshot(request.resource.data.reservationHistory))
+        && exists(/databases/$(database)/documents/reservations/$(reservationId))
+        && getAfter(/databases/$(database)/documents/reservations/$(reservationId)).data.status in ['confirmed', 'Confirmed'];
       allow delete: if false;
     }
 

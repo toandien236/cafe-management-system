@@ -2991,7 +2991,9 @@ img, video, svg, iframe {
 .customer-visit-unavailable {
   display: block;
   max-width: 170px;
+  .customer-care-filters { display: grid; grid-template-columns: 1fr; }
   color: var(--warm-gray);
+  .customer-date-label .customer-date-input { min-width: 0; }
   font-size: 11px;
   line-height: 1.4;
 }
@@ -3153,8 +3155,19 @@ img, video, svg, iframe {
   font-weight: 600;
 }
 
+.customer-care-filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .customer-search-label .admin-search-input {
   min-width: min(320px, 70vw);
+}
+
+.customer-date-label .customer-date-input {
+  min-width: 190px;
 }
 
 .customer-care-stats {
@@ -3180,6 +3193,18 @@ img, video, svg, iframe {
 
 .customer-care-table {
   min-width: 680px;
+}
+
+.customer-care-list-scroll {
+  overflow: auto;
+  max-height: 360px;
+  scrollbar-gutter: stable;
+}
+
+.customer-care-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .customer-care-empty {

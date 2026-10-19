@@ -899,6 +899,23 @@ function isValidReservationDate(value) {
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+function isFutureReservationDateTime(dateValue, timeValue, now = new Date()) {
+  if (!isValidReservationDate(dateValue) || !/^\d{4}$/.test(timeValue)) return false;
+
+  const year = Number(dateValue.slice(0, 4));
+  const month = Number(dateValue.slice(5, 7)) - 1;
+  const day = Number(dateValue.slice(8, 10));
+  const hour = Number(timeValue.slice(0, 2));
+  const minute = Number(timeValue.slice(2, 4));
+  if (hour > 23 || minute > 59) return false;
+
+  const reservationDateTime = new Date(year, month, day, hour, minute);
+  return reservationDateTime.getFullYear() === year
+    && reservationDateTime.getMonth() === month
+    && reservationDateTime.getDate() === day
+    && reservationDateTime.getTime() > now.getTime();
+}
+
 function createReservationRequestId() {
   const bytes = new Uint8Array(16);
   window.crypto.getRandomValues(bytes);
@@ -945,6 +962,14 @@ function initReservationForm() {
 
   // Set min date to today
   const dateInput = document.getElementById('res-date');
+  const timeInput = document.getElementById('res-time');
+  const phoneInput = document.getElementById('res-phone');
+  if (phoneInput && typeof phoneInput.addEventListener === 'function') {
+    phoneInput.addEventListener('input', () => {
+      const digitsOnly = phoneInput.value.replace(/[^0-9]/g, '').slice(0, 10);
+      if (phoneInput.value !== digitsOnly) phoneInput.value = digitsOnly;
+    });
+  }
   if (dateInput) {
     const today = new Date();
     dateInput.min = [
@@ -953,6 +978,25 @@ function initReservationForm() {
       String(today.getDate()).padStart(2, '0')
     ].join('-');
   }
+
+  const updateAvailableReservationTimes = () => {
+    if (!timeInput || !timeInput.options) return;
+    const selectedDate = dateInput && dateInput.value;
+    const now = new Date();
+    Array.from(timeInput.options).forEach((option) => {
+      if (!option.value) return;
+      option.disabled = Boolean(selectedDate)
+        && !isFutureReservationDateTime(selectedDate, option.value, now);
+    });
+    if (timeInput.selectedOptions && timeInput.selectedOptions[0]?.disabled) {
+      timeInput.value = '';
+    }
+  };
+  if (dateInput && typeof dateInput.addEventListener === 'function') {
+    dateInput.addEventListener('input', updateAvailableReservationTimes);
+    dateInput.addEventListener('change', updateAvailableReservationTimes);
+  }
+  updateAvailableReservationTimes();
 
   // Clear existing error message
   const clearFormError = () => {
@@ -1035,12 +1079,14 @@ function initReservationForm() {
     // Field validation
     const name  = document.getElementById('res-name');
     const email = document.getElementById('res-email');
+    const phone = document.getElementById('res-phone');
     const date  = document.getElementById('res-date');
-    const time  = document.getElementById('res-time');
+    const time  = timeInput || document.getElementById('res-time');
 
     const fields = [
       { el: name, label: 'Họ và tên' },
       { el: email, label: 'Địa chỉ email' },
+      { el: phone, label: 'Số điện thoại' },
       { el: date, label: 'Ngày' },
       { el: time, label: 'Giờ' }
     ];
@@ -1058,21 +1104,16 @@ function initReservationForm() {
       return;
     }
 
-    if (typeof email.checkValidity === 'function' && !email.checkValidity()) {
-      showValidationError('Vui lòng nhập địa chỉ email hợp lệ.');
-      shakeField(email);
-      return;
-    }
-
     const guestCount = Number(document.getElementById('res-guests')?.value || 2);
     const notes = document.getElementById('res-notes')?.value.trim() || '';
+    const normalizedTime = String(time.value || '').trim().replace(':', '').padStart(4, '0');
     const reservationData = {
       customerName: name.value.trim(),
       name: name.value.trim(),
       email: email.value.trim().toLowerCase(),
-      phone: document.getElementById('res-phone')?.value.trim() || '',
-      date: date.value,
-      time: time.value,
+      phone: phone.value.trim(),
+      date: String(date.value || '').trim(),
+      time: normalizedTime,
       guests: guestCount,
       specialRequest: notes,
       notes,
@@ -1081,16 +1122,30 @@ function initReservationForm() {
     };
     const validDate = isValidReservationDate(reservationData.date)
       && (!dateInput || !dateInput.min || reservationData.date >= dateInput.min);
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reservationData.email)
-      || reservationData.email.length > 254
-      || !validDate
-      || !VALID_RESERVATION_TIMES.has(reservationData.time)
-      || !Number.isInteger(guestCount)
-      || guestCount < 1
-      || guestCount > 12
-      || reservationData.phone.length > 40
-      || notes.length > 1000) {
-      showValidationError('Thông tin đặt bàn chưa hợp lệ. Vui lòng kiểm tra email, ngày, giờ, số khách và ghi chú.');
+    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reservationData.email)
+      && reservationData.email.length <= 254;
+    const validTime = VALID_RESERVATION_TIMES.has(reservationData.time);
+    const validFutureDateTime = validDate && validTime
+      && isFutureReservationDateTime(reservationData.date, reservationData.time);
+    const validGuestCount = Number.isInteger(guestCount) && guestCount >= 1 && guestCount <= 12;
+    const validPhone = /^[0-9]{10}$/.test(reservationData.phone);
+    const validationIssues = [];
+    if (!validEmail) validationIssues.push('email');
+    if (!validPhone) validationIssues.push('số điện thoại (phải gồm đúng 10 chữ số)');
+    if (!validDate) validationIssues.push('ngày (chọn hôm nay hoặc ngày sau)');
+    if (!validTime) validationIssues.push('giờ (chọn khung giờ có sẵn)');
+    if (validDate && validTime && !validFutureDateTime) {
+      validationIssues.push('ngày và giờ phải ở thời điểm trong tương lai');
+    }
+    if (!validGuestCount) validationIssues.push('số khách (từ 1 đến 12)');
+    if (notes.length > 1000) validationIssues.push('ghi chú (tối đa 1000 ký tự)');
+
+    if (validationIssues.length > 0) {
+      showValidationError(`Vui lòng kiểm tra lại: ${validationIssues.join(', ')}.`);
+      if (!validEmail) shakeField(email);
+      if (!validPhone) shakeField(phone);
+      if (!validDate) shakeField(date);
+      if (!validTime || (validDate && validTime && !validFutureDateTime)) shakeField(time);
       return;
     }
 

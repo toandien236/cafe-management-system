@@ -268,10 +268,15 @@
                 <p class="admin-section-eyebrow">Chăm sóc khách hàng</p>
                 <h2 class="admin-section-title" id="customer-care-heading">Hồ sơ khách</h2>
               </div>
-              <label class="customer-search-label" for="customer-search">Tìm khách
-                <input type="search" id="customer-search" class="admin-search-input"
-                  placeholder="Tên, email hoặc số điện thoại" autocomplete="off" />
-              </label>
+              <div class="customer-care-filters">
+                <label class="customer-search-label" for="customer-search">Tìm khách
+                  <input type="search" id="customer-search" class="admin-search-input"
+                    placeholder="Tên, email hoặc số điện thoại" autocomplete="off" />
+                </label>
+                <label class="customer-search-label customer-date-label" for="customer-date-filter">Ngày đặt bàn
+                  <input type="date" id="customer-date-filter" class="admin-search-input customer-date-input" />
+                </label>
+              </div>
             </div>
 
             <div class="customer-care-stats" aria-live="polite">
@@ -282,7 +287,8 @@
             <p id="customer-load-notice" class="customer-load-notice" role="status" hidden></p>
 
             <div class="admin-table-card">
-              <div class="admin-table-wrap">
+              <div class="admin-table-wrap customer-care-list-scroll" tabindex="0" role="region"
+                aria-label="Danh sách hồ sơ khách, cuộn để xem thêm">
                 <table class="admin-table customer-care-table">
                   <thead>
                     <tr>
@@ -359,6 +365,21 @@
       <div class="admin-modal-actions">
         <button type="button" class="btn btn-outline" id="customer-history-close">Đóng</button>
       </div>
+    </div>
+  </div>
+
+  <div class="admin-modal-overlay" id="customer-profile-modal" hidden>
+    <div class="admin-modal-card customer-profile-card" role="dialog" aria-modal="true"
+      aria-labelledby="customer-profile-title" aria-describedby="customer-profile-description">
+      <div class="customer-profile-heading">
+        <div>
+          <h3 class="admin-modal-title" id="customer-profile-title">Hồ sơ khách</h3>
+          <p class="customer-profile-note" id="customer-profile-description"></p>
+        </div>
+        <button type="button" class="customer-profile-close" id="customer-profile-close"
+          aria-label="Đóng hồ sơ khách">&times;</button>
+      </div>
+      <div id="customer-profile-body"></div>
     </div>
   </div>
 
@@ -447,7 +468,7 @@
       updateDoc: (reference, data) => reference.update(data)
     };
   </script>
-  <script src="admin.js?v=orders-date-filter-vi-20261019" defer></script>
+  <script src="admin.js?v=customer-visit-history-20261019" defer></script>
 </body>
 
 </html>

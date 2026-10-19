@@ -834,8 +834,8 @@
                 <span class="form-line"></span>
               </div>
               <div class="form-group">
-                <input type="tel" id="res-phone" name="phone" class="form-input" placeholder=" " maxlength="40" autocomplete="tel" />
-                <label for="res-phone" class="form-label">Số điện thoại (không bắt buộc)</label>
+                <input type="tel" id="res-phone" name="phone" class="form-input" placeholder=" " required minlength="10" maxlength="10" pattern="[0-9]{10}" inputmode="numeric" autocomplete="tel-national" />
+                <label for="res-phone" class="form-label">Số điện thoại</label>
                 <span class="form-line"></span>
               </div>
             </div>
@@ -1067,7 +1067,7 @@
   <script src="js/menu-data.js"></script>
   <script src="js/firebase-config.js"></script>
   <script src="firebase.js?v=4" defer></script>
-  <script src="js/main.js?v=9" defer></script>
+  <script src="js/main.js?v=13" defer></script>
 
 </body>
 </html>
