@@ -91,3 +91,66 @@ test('admin login blocks emails outside the configured admin account', async () 
   assert.equal(signInCalled, false);
   assert.match(loginForm.error.textContent, /không có quyền/);
 });
+
+test('admin login explains Firebase provider and authorized-domain setup failures', () => {
+  const { context } = loadAdminScript();
+
+  assert.match(
+    context.adminLoginErrorMessage({ code: 'auth/operation-not-allowed' }),
+    /chưa bật đăng nhập bằng email và mật khẩu/i
+  );
+  assert.match(
+    context.adminLoginErrorMessage({ code: 'auth/unauthorized-domain' }),
+    /Authorized domains/i
+  );
+  assert.match(
+    context.adminLoginErrorMessage({ code: 'auth/network-request-failed' }),
+    /máy chủ đăng nhập Firebase/i
+  );
+});
+
+test('admin login reports Firebase auth-state observer errors to the user', () => {
+  const { context, loginForm } = loadAdminScript();
+  let authErrorCallback;
+  context.initAdminAuth({
+    onAuthStateChanged(_callback, onError) {
+      authErrorCallback = onError;
+    },
+    signInWithEmailAndPassword: async () => {},
+    signOut: async () => {},
+    sendPasswordResetEmail: async () => {}
+  });
+
+  authErrorCallback({ code: 'auth/network-request-failed' });
+
+  assert.match(loginForm.error.textContent, /không thể xác minh trạng thái đăng nhập Firebase/i);
+});
+
+test('Firebase admin sign-in switches from the login form to the dashboard', async () => {
+  const { context, elements } = loadAdminScript();
+  let authStateCallback;
+
+  context.loadReservations = () => {};
+  context.loadReservationVisits = () => {};
+  context.loadOrders = () => {};
+  context.initAdminAuth({
+    onAuthStateChanged(callback) {
+      authStateCallback = callback;
+    },
+    signInWithEmailAndPassword: async () => {},
+    signOut: async () => {},
+    sendPasswordResetEmail: async () => {}
+  });
+
+  const loginSection = elements.get('admin-login-section');
+  const dashboard = elements.get('admin-dashboard-section');
+  const password = elements.get('admin-password');
+  await authStateCallback({ email: 'lehwangduong@gmail.com' });
+
+  assert.equal(loginSection.hidden, true);
+  assert.equal(loginSection.style.display, 'none');
+  assert.equal(dashboard.hidden, false);
+  assert.equal(dashboard.style.display, 'block');
+  assert.equal(password.value, '');
+  assert.equal(vm.runInContext('adminSessionActive', context), true);
+});

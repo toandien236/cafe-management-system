@@ -20,38 +20,40 @@ Website giới thiệu thương hiệu và bộ công cụ vận hành quán cà
 - **Frontend:** HTML, CSS và JavaScript thuần; Firebase và Supabase SDK được tải từ CDN.
 - **Cổng quản trị:** Firebase Authentication xác thực tài khoản quản trị cũ; đặt bàn, đơn và doanh thu trong cổng này đọc/ghi qua Cloud Firestore.
 - **Nhân sự:** Firebase Authentication và Cloud Firestore dùng chung project với cổng quản trị; hồ sơ, ca, chấm công và bảng lương nằm trong các collection `employees`, `employee_shifts`, `employee_attendance` và `employee_payroll`.
-- **Các phân hệ đang dùng Supabase:** Website đặt bàn và quản lý kho vẫn dùng Supabase Auth/PostgreSQL; cần project URL/anon key và schema/RLS đã được cấu hình.
+- **Đặt bàn trên website:** Gửi yêu cầu trực tiếp vào Cloud Firestore bằng cùng Firebase project với cổng quản trị; không cần Supabase.
+- **Quản lý kho:** Vẫn dùng Supabase Auth/PostgreSQL; cần project URL/anon key và schema/RLS đã được cấu hình.
 - **Gọi món QR và quản trị đơn:** Trang QR ghi đơn vào Firestore; cổng quản trị cũng đọc/cập nhật đơn từ Firestore để doanh thu nhận đúng đơn đã thanh toán.
-- **Trạng thái chuyển đổi:** Website đặt bàn và kho chưa đồng bộ trực tiếp với Firestore. Đặt bàn mới từ website chưa tự xuất hiện trong dashboard Firebase. HR dùng Firebase từ nay; dữ liệu HR cũ trong Supabase chưa được tự động di chuyển và vẫn còn nguyên ở nguồn.
+- **Thực đơn:** Trang giới thiệu và trang gọi món QR dùng chung giá trong [`js/menu-data.js`](./js/menu-data.js).
+- **Dữ liệu nhân sự cũ:** Dữ liệu HR cũ trong Supabase chưa được tự động di chuyển và vẫn còn nguyên ở nguồn.
 - EmailJS là tích hợp tùy chọn phía client. Không đưa service-role key hoặc Firebase service-account vào trình duyệt.
 
 ## Chạy local
 
-Yêu cầu: Python 3 hoặc Node.js 18+. Mở PowerShell tại thư mục dự án:
+Yêu cầu: Python 3. Mở PowerShell tại thư mục dự án và chạy:
 
 ```powershell
-python -m http.server 5500
+npm.cmd start
 ```
 
 Sau đó mở:
 
 | Mục đích | Địa chỉ |
 |---|---|
-| Website khách | <http://localhost:5500/index.html> |
-| Quản trị | <http://localhost:5500/admin.html> |
-| Gọi món bàn 01 | <http://localhost:5500/order.html?table=01> |
-| Quản lý kho | <http://localhost:5500/inventory.html> |
-| Nhân sự | <http://localhost:5500/hr.html> |
-| Tạo mã QR | <http://localhost:5500/qr.html> |
+| Website khách | <http://localhost:8000/index.html> |
+| Quản trị | <http://localhost:8000/admin.html> |
+| Gọi món bàn 01 | <http://localhost:8000/order.html?table=01> |
+| Quản lý kho | <http://localhost:8000/inventory.html> |
+| Nhân sự | <http://localhost:8000/hr.html> |
+| Tạo mã QR | <http://localhost:8000/qr.html> |
 
 ## Cấu hình Supabase
 
-Các bước dưới đây chỉ áp dụng cho website đặt bàn và quản lý kho. Gọi món QR, quản trị đơn và HR hiện dùng Firebase/Firestore như mô tả ở trên.
+Các bước dưới đây chỉ áp dụng cho quản lý kho. Website đặt bàn, gọi món QR, quản trị đơn và HR hiện dùng Firebase/Firestore như mô tả ở trên.
 
 1. Tạo project Supabase và cấu hình Project URL cùng anon key trong [`js/supabase.js`](./js/supabase.js), hoặc đặt `window.ENV_SUPABASE_URL` / `window.ENV_SUPABASE_ANON_KEY` trước khi khởi tạo client. Không đặt service-role key trong HTML, JavaScript client hoặc Git.
 2. Với project **mới**, chạy [`database/supabase-schema.sql`](./database/supabase-schema.sql). Tập lệnh khởi tạo này có `DROP TABLE`; chỉ chạy trên project trống hoặc sau bản sao lưu và phê duyệt xóa dữ liệu.
 3. Với project **đã có schema/dữ liệu**, không chạy tập lệnh có `DROP TABLE`. Chạy tập lệnh tăng dần [`database/firebase-to-supabase.sql`](./database/firebase-to-supabase.sql) chỉ khi cần chuẩn bị schema cho các luồng Supabase/migration; gọi món QR hiện tại không gọi RPC Supabase `create_order`.
-4. Dữ liệu menu trong `seed-data.sql` phục vụ bảng Supabase/luồng RPC tương ứng, không cung cấp menu cho trang QR hiện tại (menu QR đang khai báo trong `js/order.js`). Phần còn lại của script thêm dữ liệu mẫu kho/đặt bàn/đơn; không chạy phần dữ liệu mẫu trên dữ liệu thật.
+4. Dữ liệu menu trong `seed-data.sql` phục vụ bảng Supabase/luồng RPC tương ứng, không cung cấp menu cho trang QR hiện tại (menu dùng chung của website nằm trong [`js/menu-data.js`](./js/menu-data.js)). Phần còn lại của script thêm dữ liệu mẫu kho/đặt bàn/đơn; không chạy phần dữ liệu mẫu trên dữ liệu thật.
 5. Tạo user trong Supabase Authentication và gán vai trò admin trong SQL Editor (dùng cho trang quản lý kho):
 
    ```sql

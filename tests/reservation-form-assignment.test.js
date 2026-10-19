@@ -7,7 +7,7 @@ const { TextEncoder } = require('node:util');
 const vm = require('node:vm');
 
 const root = path.join(__dirname, '..');
-const mainSource = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+const mainSource = fs.readFileSync(path.join(root, 'js', 'main.js'), 'utf8');
 const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const firebaseSource = fs.readFileSync(path.join(root, 'firebase.js'), 'utf8');
 const rulesSource = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
@@ -169,11 +169,11 @@ function createFormHarness({ commitBehavior = null, storedRequestId = null, stor
 }
 
 async function submit(harness) {
-  harness.form.listener({ preventDefault() {} });
-  await new Promise(resolve => setImmediate(resolve));
+  await harness.form.listener({ preventDefault() {} });
 }
 
 test('writes an unassigned reservation and shows success only after Firestore acknowledges it', async () => {
+  assert.doesNotMatch(reservationSource, /sendEmailJS\(/);
   const harness = createFormHarness();
   await submit(harness);
 
@@ -285,13 +285,14 @@ test('confirms an ambiguous commit only after the idempotency marker is readable
 });
 
 test('client avoids Cloud Functions and does not ask guests to choose a table', () => {
+  assert.doesNotMatch(mainSource, /supabase/i);
   assert.doesNotMatch(mainSource, /httpsCallable|createReservationWithTable/);
   assert.doesNotMatch(firebaseSource, /firebaseFunctions|\.functions\(/);
   assert.doesNotMatch(indexHtml, /firebase-functions-compat|res-table-number|tableNumber/);
   assert.doesNotMatch(indexHtml, /res-requested-table-number|Bàn mong muốn/);
   assert.doesNotMatch(mainSource, /requestedTableNumber|res-requested-table-number/);
   assert.match(indexHtml, /firebase\.js\?v=4/);
-  assert.match(indexHtml, /main\.js\?v=8/);
+  assert.match(indexHtml, /js\/main\.js\?v=9/);
   assert.doesNotMatch(indexHtml, /form-success-table|modal-res-table/);
   assert.doesNotMatch(mainSource, /form-success-table|modal-res-table|formatAssignedTableNumber/);
   assert.match(rulesSource, /allow create: if isValidPublicReservation\(reservation\)/);

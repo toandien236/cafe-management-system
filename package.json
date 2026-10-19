@@ -1,6 +1,7 @@
 {
   "private": true,
   "scripts": {
+    "start": "python -m http.server",
     "migrate:firebase": "node scripts/migrate-firebase-to-supabase.js"
   },
   "dependencies": {

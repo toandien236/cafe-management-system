@@ -46,15 +46,44 @@ function normalizeAdminEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
 
-function observeFirebaseAuth(authInstance, callback) {
+function observeFirebaseAuth(authInstance, callback, onError) {
   if (typeof authInstance?.onAuthStateChanged === 'function') {
-    return authInstance.onAuthStateChanged(callback);
+    return authInstance.onAuthStateChanged(callback, onError);
   }
   const methods = window.firebaseAuthMethods;
   if (typeof methods?.onAuthStateChanged === 'function') {
-    return methods.onAuthStateChanged(authInstance, callback);
+    return methods.onAuthStateChanged(authInstance, callback, onError);
   }
   throw new Error('Firebase Auth observer is unavailable.');
+}
+
+function adminLoginErrorMessage(error) {
+  const code = String(error && error.code || '');
+  if (code === 'auth/invalid-email') return 'Vui lòng nhập địa chỉ email hợp lệ.';
+  if (code === 'auth/user-disabled') return 'Tài khoản quản trị này đã bị vô hiệu hóa.';
+  if (code === 'auth/too-many-requests') return 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau.';
+  if (code === 'auth/network-request-failed') return 'Không kết nối được máy chủ đăng nhập Firebase. Kiểm tra mạng, VPN hoặc tiện ích chặn quảng cáo rồi thử lại.';
+  if (code === 'auth/unauthorized-domain') return 'Firebase chưa cho phép tên miền hiện tại. Hãy thêm localhost hoặc tên miền website vào Firebase Authentication > Settings > Authorized domains.';
+  if (code === 'auth/operation-not-allowed') return 'Chưa bật đăng nhập bằng email và mật khẩu trong Firebase Authentication.';
+  if (code === 'auth/configuration-not-found') return 'Firebase Authentication chưa được cấu hình cho project này.';
+  if (code === 'auth/invalid-api-key') return 'Cấu hình Firebase API key không hợp lệ. Hãy kiểm tra cấu hình ứng dụng web Firebase.';
+  if (['auth/invalid-credential', 'auth/invalid-login-credentials', 'auth/wrong-password', 'auth/user-not-found'].includes(code)) {
+    return 'Email hoặc mật khẩu không đúng.';
+  }
+  return 'Không thể đăng nhập vào Firebase. Vui lòng thử lại; nếu lỗi tiếp diễn, kiểm tra Console của trình duyệt.';
+}
+
+function setAdminView(isAuthenticated) {
+  const loginSection = document.getElementById('admin-login-section');
+  const dashboard = document.getElementById('admin-dashboard-section');
+  if (loginSection) {
+    loginSection.hidden = isAuthenticated;
+    loginSection.style.display = isAuthenticated ? 'none' : 'flex';
+  }
+  if (dashboard) {
+    dashboard.hidden = !isAuthenticated;
+    dashboard.style.display = isAuthenticated ? 'block' : 'none';
+  }
 }
 
 function firebaseSignIn(authInstance, email, password) {
@@ -192,22 +221,26 @@ function initAdminAuth(authInstance) {
       // Authenticated: show dashboard
       adminSessionActive = true;
       if (emailDisplay) emailDisplay.textContent = user.email;
+      setAdminView(true);
+      if (loginForm) {
+        const existingError = loginForm.querySelector('.form-error');
+        if (existingError) existingError.remove();
+        const passwordInput = document.getElementById('admin-password');
+        if (passwordInput) passwordInput.value = '';
+      }
       loadReservations();
       loadReservationVisits();
       loadOrders();
     } else {
       // Not authenticated: show login
       adminSessionActive = false;
+      setAdminView(false);
       stopReservationVisitsListener();
       serverAcknowledgedVisits.clear();
       if (ordersUnsubscribe) {
         ordersUnsubscribe();
         ordersUnsubscribe = null;
       }
-      loginSection.hidden = false;
-      loginSection.style.display = 'flex';
-      dashboard.hidden = true;
-      dashboard.style.display = 'none';
       const customerModal = document.getElementById('customer-profile-modal');
       const customerProfileBody = document.getElementById('customer-profile-body');
       const replyModal = document.getElementById('reply-modal');
@@ -233,6 +266,9 @@ function initAdminAuth(authInstance) {
         showLoginError('Tài khoản này không có quyền truy cập cổng quản trị.');
       }
     }
+  }, (error) => {
+    console.error('[Firebase Auth State Error]', error && error.code);
+    showLoginError('Không thể xác minh trạng thái đăng nhập Firebase. Kiểm tra kết nối mạng rồi tải lại trang.');
   });
 
   if (loginForm) {
@@ -269,23 +305,8 @@ function initAdminAuth(authInstance) {
         await firebaseSignIn(authInstance, email, pass);
         // onAuthStateChanged above handles the view switch
       } catch (err) {
-        // Map Firebase error codes to friendly messages
-        let msg = 'Truy cập bị từ chối: email hoặc mật khẩu không đúng.';
-        if (err.code === 'auth/invalid-email') {
-          msg = 'Vui lòng nhập địa chỉ email hợp lệ.';
-        } else if (err.code === 'auth/user-disabled') {
-          msg = 'Tài khoản quản trị này đã bị vô hiệu hóa.';
-        } else if (err.code === 'auth/too-many-requests') {
-          msg = 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau.';
-        } else if (err.code === 'auth/network-request-failed') {
-          msg = 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối của bạn.';
-        } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-          msg = 'Truy cập bị từ chối: email hoặc mật khẩu không đúng.';
-        } else if (err.code === 'auth/operation-not-allowed') {
-          msg = 'Chưa bật đăng nhập bằng email và mật khẩu. Vui lòng liên hệ quản trị viên.';
-        }
         console.error('[Admin Login Error]', err.code, err.message);
-        showLoginError(msg);
+        showLoginError(adminLoginErrorMessage(err));
       } finally {
         if (submitBtn) submitBtn.disabled = false;
         if (btnText) btnText.textContent = 'Đăng nhập';

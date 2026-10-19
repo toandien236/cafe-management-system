@@ -11,9 +11,25 @@
    ────────────────────────────────────────────────────────── */
 function initCore() {
   initNav();            // Navigation scroll + mobile menu
+  syncMenuPrices();
   initMenuFilter();     // Menu category tabs
   initGuestsSelector(); // Guests +/- buttons
   initReservationForm();// Reservation form submission
+}
+
+function syncMenuPrices() {
+  if (!Array.isArray(window.CAFE_MENU)) return;
+  const menuItems = new Map(window.CAFE_MENU.map(item => [item.id, item]));
+  document.querySelectorAll('.menu-card[data-menu-id]').forEach(card => {
+    const item = menuItems.get(card.dataset.menuId);
+    const price = card.querySelector('.menu-card-price');
+    if (item && price) {
+      price.textContent = new Intl.NumberFormat('vi-VN', {
+        style: 'currency',
+        currency: 'VND'
+      }).format(item.price);
+    }
+  });
 }
 
 function initAnimationsWhenReady() {
@@ -869,6 +885,57 @@ function initGuestsSelector() {
 /* ──────────────────────────────────────────────────────────
    9. RESERVATION FORM
    ────────────────────────────────────────────────────────── */
+const VALID_RESERVATION_TIMES = new Set([
+  '0730', '0800', '0830', '0900', '0930', '1000', '1030', '1200',
+  '1230', '1300', '1330', '1400', '1830', '1900', '1930', '2000'
+]);
+const RESERVATION_REQUEST_ID_KEY = 'mocha_reservation_request_id';
+const RESERVATION_REQUEST_HASH_KEY = 'mocha_reservation_request_hash';
+const RESERVATION_REQUEST_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+function isValidReservationDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function createReservationRequestId() {
+  const bytes = new Uint8Array(16);
+  window.crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+async function hashReservationPayload(payload) {
+  const encoded = new TextEncoder().encode(JSON.stringify(payload));
+  const digest = await window.crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function reservationRequestMatches(snapshot, requestId, payloadHash) {
+  if (!snapshot.exists) return false;
+  const marker = snapshot.data();
+  return marker
+    && marker.requestId === requestId
+    && marker.reservationId === requestId
+    && marker.payloadHash === payloadHash;
+}
+
+function reservationWriteErrorMessage(error) {
+  if (error && error.code === 'storage-unavailable') {
+    return 'Trình duyệt không lưu được mã yêu cầu để gửi an toàn. Hãy bật bộ nhớ phiên rồi thử lại.';
+  }
+  if (error && error.code === 'permission-denied') {
+    return 'Firestore từ chối tạo đặt bàn. Kiểm tra Rules của /reservations và /reservationRequests trên Firebase đã được triển khai.';
+  }
+  if (error && ['unavailable', 'deadline-exceeded', 'network-request-failed'].includes(error.code)) {
+    return 'Chưa kết nối được Firebase. Thông tin vẫn còn trong biểu mẫu; vui lòng thử gửi lại.';
+  }
+  return 'Không thể gửi yêu cầu đặt bàn lên Firebase. Thông tin vẫn còn trong biểu mẫu; vui lòng thử lại.';
+}
+
 function initReservationForm() {
   const form    = document.getElementById('reservation-form');
   const success = document.getElementById('form-success');
@@ -879,8 +946,12 @@ function initReservationForm() {
   // Set min date to today
   const dateInput = document.getElementById('res-date');
   if (dateInput) {
-    const today = new Date().toISOString().split('T')[0];
-    dateInput.min = today;
+    const today = new Date();
+    dateInput.min = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0')
+    ].join('-');
   }
 
   // Clear existing error message
@@ -957,7 +1028,7 @@ function initReservationForm() {
     anotherBtn.addEventListener('click', resetFormView);
   }
 
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     clearFormError();
 
@@ -987,70 +1058,152 @@ function initReservationForm() {
       return;
     }
 
+    if (typeof email.checkValidity === 'function' && !email.checkValidity()) {
+      showValidationError('Vui lòng nhập địa chỉ email hợp lệ.');
+      shakeField(email);
+      return;
+    }
+
+    const guestCount = Number(document.getElementById('res-guests')?.value || 2);
+    const notes = document.getElementById('res-notes')?.value.trim() || '';
+    const reservationData = {
+      customerName: name.value.trim(),
+      name: name.value.trim(),
+      email: email.value.trim().toLowerCase(),
+      phone: document.getElementById('res-phone')?.value.trim() || '',
+      date: date.value,
+      time: time.value,
+      guests: guestCount,
+      specialRequest: notes,
+      notes,
+      status: 'pending',
+      emailStatus: 'Pending'
+    };
+    const validDate = isValidReservationDate(reservationData.date)
+      && (!dateInput || !dateInput.min || reservationData.date >= dateInput.min);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reservationData.email)
+      || reservationData.email.length > 254
+      || !validDate
+      || !VALID_RESERVATION_TIMES.has(reservationData.time)
+      || !Number.isInteger(guestCount)
+      || guestCount < 1
+      || guestCount > 12
+      || reservationData.phone.length > 40
+      || notes.length > 1000) {
+      showValidationError('Thông tin đặt bàn chưa hợp lệ. Vui lòng kiểm tra email, ngày, giờ, số khách và ghi chú.');
+      return;
+    }
+
     // Submit state UI (prevent duplicate submission)
     const btnText = submit ? submit.querySelector('.btn-text') : null;
     if (btnText) btnText.textContent = 'Đang xử lý…';
     if (submit) submit.disabled = true;
 
-    const resId = 'RES-' + Math.floor(100000 + Math.random() * 900000);
-    const nowIso = new Date().toISOString();
-
-    const reservationData = {
-      reservationId: resId,
-      customerName: name.value.trim(),
-      name: name.value.trim(),
-      email: email.value.trim(),
-      phone: document.getElementById('res-phone') ? document.getElementById('res-phone').value.trim() : '',
-      date: date.value,
-      time: time.value,
-      guests: parseInt(document.getElementById('res-guests') ? document.getElementById('res-guests').value : '2', 10) || 2,
-      specialRequest: document.getElementById('res-notes') ? document.getElementById('res-notes').value.trim() : '',
-      notes: document.getElementById('res-notes') ? document.getElementById('res-notes').value.trim() : '',
-      status: 'pending',
-      emailStatus: 'Pending',
-      createdAt: nowIso,
-      updatedAt: nowIso
-    };
-
-    // Save to local backup array
     try {
-      const existing = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
-      existing.push(reservationData);
-      localStorage.setItem('mocha_reservations', JSON.stringify(existing));
-    } catch (err) {
-      console.warn('LocalStorage save warning:', err);
-    }
+      const firestore = window.firebaseDb || window.db;
+      if (!firestore || typeof firestore.collection !== 'function' || typeof firestore.batch !== 'function') {
+        throw Object.assign(new Error('Firebase is unavailable.'), { code: 'unavailable' });
+      }
 
-    // Async dispatch to Supabase / PostgreSQL
-    const client = window.supabaseClient || window.supabaseDb || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
-    if (client && typeof client.from === 'function') {
-      client.from('reservations').insert({
-        reservation_id: resId,
+      const payloadForHash = {
         name: reservationData.name,
         email: reservationData.email,
         phone: reservationData.phone,
         date: reservationData.date,
         time: reservationData.time,
         guests: reservationData.guests,
-        notes: reservationData.notes,
-        status: 'pending',
-        email_status: 'Pending'
-      }).then(({ error }) => {
-        if (error) throw error;
-        reservationData.id = resId;
-        sendEmailJS(reservationData, 'confirmation', null);
-        showToast('Đã tạo yêu cầu đặt bàn! Email xác nhận đang được gửi đến bạn.', 'success');
-        showSuccessView();
-        openSuccessModal(reservationData);
-      }).catch((error) => {
-        console.error('[Supabase] Reservation write failed:', error);
-        showToast('Yêu cầu được lưu tạm trên thiết bị nhưng chưa gửi tới quán. Vui lòng thử lại khi có kết nối.', 'error');
-      }).finally(() => {
-        if (submit) submit.disabled = false;
-        if (btnText) btnText.textContent = 'Xác nhận đặt bàn';
+        specialRequest: reservationData.specialRequest
+      };
+      const payloadHash = await hashReservationPayload(payloadForHash);
+      const session = window.sessionStorage;
+      let storedRequestId;
+      let storedRequestHash;
+      try {
+        storedRequestId = session.getItem(RESERVATION_REQUEST_ID_KEY);
+        storedRequestHash = session.getItem(RESERVATION_REQUEST_HASH_KEY);
+      } catch (storageError) {
+        throw Object.assign(new Error('Could not read the browser session storage.'), { code: 'storage-unavailable' });
+      }
+      const requestId = storedRequestId && storedRequestHash === payloadHash
+        && RESERVATION_REQUEST_ID_PATTERN.test(storedRequestId)
+        ? storedRequestId
+        : createReservationRequestId();
+
+      try {
+        session.setItem(RESERVATION_REQUEST_ID_KEY, requestId);
+        session.setItem(RESERVATION_REQUEST_HASH_KEY, payloadHash);
+      } catch (storageError) {
+        throw Object.assign(new Error('Could not persist the browser session request ID.'), { code: 'storage-unavailable' });
+      }
+
+      const requestRef = firestore.collection('reservationRequests').doc(requestId);
+      const existingRequest = await requestRef.get({ source: 'server' });
+      if (existingRequest.exists && !reservationRequestMatches(existingRequest, requestId, payloadHash)) {
+        throw Object.assign(new Error('The saved request ID belongs to another payload.'), { code: 'already-exists' });
+      }
+
+      if (!existingRequest.exists) {
+        const fieldValue = window.firebase?.firestore?.FieldValue;
+        if (!fieldValue || typeof fieldValue.serverTimestamp !== 'function') {
+          throw Object.assign(new Error('Firebase server timestamps are unavailable.'), { code: 'unavailable' });
+        }
+        const timestamp = fieldValue.serverTimestamp();
+        const reservationRef = firestore.collection('reservations').doc(requestId);
+        const reservationDocument = {
+          ...reservationData,
+          reservationId: requestId,
+          requestId,
+          createdAt: timestamp
+        };
+        const requestMarker = {
+          requestId,
+          reservationId: requestId,
+          payloadHash,
+          createdAt: timestamp
+        };
+        const batch = firestore.batch();
+        batch.set(reservationRef, reservationDocument);
+        batch.set(requestRef, requestMarker);
+        try {
+          await batch.commit();
+        } catch (commitError) {
+          const committedRequest = await requestRef.get({ source: 'server' }).catch(() => null);
+          if (!committedRequest || !reservationRequestMatches(committedRequest, requestId, payloadHash)) {
+            throw commitError;
+          }
+        }
+      }
+
+      const nowIso = new Date().toISOString();
+      reservationData.reservationId = requestId;
+      reservationData.requestId = requestId;
+      reservationData.id = requestId;
+      reservationData.createdAt = nowIso;
+      try {
+        const existing = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
+        existing.push(reservationData);
+        localStorage.setItem('mocha_reservations', JSON.stringify(existing));
+      } catch (storageError) {
+        console.warn('[Reservation] Local backup could not be saved.', storageError);
+      }
+      try {
+        session.removeItem(RESERVATION_REQUEST_ID_KEY);
+        session.removeItem(RESERVATION_REQUEST_HASH_KEY);
+      } catch (storageError) {
+        console.warn('[Reservation] Completed request marker could not be cleared.', storageError);
+      }
+
+      const successMessage = document.getElementById('form-success-message');
+      if (successMessage) successMessage.textContent = 'Yêu cầu đặt bàn đã được lưu thành công.';
+      showToast('Đã gửi yêu cầu đặt bàn đến quán qua Firebase.', 'success');
+      showSuccessView();
+      openSuccessModal(reservationData);
+    } catch (error) {
+      console.warn('[Firestore] Reservation write failed.', {
+        code: String(error && error.code || 'unknown')
       });
-    } else {
-      showToast('Chưa kết nối được Supabase nên yêu cầu chưa được gửi tới quán. Vui lòng thử lại sau.', 'error');
+      showToast(reservationWriteErrorMessage(error), 'error');
+    } finally {
       if (submit) submit.disabled = false;
       if (btnText) btnText.textContent = 'Xác nhận đặt bàn';
     }
@@ -1059,11 +1212,11 @@ function initReservationForm() {
 
 /**
  * sendEmailJS — dispatches a transactional email via EmailJS (no backend needed).
- * Updates Supabase email_status to 'Sent' or 'Failed' after every attempt.
+ * Reservation email delivery and status updates are handled by Cloud Functions.
  *
  * @param {Object}      res    Reservation data object
  * @param {string}      type   'confirmation' | 'confirmed' | 'cancelled' | 'custom'
- * @param {string|null} docId  Database record ID — used to update email_status
+ * @param {string|null} docId  Legacy record ID argument, retained for callers
  * @param {string}      [customBody]  Custom message body (for Reply modal)
  */
 function sendEmailJS(res, type, docId, customBody) {
@@ -1102,24 +1255,12 @@ function sendEmailJS(res, type, docId, customBody) {
     maps_link:       'https://maps.google.com/?q=124+Artisan+Alley+Craft+District'
   };
 
-  const client = window.supabaseClient || window.supabaseDb || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
-
-  function updateEmailStatus(status) {
-    if (docId && !String(docId).startsWith('local_') && client && typeof client.from === 'function') {
-      client.from('reservations').update({
-        email_status: status
-      }).eq('id', docId).then(() => {}).catch(() => {});
-    }
-  }
-
   emailjs.send(cfg.serviceId, cfg.templateId, templateParams)
     .then(() => {
       console.log('[EmailJS] Email sent to', res.email);
-      updateEmailStatus('Sent');
     })
     .catch(err => {
       console.warn('[EmailJS] Email send failed (reservation still saved):', err);
-      updateEmailStatus('Failed');
     });
 }
 

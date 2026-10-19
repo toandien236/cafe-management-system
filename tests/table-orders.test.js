@@ -27,7 +27,9 @@ function loadOrderScript(firebaseFirestoreReady, alert) {
     console: { error() {} },
     alert
   });
+  const menuSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'menu-data.js'), 'utf8');
   const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'order.js'), 'utf8');
+  vm.runInContext(menuSource, context, { filename: 'js/menu-data.js' });
   vm.runInContext(source, context, { filename: 'js/order.js' });
   vm.runInContext('cart = [{ id: "espresso", quantity: 2 }]', context);
   return { context, elements };
