@@ -1254,6 +1254,60 @@ function getOrderCreatedAt(order) {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+function getOrdersDateRange() {
+  return {
+    from: String(document.getElementById('orders-date-from')?.value || ''),
+    to: String(document.getElementById('orders-date-to')?.value || '')
+  };
+}
+
+function getFilteredOrders() {
+  const { from, to } = getOrdersDateRange();
+  return [...allOrders]
+    .filter(order => {
+      if (!from && !to) return true;
+      const createdAt = getOrderCreatedAt(order);
+      if (!createdAt) return false;
+      const createdDate = getLocalDateKey(new Date(createdAt));
+      return (!from || createdDate >= from) && (!to || createdDate <= to);
+    })
+    .sort((a, b) => getOrderCreatedAt(b) - getOrderCreatedAt(a));
+}
+
+function formatOrdersDateLabel(value) {
+  const [year, month, day] = value.split('-');
+  return `${day}/${month}/${year}`;
+}
+
+window.applyOrdersDateFilter = function() {
+  currentOrdersPage = 1;
+  renderOrders();
+};
+
+window.setOrdersDatePreset = function(preset) {
+  const fromInput = document.getElementById('orders-date-from');
+  const toInput = document.getElementById('orders-date-to');
+  if (!fromInput || !toInput) return;
+  const now = new Date();
+  const today = getLocalDateKey(now);
+  if (preset === 'today') {
+    fromInput.value = today;
+    toInput.value = today;
+  } else if (preset === 'this-month') {
+    fromInput.value = `${today.slice(0, 7)}-01`;
+    toInput.value = `${today.slice(0, 7)}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+  } else if (preset === 'this-year') {
+    fromInput.value = `${now.getFullYear()}-01-01`;
+    toInput.value = `${now.getFullYear()}-12-31`;
+  } else if (preset === 'all') {
+    fromInput.value = '';
+    toInput.value = '';
+  } else {
+    return;
+  }
+  window.applyOrdersDateFilter();
+};
+
 function formatVnd(amount) {
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
@@ -1355,26 +1409,44 @@ function renderOrders() {
   const pageLabel = document.getElementById('orders-page-label');
   const previousButton = document.getElementById('orders-previous-page');
   const nextButton = document.getElementById('orders-next-page');
-  const activeOrderCount = allOrders.filter(order => {
+  const filterPeriod = document.getElementById('orders-filter-period');
+  const { from, to } = getOrdersDateRange();
+  const filteredOrders = getFilteredOrders();
+  const activeOrderCount = filteredOrders.filter(order => {
     const status = String(order.status || 'new').toLowerCase();
     return status === 'new' || status === 'preparing' || status === 'in_progress';
   }).length;
+  if (filterPeriod) {
+    if (from && to) {
+      filterPeriod.textContent = `Khoảng ngày: ${formatOrdersDateLabel(from)} – ${formatOrdersDateLabel(to)}`;
+    } else if (from) {
+      filterPeriod.textContent = `Từ ngày ${formatOrdersDateLabel(from)}`;
+    } else if (to) {
+      filterPeriod.textContent = `Đến ngày ${formatOrdersDateLabel(to)}`;
+    } else {
+      filterPeriod.textContent = 'Đang hiển thị toàn bộ thời gian';
+    }
+  }
   if (summary) {
-    summary.textContent = `Đơn đang xử lý: ${activeOrderCount} · Tổng đơn: ${allOrders.length}`;
+    summary.textContent = `Đơn đang xử lý: ${activeOrderCount} · Kết quả: ${filteredOrders.length} / ${allOrders.length} đơn`;
   }
 
-  if (allOrders.length === 0) {
+  if (filteredOrders.length === 0) {
     currentOrdersPage = 1;
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--warm-gray);">Chưa có đơn gọi món.</td></tr>';
+    const emptyMessage = allOrders.length === 0
+      ? 'Chưa có đơn gọi món.'
+      : from || to
+        ? 'Không có đơn gọi món trong khoảng ngày đã chọn.'
+        : 'Chưa có đơn gọi món.';
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--warm-gray);">${emptyMessage}</td></tr>`;
     if (pagination) pagination.hidden = true;
     return;
   }
 
-  const orderedOrders = [...allOrders].sort((a, b) => getOrderCreatedAt(b) - getOrderCreatedAt(a));
-  const pageCount = Math.ceil(orderedOrders.length / ORDERS_PER_PAGE);
+  const pageCount = Math.ceil(filteredOrders.length / ORDERS_PER_PAGE);
   currentOrdersPage = Math.min(Math.max(1, currentOrdersPage), pageCount);
   const firstOrderNumber = (currentOrdersPage - 1) * ORDERS_PER_PAGE;
-  const pageOrders = orderedOrders.slice(firstOrderNumber, firstOrderNumber + ORDERS_PER_PAGE);
+  const pageOrders = filteredOrders.slice(firstOrderNumber, firstOrderNumber + ORDERS_PER_PAGE);
   tbody.innerHTML = pageOrders.map((order, index) => {
     const items = Array.isArray(order.items) ? order.items : [];
     const status = order.status || 'new';
@@ -1397,8 +1469,8 @@ function renderOrders() {
   }).join('');
   if (pagination) pagination.hidden = pageCount <= 1;
   if (pageLabel) {
-    const lastOrderNumber = Math.min(firstOrderNumber + ORDERS_PER_PAGE, orderedOrders.length);
-    pageLabel.textContent = `${firstOrderNumber + 1}–${lastOrderNumber} / ${orderedOrders.length} đơn · Trang ${currentOrdersPage}/${pageCount}`;
+    const lastOrderNumber = Math.min(firstOrderNumber + ORDERS_PER_PAGE, filteredOrders.length);
+    pageLabel.textContent = `${firstOrderNumber + 1}–${lastOrderNumber} / ${filteredOrders.length} đơn · Trang ${currentOrdersPage}/${pageCount}`;
   }
   if (previousButton) previousButton.disabled = currentOrdersPage === 1;
   if (nextButton) nextButton.disabled = currentOrdersPage === pageCount;

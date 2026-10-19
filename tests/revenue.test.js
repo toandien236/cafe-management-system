@@ -144,7 +144,7 @@ test('table orders show 15 numbered orders per scrollable page and count active 
   assert.equal(rowsOnPage(), 15);
   assert.match(elements.get('orders-tbody').innerHTML, /<td>1<\/td>\s*<td><strong>ORD-32<\/strong>/);
   assert.match(elements.get('orders-tbody').innerHTML, /<td>15<\/td>\s*<td><strong>ORD-18<\/strong>/);
-  assert.equal(elements.get('orders-summary').textContent, 'Đơn đang xử lý: 3 · Tổng đơn: 32');
+  assert.equal(elements.get('orders-summary').textContent, 'Đơn đang xử lý: 3 · Kết quả: 32 / 32 đơn');
   assert.equal(elements.get('orders-page-label').textContent, '1–15 / 32 đơn · Trang 1/3');
   assert.equal(elements.get('orders-previous-page').disabled, true);
   assert.equal(elements.get('orders-next-page').disabled, false);
@@ -162,4 +162,83 @@ test('table orders show 15 numbered orders per scrollable page and count active 
 
   context.window.changeOrdersPage(-1);
   assert.equal(elements.get('orders-page-label').textContent, '16–30 / 32 đơn · Trang 2/3');
+});
+
+test('order date range filters by created day and refreshes from Firestore snapshots', () => {
+  const { context, elements } = loadAdminScript();
+  const orderAtLocalTime = (day, orderId) => ({
+    id: orderId,
+    orderId,
+    status: 'preparing',
+    createdAt: new Date(2026, 9, day, 12).toISOString()
+  });
+  let orders = [
+    orderAtLocalTime(19, 'ORD-TODAY-A'),
+    orderAtLocalTime(18, 'ORD-YESTERDAY'),
+    orderAtLocalTime(19, 'ORD-TODAY-B')
+  ];
+  let snapshotCallback;
+  context.window.firebaseDb = {
+    collection(name) {
+      assert.equal(name, 'orders');
+      return {
+        onSnapshot(onData) {
+          snapshotCallback = onData;
+          onData({
+            forEach(callback) {
+              orders.forEach(order => callback({ id: order.id, data: () => order }));
+            }
+          });
+          return () => {};
+        }
+      };
+    }
+  };
+  vm.runInContext('adminSessionActive = true; loadOrders()', context);
+  elements.get('orders-date-from').value = '2026-10-19';
+  elements.get('orders-date-to').value = '2026-10-19';
+  context.window.applyOrdersDateFilter();
+
+  assert.equal((elements.get('orders-tbody').innerHTML.match(/<tr>/g) || []).length, 2);
+  assert.match(elements.get('orders-tbody').innerHTML, /ORD-TODAY-A/);
+  assert.match(elements.get('orders-tbody').innerHTML, /ORD-TODAY-B/);
+  assert.doesNotMatch(elements.get('orders-tbody').innerHTML, /ORD-YESTERDAY/);
+  assert.equal(elements.get('orders-summary').textContent, 'Đơn đang xử lý: 2 · Kết quả: 2 / 3 đơn');
+  assert.equal(elements.get('orders-filter-period').textContent, 'Khoảng ngày: 19/10/2026 – 19/10/2026');
+
+  orders = [...orders, orderAtLocalTime(19, 'ORD-TODAY-C')];
+  snapshotCallback({
+    forEach(callback) {
+      orders.forEach(order => callback({ id: order.id, data: () => order }));
+    }
+  });
+  assert.equal((elements.get('orders-tbody').innerHTML.match(/<tr>/g) || []).length, 3);
+  assert.equal(elements.get('orders-summary').textContent, 'Đơn đang xử lý: 3 · Kết quả: 3 / 4 đơn');
+
+  context.window.setOrdersDatePreset('all');
+  assert.equal(elements.get('orders-date-from').value, '');
+  assert.equal(elements.get('orders-date-to').value, '');
+  assert.equal((elements.get('orders-tbody').innerHTML.match(/<tr>/g) || []).length, 4);
+});
+
+test('order date presets select today, month, and year boundaries', () => {
+  const { context, elements } = loadAdminScript();
+  const now = new Date();
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0')
+  ].join('-');
+
+  context.window.setOrdersDatePreset('today');
+  assert.equal(elements.get('orders-date-from').value, today);
+  assert.equal(elements.get('orders-date-to').value, today);
+
+  context.window.setOrdersDatePreset('this-month');
+  assert.equal(elements.get('orders-date-from').value, `${today.slice(0, 7)}-01`);
+  assert.equal(elements.get('orders-date-to').value, `${today.slice(0, 7)}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`);
+
+  context.window.setOrdersDatePreset('this-year');
+  assert.equal(elements.get('orders-date-from').value, `${now.getFullYear()}-01-01`);
+  assert.equal(elements.get('orders-date-to').value, `${now.getFullYear()}-12-31`);
 });
