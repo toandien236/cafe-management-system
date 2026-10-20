@@ -45,6 +45,12 @@ function showTableMessage(message) {
     tableBody.replaceChildren(row);
 }
 
+function parseDecimal(value) {
+    if (value == null) return NaN;
+    const str = String(value).trim().replace(',', '.');
+    return parseFloat(str);
+}
+
 function getQuantity(value) {
     const quantity = Number(value);
     return Number.isFinite(quantity) ? quantity : 0;
@@ -106,6 +112,13 @@ function updateStats() {
     if (outItems) outItems.textContent = String(inventoryItems.filter(function (item) {
         return getQuantity(item.quantity) <= 0;
     }).length);
+    const totalValueEl = document.getElementById("total-value");
+    if (totalValueEl) {
+        const sumValue = inventoryItems.reduce(function (sum, item) {
+            return sum + (getQuantity(item.quantity) * (Number(item.price) || 0));
+        }, 0);
+        totalValueEl.textContent = formatCurrency(sumValue);
+    }
 }
 
 function createTextCell(value) {
@@ -227,32 +240,32 @@ async function handleSaveItem(e) {
     }
 
     const name = itemName.value.trim();
-    const category = itemCategory.value;
+    const category = itemCategory.value || "Khác";
     const unit = itemUnit.value.trim();
-    const quantity = Number(itemQuantity.value);
-    const minStock = Number(itemMin.value);
-    const price = Number(itemPrice.value);
+    const quantity = parseDecimal(itemQuantity.value);
+    const minStock = parseDecimal(itemMin.value);
+    const price = parseDecimal(itemPrice.value);
     const isEditing = itemId.value !== "";
 
     if (!name || !unit) {
-        showMessage("Vui lòng nhập tên nguyên liệu và đơn vị.", true);
+        showMessage("Vui lòng nhập tên nguyên liệu và đơn vị tính.", true);
         return;
     }
 
-    if (!isEditing && (!/^[0-9]+$/.test(itemQuantity.value.trim()) || !Number.isSafeInteger(quantity))) {
-        showMessage("Tồn đầu kỳ chỉ được nhập chữ số nguyên, không dùng dấu phẩy hoặc dấu chấm.", true);
+    if (!isEditing && (Number.isNaN(quantity) || quantity < 0)) {
+        showMessage("Tồn đầu kỳ phải là số không âm (>= 0).", true);
         itemQuantity.focus();
         return;
     }
 
-    if (!/^[0-9]+$/.test(itemMin.value.trim()) || !Number.isSafeInteger(minStock)) {
-        showMessage("Mức tồn tối thiểu chỉ được nhập chữ số nguyên, không dùng dấu phẩy hoặc dấu chấm.", true);
+    if (Number.isNaN(minStock) || minStock < 0) {
+        showMessage("Mức tồn tối thiểu phải là số không âm (>= 0).", true);
         itemMin.focus();
         return;
     }
 
-    if (!Number.isInteger(price) || price < 0) {
-        showMessage("Giá nhập phải là số nguyên VND không âm.", true);
+    if (Number.isNaN(price) || price < 0) {
+        showMessage("Giá nhập phải là số không âm (>= 0 VND).", true);
         itemPrice.focus();
         return;
     }
@@ -288,7 +301,7 @@ async function handleSaveItem(e) {
         form.reset();
         itemId.value = "";
         itemQuantity.disabled = false;
-        showMessage(isEditing ? "Đã cập nhật nguyên liệu." : "Đã thêm nguyên liệu.");
+        showMessage(isEditing ? `Đã cập nhật nguyên liệu "${name}".` : `Đã thêm mới nguyên liệu "${name}".`);
         loadInventory();
     } catch (error) {
         console.error("Lỗi lưu kho:", error);
@@ -528,16 +541,9 @@ function initInventory() {
     if (addItemBtn) addItemBtn.addEventListener("click", openAddModal);
     if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
     if (form) form.addEventListener("submit", handleSaveItem);
-    if (itemQuantity) {
-        itemQuantity.addEventListener("input", function () {
-            itemQuantity.value = itemQuantity.value.replace(/[^0-9]/g, "");
-        });
-    }
-    if (itemMin) {
-        itemMin.addEventListener("input", function () {
-            itemMin.value = itemMin.value.replace(/[^0-9]/g, "");
-        });
-    }
+    window.addEventListener("click", function (e) {
+        if (e.target === modal) closeModal();
+    });
     if (importForm) importForm.addEventListener("submit", recordStockImport);
     if (exportForm) exportForm.addEventListener("submit", recordStockExport);
 

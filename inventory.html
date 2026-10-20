@@ -72,9 +72,21 @@
 
         .inventory-stats {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 20px;
             margin-bottom: 30px;
+        }
+
+        @media (max-width: 900px) {
+            .inventory-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 500px) {
+            .inventory-stats {
+                grid-template-columns: 1fr;
+            }
         }
 
         .stat-card {
@@ -1273,6 +1285,11 @@
 
         </div>
 
+        <div class="stat-card">
+            <h3>Tổng giá trị kho</h3>
+            <p id="total-value">0 ₫</p>
+        </div>
+
 
     </div>
 
@@ -1444,27 +1461,16 @@
                 </label>
 
                 <select id="item-category">
-
-                    <option value="Coffee">
-                        Coffee
-                    </option>
-
-                    <option value="Milk">
-                        Sữa
-                    </option>
-
-                    <option value="Tea">
-                        Trà
-                    </option>
-
-                    <option value="Sugar">
-                        Đường
-                    </option>
-
-                    <option value="Other">
-                        Khác
-                    </option>
-
+                    <option value="Cà phê">Cà phê</option>
+                    <option value="Sữa & Kem">Sữa & Kem</option>
+                    <option value="Trà & Bột">Trà & Bột</option>
+                    <option value="Bơ & Phô mai">Bơ & Phô mai</option>
+                    <option value="Nguyên liệu bánh & Mì">Nguyên liệu bánh & Mì</option>
+                    <option value="Topping & Syrup">Topping & Syrup</option>
+                    <option value="Hải sản & Thịt">Hải sản & Thịt</option>
+                    <option value="Rau củ & Trái cây">Rau củ & Trái cây</option>
+                    <option value="Gia vị & Khác">Gia vị & Khác</option>
+                    <option value="Khác">Khác</option>
                 </select>
 
             </div>
@@ -1477,10 +1483,11 @@
                 </label>
 
                 <input
-                    type="text"
+                    type="number"
+                    step="any"
+                    min="0"
                     id="item-quantity"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
+                    placeholder="Ví dụ: 25"
                     autocomplete="off"
                     required>
 
@@ -1527,10 +1534,11 @@
                 </label>
 
                 <input
-                    type="text"
+                    type="number"
+                    step="any"
+                    min="0"
                     id="item-min"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
+                    placeholder="Ví dụ: 5"
                     autocomplete="off"
                     required>
 
