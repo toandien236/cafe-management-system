@@ -1205,7 +1205,6 @@ function renderCustomerProfile(profile) {
     </tr>`;
   }).join('');
 
-    ${legacyVisitHistoryNote}
   const visitHistoryText = visitLoadState === 'ready'
     ? `${profile.visits.length} lượt ghé được ghi nhận`
     : getVisitLoadMessage();
@@ -1219,6 +1218,7 @@ function renderCustomerProfile(profile) {
       <div><strong>Lượt đặt bàn</strong><span>${profile.reservations.length}</span></div>
       <div><strong>Lượt ghé</strong><span>${escapeHtml(visitHistoryText)}<br>Lần gần nhất: ${escapeHtml(latestVisitText)}</span></div>
     </div>
+    ${legacyVisitHistoryNote}
     <h3 class="customer-history-heading">Lịch sử đặt bàn (${profile.reservations.length})</h3>
     <p class="customer-profile-note">Đặt bàn không tự động được tính là lượt ghé. Chỉ ghi nhận sau khi nhân viên xác nhận khách đã đến và được phục vụ.</p>
     <div class="admin-table-card">
@@ -1535,7 +1535,6 @@ window.selectOrdersCalendarDate = function(value) {
 
 window.clearOrdersCalendarDate = function() {
   if (!['from', 'to'].includes(ordersCalendarTarget)) return;
-    if (res.archivedAt) return false;
   const input = document.getElementById(`orders-date-${ordersCalendarTarget}`);
   if (input) input.value = '';
   updateOrdersDateDisplay(ordersCalendarTarget);
@@ -1770,6 +1769,8 @@ function renderTable() {
   if (!tbody) return;
 
   let filtered = allReservations.filter(res => {
+    if (res.archivedAt) return false;
+
     // Filter status
     const resStatus = (res.status || 'Pending').toLowerCase();
     if (activeFilter !== 'all' && resStatus !== activeFilter.toLowerCase()) return false;
@@ -1793,7 +1794,6 @@ function renderTable() {
       <tr>
         <td colspan="7" style="text-align:center; padding: 48px; color: var(--warm-gray);">
           Không tìm thấy lượt đặt bàn phù hợp.
-  let archivedReservation = false;
         </td>
       </tr>
     `;
@@ -1857,7 +1857,6 @@ function renderTable() {
         <td>
           <span class="email-badge ${emailBadgeClass}">
             ${escapeHtml(getEmailStatusLabel(emailStatus))}
-      archivedReservation = result.status === 'archived';
           </span>
         </td>
         <td>
@@ -2029,6 +2028,7 @@ window.deleteBooking = async function(id) {
   if (!confirm('Xóa lượt đặt bàn khỏi danh sách? Nếu khách đã được ghi nhận đã đến, lịch sử đặt bàn sẽ được giữ lại.')) return;
 
   const item = allReservations.find(r => r.id === reservationId);
+  let archivedReservation = false;
 
   if (!isLocalReservation) {
     const authInstance = window.firebaseAuth || window.auth || (typeof auth !== 'undefined' ? auth : null);
@@ -2093,6 +2093,7 @@ window.deleteBooking = async function(id) {
         showToast('Không tìm thấy đặt bàn trên Firestore; không có dữ liệu nào bị xóa.', 'error');
         return;
       }
+      archivedReservation = result.status === 'archived';
       if (result.visit) {
         serverAcknowledgedVisits.set(reservationId, result.visit);
         allVisits = mergeAcknowledgedVisits([...allVisits, result.visit]);
