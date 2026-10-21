@@ -34,7 +34,7 @@
         <p class="admin-brand-sub">Mocha &amp; Miso · Cà phê thủ công</p>
       </div>
 
-      <form class="reservation-form" id="admin-login-form" novalidate>
+      <form class="reservation-form" id="admin-login-form" onsubmit="event.preventDefault();" novalidate>
         <div class="form-group">
           <input type="email" id="admin-email" class="form-input" placeholder=" " required autocomplete="username" />
           <label for="admin-email" class="form-label form-label--up">Email quản trị</label>
@@ -468,7 +468,7 @@
       updateDoc: (reference, data) => reference.update(data)
     };
   </script>
-  <script src="admin.js?v=customer-visit-history-20261019" defer></script>
+  <script src="admin.js?v=orders-date-filter-vi-20261019" defer></script>
 </body>
 
 </html>

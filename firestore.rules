@@ -205,7 +205,7 @@ service cloud.firestore {
           || resource.data.reservationId == null
           || resource.data.reservationId == ''
           || resource.data.reservationId == reservationId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customer', 'reservationId', 'reservationHistory'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customer', 'reservationId'])
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['customer'])
           || !resource.data.keys().hasAny(['customer'])
           || !isValidVisitCustomerSnapshot(resource.data.customer))

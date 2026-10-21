@@ -853,7 +853,6 @@ function buildCustomerProfiles() {
       reservations.forEach((reservation, index) => {
         const key = `reservation:${reservation.id || `ambiguous-phone-${phone}-${index}`}`;
         addReservationToCustomer(ensureProfile(key, true), reservation);
-  const visitProfileKeyById = new Map();
         if (reservation.id) reservationProfileKeyById.set(String(reservation.id), key);
       });
       return;
@@ -873,6 +872,7 @@ function buildCustomerProfiles() {
     const reservationId = getVisitReservationId(visit);
     if (reservationId) visitsByReservationId.set(reservationId, visit);
   });
+  const visitProfileKeyById = new Map();
 
   visitsByReservationId.forEach((visit, reservationId) => {
     const linkedReservation = reservationsById.get(reservationId);
@@ -889,7 +889,6 @@ function buildCustomerProfiles() {
     if (!key && email) {
       key = `email:${email}`;
     } else if (!key && phone.length >= 7) {
-    visitProfileKeyById.set(reservationId, key);
       const owners = emailGroupsByPhone.get(phone) || new Set();
       if (owners.size === 1) {
         key = Array.from(owners)[0];
@@ -904,43 +903,10 @@ function buildCustomerProfiles() {
       const storedKey = String(customer && customer.key || '');
       key = /^(?:reservation|visit):/.test(storedKey) ? storedKey : `visit:${reservationId}`;
     }
+    visitProfileKeyById.set(reservationId, key);
     const profile = ensureProfile(key, ambiguousPhoneMatch);
     profile.visits.push({ ...visit, id: visit.id || reservationId, reservationId });
     if (customer) profile.customerSnapshots.push(customer);
-  });
-
-  // Keep visit-only records discoverable in customer history after an older
-  // version of the delete action removed their reservation document.
-  visitsByReservationId.forEach((visit, reservationId) => {
-    if (reservationsById.has(reservationId)) return;
-    const customer = visit.customer && typeof visit.customer === 'object' ? visit.customer : {};
-    const storedHistory = visit.reservationHistory && typeof visit.reservationHistory === 'object'
-      ? visit.reservationHistory
-      : null;
-    const hasStoredHistory = Boolean(storedHistory && getReservationDateKey(storedHistory.date));
-    const date = hasStoredHistory
-      ? String(storedHistory.date)
-      : getVisitDateKey(visit);
-    if (!date) return;
-    const key = visitProfileKeyById.get(reservationId);
-    const profile = key && profilesByKey.get(key);
-    if (!profile) return;
-    const snapshot = hasStoredHistory ? storedHistory : {};
-    profile.reservations.push({
-      id: reservationId,
-      reservationId,
-      customerName: String(customer.name || ''),
-      name: String(customer.name || ''),
-      email: String(customer.email || ''),
-      phone: String(customer.phone || ''),
-      date,
-      time: String(snapshot.time || getVisitTime(visit)),
-      guests: Number.isInteger(Number(snapshot.guests)) ? Number(snapshot.guests) : 0,
-      specialRequest: String(snapshot.notes || ''),
-      status: String(snapshot.status || 'confirmed'),
-      createdAt: visit.recordedAt || visit.visitedAt || null,
-      isVisitHistoryFallback: !hasStoredHistory
-    });
   });
 
   return Array.from(profilesByKey.values()).map(profile => {
@@ -1007,14 +973,14 @@ function getVisitLoadMessage() {
 
 function updateCustomerListViewport() {
   const tbody = document.getElementById('customers-tbody');
-  const viewport = tbody && tbody.closest('.customer-care-list-scroll');
-  const table = tbody && tbody.closest('table');
+  const viewport = tbody && typeof tbody.closest === 'function' ? tbody.closest('.customer-care-list-scroll') : null;
+  const table = tbody && typeof tbody.closest === 'function' ? tbody.closest('table') : null;
   if (!viewport || !table) return;
 
-  const headerHeight = table.tHead ? table.tHead.getBoundingClientRect().height : 0;
-  const customerRowsHeight = Array.from(tbody.rows)
+  const headerHeight = table.tHead && typeof table.tHead.getBoundingClientRect === 'function' ? table.tHead.getBoundingClientRect().height : 0;
+  const customerRowsHeight = Array.from(tbody.rows || [])
     .slice(0, 5)
-    .reduce((height, row) => height + row.getBoundingClientRect().height, 0);
+    .reduce((height, row) => height + (typeof row.getBoundingClientRect === 'function' ? row.getBoundingClientRect().height : 0), 0);
   viewport.style.maxHeight = `${headerHeight + customerRowsHeight}px`;
 }
 
@@ -1189,7 +1155,7 @@ function renderCustomerProfile(profile) {
     return `
       <tr>
         <td>${escapeHtml(reservation.date || 'Không có ngày')}<br><span class="customer-contact-line">${escapeHtml(formatTime(String(reservation.time || '')) || 'Không có giờ')}</span></td>
-        <td>${!reservation.isVisitHistoryFallback && Number.isInteger(Number(reservation.guests)) && Number(reservation.guests) > 0 ? Number(reservation.guests) : '—'}</td>
+        <td>${Number.isInteger(Number(reservation.guests)) && Number(reservation.guests) > 0 ? Number(reservation.guests) : '—'}</td>
         <td>${notes ? escapeHtml(notes) : '<span class="customer-contact-line">Không có ghi chú</span>'}</td>
         <td><span class="status-badge status--${escapeHtml(String(status).toLowerCase())}">${escapeHtml(getStatusLabel(status))}</span></td>
         <td>${visitControl}</td>
@@ -1205,13 +1171,9 @@ function renderCustomerProfile(profile) {
     </tr>`;
   }).join('');
 
-    ${legacyVisitHistoryNote}
   const visitHistoryText = visitLoadState === 'ready'
     ? `${profile.visits.length} lượt ghé được ghi nhận`
     : getVisitLoadMessage();
-  const legacyVisitHistoryNote = profile.reservations.some(reservation => reservation.isVisitHistoryFallback)
-    ? '<p class="customer-profile-note">Một số đặt bàn cũ đã bị xóa khỏi hệ thống. Ngày giờ đang hiển thị là ngày giờ ghi nhận khách đã đến.</p>'
-    : '';
   body.innerHTML = `
     <div class="customer-profile-summary">
       <div><strong>Email</strong><span>${escapeHtml(emailText)}</span></div>
@@ -1328,8 +1290,7 @@ async function recordReservationVisit(reservationId) {
         recordedAt: fieldValue.serverTimestamp(),
         recordedBy: user.uid,
         source: 'staff-confirmed',
-        customer,
-        reservationHistory: buildVisitReservationSnapshot(reservationSnapshot.data() || reservation)
+        customer
       });
       transactionStep = 'commit-transaction';
       return {
@@ -1340,8 +1301,7 @@ async function recordReservationVisit(reservationId) {
           recordedAt: new Date(),
           recordedBy: user.uid,
           source: 'staff-confirmed',
-          customer,
-          reservationHistory: buildVisitReservationSnapshot(reservationSnapshot.data() || reservation)
+          customer
         }
       };
     });
@@ -1535,7 +1495,6 @@ window.selectOrdersCalendarDate = function(value) {
 
 window.clearOrdersCalendarDate = function() {
   if (!['from', 'to'].includes(ordersCalendarTarget)) return;
-    if (res.archivedAt) return false;
   const input = document.getElementById(`orders-date-${ordersCalendarTarget}`);
   if (input) input.value = '';
   updateOrdersDateDisplay(ordersCalendarTarget);
@@ -1793,7 +1752,6 @@ function renderTable() {
       <tr>
         <td colspan="7" style="text-align:center; padding: 48px; color: var(--warm-gray);">
           Không tìm thấy lượt đặt bàn phù hợp.
-  let archivedReservation = false;
         </td>
       </tr>
     `;
@@ -1857,7 +1815,6 @@ function renderTable() {
         <td>
           <span class="email-badge ${emailBadgeClass}">
             ${escapeHtml(getEmailStatusLabel(emailStatus))}
-      archivedReservation = result.status === 'archived';
           </span>
         </td>
         <td>
@@ -2062,25 +2019,12 @@ window.deleteBooking = async function(id) {
             visitUpdate.customer = buildVisitCustomerSnapshot(reservationData, reservationId);
           }
           if (!existingVisit.reservationId) visitUpdate.reservationId = reservationId;
-          if (!isValidVisitReservationSnapshot(existingVisit.reservationHistory)) {
-            visitUpdate.reservationHistory = buildVisitReservationSnapshot(reservationData);
-          }
           if (Object.keys(visitUpdate).length) {
-            transactionStep = 'preserve-visit-history';
+            transactionStep = 'preserve-visit-customer';
             transactionOperations.push({ action: 'update', path: visitRef.path, fields: Object.keys(visitUpdate).sort() });
-            preservedVisit.customer = buildVisitCustomerSnapshot(reservationSnapshot.data() || {}, reservationId);
             transaction.update(visitRef, visitUpdate);
           }
           preservedVisit = { ...existingVisit, ...visitUpdate, id: reservationId, reservationId };
-          transactionStep = 'archive-reservation';
-          transactionOperations.push({ action: 'update', path: reservationRef.path, fields: ['archivedAt'] });
-          const fieldValue = window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue;
-          transaction.update(reservationRef, {
-            archivedAt: fieldValue ? fieldValue.serverTimestamp() : new Date()
-          });
-          transactionStep = 'commit-transaction';
-          transactionOperations.push({ action: 'commit' });
-          return { status: 'archived', visit: preservedVisit };
         }
         transactionStep = 'delete-reservation';
         transactionOperations.push({ action: 'delete', path: reservationRef.path });
@@ -2109,9 +2053,7 @@ window.deleteBooking = async function(id) {
     }
   }
 
-  allReservations = archivedReservation
-    ? allReservations.map(r => r.id === reservationId ? { ...r, archivedAt: new Date() } : r)
-    : allReservations.filter(r => r.id !== reservationId);
+  allReservations = allReservations.filter(r => r.id !== reservationId);
 
   // Remove from localStorage
   try {
@@ -2125,9 +2067,7 @@ window.deleteBooking = async function(id) {
   updateStats();
   renderTable();
   renderCustomers();
-  if (archivedReservation) {
-    showToast('Đã ẩn đặt bàn khỏi danh sách; hồ sơ khách và lịch sử đặt bàn vẫn được giữ.', 'success');
-  } else if (!isLocalReservation) {
+  if (!isLocalReservation) {
     showToast('Đã xóa đặt bàn; lịch sử lượt ghé được giữ nguyên.', 'success');
   }
 };
