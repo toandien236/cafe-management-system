@@ -185,10 +185,8 @@ service cloud.firestore {
       // Its document ID is the reservation ID, making repeats fail.
       allow create: if isAdmin()
         && request.resource.data.keys().hasAll(['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer'])
-        && request.resource.data.keys().hasOnly(['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer', 'reservationHistory'])
+        && request.resource.data.keys().hasOnly(['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer'])
         && isValidVisitCustomerSnapshot(request.resource.data.customer)
-        && (!request.resource.data.keys().hasAny(['reservationHistory'])
-          || isValidVisitReservationSnapshot(request.resource.data.reservationHistory))
         && request.resource.data.reservationId == reservationId
         && request.resource.data.recordedAt == request.time
         && request.resource.data.recordedBy == request.auth.uid
@@ -198,26 +196,20 @@ service cloud.firestore {
         && existsAfter(/databases/$(database)/documents/reservations/$(reservationId))
         && getAfter(/databases/$(database)/documents/reservations/$(reservationId)).data.status in ['confirmed', 'Confirmed'];
 
-      // Legacy visit records may be enriched with missing customer and
-      // reservation history while their confirmed reservation is retained.
+      // A legacy visit without a valid customer snapshot may be enriched only
+      // in the same transaction that removes its reservation. Keep every
+      // existing field immutable; legacy documents may have additional fields.
       allow update: if isAdmin()
         && (!resource.data.keys().hasAny(['reservationId'])
           || resource.data.reservationId == null
           || resource.data.reservationId == ''
           || resource.data.reservationId == reservationId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customer', 'reservationId'])
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['customer'])
-          || !resource.data.keys().hasAny(['customer'])
-          || !isValidVisitCustomerSnapshot(resource.data.customer))
         && request.resource.data.reservationId == reservationId
+        && (!resource.data.keys().hasAny(['customer'])
+          || !isValidVisitCustomerSnapshot(resource.data.customer))
         && isValidVisitCustomerSnapshot(request.resource.data.customer)
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reservationHistory'])
-          || !resource.data.keys().hasAny(['reservationHistory'])
-          || !isValidVisitReservationSnapshot(resource.data.reservationHistory))
-        && (!request.resource.data.keys().hasAny(['reservationHistory'])
-          || isValidVisitReservationSnapshot(request.resource.data.reservationHistory))
-        && exists(/databases/$(database)/documents/reservations/$(reservationId))
-        && getAfter(/databases/$(database)/documents/reservations/$(reservationId)).data.status in ['confirmed', 'Confirmed'];
+        && !existsAfter(/databases/$(database)/documents/reservations/$(reservationId));
       allow delete: if false;
     }
 
@@ -237,7 +229,9 @@ service cloud.firestore {
         && request.resource.data.status == 'new'
         && request.resource.data.paymentStatus == 'unpaid';
 
-      allow read, update, delete: if isAdmin();
+      // Customers can get their single order document to track progress; only admin can list or update
+      allow get: if true;
+      allow list, update, delete: if isAdmin();
     }
 
     match /tableAllocationDays/{date} {

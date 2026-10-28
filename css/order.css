@@ -65,3 +65,135 @@ textarea { width: 100%; resize: vertical; border: 1px solid var(--line); backgro
 .state-icon { width: 54px; height: 54px; margin: 0 auto; display: grid; place-items: center; border-radius: 50%; background: #ead9c9; color: var(--coffee); font-size: 28px; font-weight: 700; }
 @media (max-width: 820px) { .order-layout { grid-template-columns: 1fr; } .cart-panel { position: static; } }
 @media (max-width: 560px) { .order-shell { width: min(100% - 22px, 560px); padding-top: 16px; } .order-header { align-items: flex-start; flex-direction: column; } .order-menu-grid { grid-template-columns: 1fr; } .menu-item { grid-template-columns: 72px 1fr; } .menu-item img { width: 72px; height: 72px; } }
+
+/* ──────────────────────────────────────────────────────────
+   ORDER STATUS TRACKER & PROGRESS (ORD-07)
+   ────────────────────────────────────────────────────────── */
+.order-tracker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 28px 0 20px;
+  position: relative;
+  width: 100%;
+}
+.tracker-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  z-index: 2;
+  flex: 1;
+}
+.step-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--cream-dark);
+  color: var(--coffee-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  transition: all .3s ease;
+  border: 2px solid transparent;
+}
+.step-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #876f64;
+  text-align: center;
+  white-space: nowrap;
+}
+.tracker-line {
+  flex: 1;
+  height: 3px;
+  background: var(--line);
+  margin-top: -18px;
+  z-index: 1;
+  transition: background .3s ease;
+}
+.tracker-step.active .step-circle {
+  background: var(--accent);
+  color: white;
+  border-color: #f7ede7;
+  box-shadow: 0 0 0 4px rgba(198, 108, 69, .25);
+  transform: scale(1.1);
+}
+.tracker-step.active .step-label {
+  color: var(--accent);
+  font-weight: 700;
+}
+.tracker-step.completed .step-circle {
+  background: var(--success);
+  color: white;
+}
+.tracker-step.completed .step-label {
+  color: var(--success);
+}
+.tracker-line.completed {
+  background: var(--success);
+}
+.live-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f0f7f4;
+  color: var(--success);
+  border: 1px solid #c9e2d7;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 12px 0 18px;
+}
+.pulsing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 0 rgba(63, 114, 91, .7);
+  animation: pulse 1.8s infinite;
+}
+@keyframes pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(63, 114, 91, .7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(63, 114, 91, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(63, 114, 91, 0); }
+}
+.order-summary-box {
+  margin: 20px 0;
+  padding: 16px;
+  background: var(--cream);
+  border: 1px solid var(--line);
+  text-align: left;
+  border-radius: 4px;
+}
+.order-meta-row {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--line);
+  font-size: 13px;
+}
+.order-items-list {
+  padding: 10px 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.order-items-list .order-item-row {
+  display: flex;
+  justify-content: space-between;
+}
+.order-total-row {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-size: 15px;
+}
+.order-total-row strong {
+  color: var(--coffee);
+  font-size: 17px;
+}

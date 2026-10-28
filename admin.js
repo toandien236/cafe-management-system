@@ -9,7 +9,26 @@
 /* ──────────────────────────────────────────────────────────
    BOOT — wait for Firebase Auth and Firestore SDKs
    ────────────────────────────────────────────────────────── */
+function checkFileProtocol() {
+  if (typeof window === 'undefined' || window.location?.protocol !== 'file:') return;
+  const banner = document.getElementById('file-protocol-warning');
+  if (banner) {
+    banner.style.display = 'block';
+    if (typeof fetch === 'function') {
+      fetch('http://localhost:8000/admin.html', { method: 'HEAD', mode: 'no-cors' })
+        .then(() => {
+          banner.innerHTML = '⚡ Máy chủ <strong>http://localhost:8000</strong> đang hoạt động! <a href="http://localhost:8000/admin.html" style="font-weight:bold; color:#155724; background:#d4edda; padding:3px 10px; border-radius:4px; text-decoration:none; margin-left:10px;">👉 Bấm vào đây để chuyển sang máy chủ Local (gửi email trực tiếp)</a>';
+          banner.style.background = '#d4edda';
+          banner.style.color = '#155724';
+          banner.style.borderBottomColor = '#c3e6cb';
+        })
+        .catch(() => {});
+    }
+  }
+}
+
 function bootAdmin() {
+  checkFileProtocol();
   const waitForFirebase = setInterval(() => {
     const authInstance = window.firebaseAuth || window.auth || (typeof firebase !== 'undefined' ? firebase.auth() : null);
     if (authInstance && (typeof authInstance.onAuthStateChanged === 'function'
@@ -2271,6 +2290,25 @@ function initReplyModalHandlers() {
   const modal = document.getElementById('reply-modal');
   const cancelBtn = document.getElementById('modal-cancel-btn');
   const sendBtn = document.getElementById('modal-send-btn');
+  const mailtoBtn = document.getElementById('modal-mailto-btn');
+
+  if (mailtoBtn) {
+    mailtoBtn.addEventListener('click', () => {
+      const email = document.getElementById('modal-guest-email')?.value?.trim() || '';
+      const subject = document.getElementById('modal-subject')?.value?.trim() || 'Thông tin đặt bàn tại Mocha & Miso';
+      const body  = document.getElementById('modal-message')?.value?.trim() || '';
+
+      if (!email) {
+        showToast('Chưa có địa chỉ email người nhận.', 'error');
+        return;
+      }
+
+      const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.open(mailtoUrl, '_blank');
+      showToast('Đã mở trình gửi email mặc định của máy.', 'info');
+      if (modal) modal.hidden = true;
+    });
+  }
 
   if (cancelBtn) {
     cancelBtn.addEventListener('click', () => {
@@ -2399,7 +2437,13 @@ window.sendEmailJS = function(reservation, type, id) {
     });
   };
 
-  return emailjs.send(config.serviceId, config.templateId, params).then(async () => {
+  try {
+    if (typeof emailjs !== 'undefined' && emailjs.init) {
+      emailjs.init({ publicKey: config.publicKey });
+    }
+  } catch (e) {}
+
+  return emailjs.send(config.serviceId, config.templateId, params, config.publicKey).then(async () => {
     try {
       await saveEmailStatus('Sent', null);
     } catch (error) {

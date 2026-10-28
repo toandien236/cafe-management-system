@@ -23,6 +23,11 @@
 
 <body class="admin-body">
 
+  <div id="file-protocol-warning" style="display:none; background:#fff3cd; color:#856404; padding:10px 16px; font-size:13px; text-align:center; border-bottom:1px solid #ffeeba; position:sticky; top:0; z-index:9999;">
+    ⚠️ Bạn đang mở qua giao thức <code>file:///</code>. EmailJS yêu cầu chạy trên máy chủ web.
+    <a href="http://localhost:8000/admin.html" style="font-weight:600; color:#533f03; text-decoration:underline; margin-left:8px;">👉 Nhấp vào đây để chuyển sang http://localhost:8000/admin.html</a>
+  </div>
+
   <!-- ============================================================ -->
   <!-- 1. LOGIN SCREEN -->
   <!-- ============================================================ -->
@@ -409,6 +414,8 @@
       <div class="admin-modal-actions">
         <button type="button" class="btn btn-outline" id="modal-cancel-btn"
           style="font-size: 13px; padding: 8px 18px;">Đóng</button>
+        <button type="button" class="btn btn-outline" id="modal-mailto-btn"
+          style="font-size: 13px; padding: 8px 14px;" title="Gửi bằng ứng dụng email của máy (Gmail, Outlook...)">Gửi qua ứng dụng Mail</button>
         <button type="button" class="btn btn-primary" id="modal-send-btn"
           style="font-size: 13px; padding: 8px 18px;">Gửi email</button>
       </div>
@@ -422,13 +429,21 @@
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <script>
     // EmailJS config — must match the credentials set in index.html
-    window.EMAILJS_CONFIG = {
+    const storedEmailConfig = (() => {
+      try {
+        const stored = localStorage.getItem('mocha_emailjs_config');
+        return stored ? JSON.parse(stored) : null;
+      } catch (e) { return null; }
+    })();
+
+    window.EMAILJS_CONFIG = Object.assign({
       publicKey: '7jzJ419nvCmAxeJLX',
       serviceId: 'service_x65ekfh',
       templateId: 'template_6uavdg3'
-    };
-    if (window.EMAILJS_CONFIG.publicKey !== 'YOUR_PUBLIC_KEY') {
-      emailjs.init({ publicKey: window.EMAILJS_CONFIG.publicKey });
+    }, storedEmailConfig || {});
+
+    if (window.EMAILJS_CONFIG.publicKey && window.EMAILJS_CONFIG.publicKey !== 'YOUR_PUBLIC_KEY' && typeof emailjs !== 'undefined') {
+      try { emailjs.init({ publicKey: window.EMAILJS_CONFIG.publicKey }); } catch (e) {}
     }
   </script>
 

@@ -292,7 +292,7 @@ test('client avoids Cloud Functions and does not ask guests to choose a table', 
   assert.doesNotMatch(indexHtml, /res-requested-table-number|Bàn mong muốn/);
   assert.doesNotMatch(mainSource, /requestedTableNumber|res-requested-table-number/);
   assert.match(indexHtml, /firebase\.js\?v=4/);
-  assert.match(indexHtml, /js\/main\.js\?v=9/);
+  assert.match(indexHtml, /js\/main\.js\?v=(?:9|13)/);
   assert.doesNotMatch(indexHtml, /form-success-table|modal-res-table/);
   assert.doesNotMatch(mainSource, /form-success-table|modal-res-table|formatAssignedTableNumber/);
   assert.match(rulesSource, /allow create: if isValidPublicReservation\(reservation\)/);

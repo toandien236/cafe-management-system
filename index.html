@@ -1052,14 +1052,22 @@
   <!-- Optional EmailJS SDK; Firebase Functions handle reservation emails and delivery status. -->
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <script>
-    // EmailJS config — replace with your credentials from emailjs.com
-    window.EMAILJS_CONFIG = {
-      publicKey:  'YOUR_PUBLIC_KEY',     // Account → API Keys → Public Key
-      serviceId:  'YOUR_SERVICE_ID',     // Email Services → your service ID
-      templateId: 'YOUR_TEMPLATE_ID'    // Email Templates → your template ID
-    };
-    if (window.EMAILJS_CONFIG.publicKey !== 'YOUR_PUBLIC_KEY') {
-      emailjs.init({ publicKey: window.EMAILJS_CONFIG.publicKey });
+    // EmailJS config
+    const storedEmailConfig = (() => {
+      try {
+        const stored = localStorage.getItem('mocha_emailjs_config');
+        return stored ? JSON.parse(stored) : null;
+      } catch (e) { return null; }
+    })();
+
+    window.EMAILJS_CONFIG = Object.assign({
+      publicKey: '7jzJ419nvCmAxeJLX',
+      serviceId: 'service_x65ekfh',
+      templateId: 'template_6uavdg3'
+    }, storedEmailConfig || {});
+
+    if (window.EMAILJS_CONFIG.publicKey && window.EMAILJS_CONFIG.publicKey !== 'YOUR_PUBLIC_KEY' && typeof emailjs !== 'undefined') {
+      try { emailjs.init({ publicKey: window.EMAILJS_CONFIG.publicKey }); } catch (e) {}
     }
   </script>
 

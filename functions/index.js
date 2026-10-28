@@ -10,6 +10,7 @@ const {
 } = require('./templates/emailTemplates');
 const smsService = require('./services/smsService');
 const { createReservationWithTable } = require('./services/tableAssignment');
+const { createVerifiedOrder, validateAndCalculateOrder } = require('./services/orderService');
 const {
   normalizeFirestoreErrorCode,
   mapFirestoreErrorCodeToCallableCode
@@ -129,6 +130,31 @@ exports.createReservationWithTable = functions
     throw new functions.https.HttpsError('internal', 'Máy chủ không thể hoàn tất giao dịch đặt bàn.');
   }
 });
+
+/**
+ * Submit and verify a table order on the server.
+ * Recalculates prices against authoritative menu data and guarantees idempotency.
+ */
+exports.submitTableOrder = functions
+  .region(TABLE_ASSIGNMENT_FUNCTION_REGION)
+  .https.onCall(async (data) => {
+    try {
+      const result = await createVerifiedOrder(admin.firestore(), data);
+      return {
+        success: true,
+        orderId: result.orderId,
+        total: result.total,
+        isDuplicate: result.isDuplicate,
+        order: result
+      };
+    } catch (error) {
+      console.error('[submitTableOrder] Order submission failed:', error);
+      if (error && error.code === 'invalid-argument') {
+        throw new functions.https.HttpsError('invalid-argument', error.message || 'Dữ liệu đơn hàng không hợp lệ.');
+      }
+      throw new functions.https.HttpsError('internal', 'Máy chủ không thể hoàn tất đơn gọi món.');
+    }
+  });
 
 /**
  * Helper to safely dispatch email and update Firestore status
