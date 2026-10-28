@@ -379,6 +379,18 @@ let customerSearchQuery = '';
 let selectedCustomerKey = null;
 const visitSavingIds = new Set();
 const serverAcknowledgedVisits = new Map();
+const archivedVisitGuests = new Map();
+try {
+  if (typeof localStorage !== 'undefined') {
+    const raw = localStorage.getItem('mocha_archived_visit_guests');
+    const stored = JSON.parse(raw || '{}');
+    if (stored && typeof stored === 'object' && !Array.isArray(stored)) {
+      Object.entries(stored).forEach(([id, count]) => {
+        archivedVisitGuests.set(id, parseInt(count, 10) || 2);
+      });
+    }
+  }
+} catch (e) {}
 let reservationVisitsUnsubscribe = null;
 let reservationVisitsListenerGeneration = 0;
 
@@ -539,6 +551,13 @@ function loadReservations() {
       // Sort newest first
       allReservations.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
+      // Cache guests of known reservations
+      allReservations.forEach(r => {
+        if (r.id && r.guests) {
+          archivedVisitGuests.set(r.id, parseInt(r.guests, 10) || 2);
+        }
+      });
+
       updateStats();
       renderTable();
       renderCustomers();
@@ -567,10 +586,30 @@ function updateStats() {
   const confirmedEl = document.getElementById('stat-confirmed');
   const guestsEl    = document.getElementById('stat-guests');
 
-  const total     = allReservations.length;
+  // Đếm các lượt ghé đã đến mà đơn đặt bàn gốc đã được xóa khỏi bảng
+  const reservationIdsInTable = new Set(allReservations.map(r => r.id));
+  const archivedVisits = allVisits.filter(v => {
+    const resId = getVisitReservationId(v);
+    return resId && !reservationIdsInTable.has(resId);
+  });
+  const archivedVisitsCount = archivedVisits.length;
+
+  let archivedVisitsGuests = 0;
+  archivedVisits.forEach(visit => {
+    const resId = getVisitReservationId(visit);
+    const count = (typeof archivedVisitGuests !== 'undefined' && archivedVisitGuests.get(resId))
+      || (visit.reservationHistory && parseInt(visit.reservationHistory.guests, 10))
+      || 2;
+    archivedVisitsGuests += count;
+  });
+
+  // Loại trừ các đơn đã hủy (cancelled) - khi hủy đặt bàn, số khách lập tức được trừ đi
+  const nonCancelled = allReservations.filter(r => (r.status || '').toLowerCase() !== 'cancelled');
+
+  const total     = allReservations.length + archivedVisitsCount;
   const pending   = allReservations.filter(r => (r.status || 'Pending').toLowerCase() === 'pending').length;
-  const confirmed = allReservations.filter(r => (r.status || '').toLowerCase() === 'confirmed').length;
-  const guests    = allReservations.reduce((sum, r) => sum + (parseInt(r.guests, 10) || 2), 0);
+  const confirmed = allReservations.filter(r => (r.status || '').toLowerCase() === 'confirmed').length + archivedVisitsCount;
+  const guests    = nonCancelled.reduce((sum, r) => sum + (parseInt(r.guests, 10) || 2), 0) + archivedVisitsGuests;
 
   if (totalEl) totalEl.textContent = total;
   if (pendingEl) pendingEl.textContent = pending;
@@ -620,6 +659,7 @@ function loadReservationVisits() {
     snapshot.forEach(doc => snapshotVisits.push({ ...doc.data(), id: doc.id }));
     allVisits = mergeAcknowledgedVisits(snapshotVisits);
     visitLoadState = 'ready';
+    if (typeof updateStats === 'function') updateStats();
     renderTable();
     renderCustomers();
   }, (error) => {
@@ -630,6 +670,7 @@ function loadReservationVisits() {
     });
     allVisits = mergeAcknowledgedVisits([]);
     visitLoadState = 'error';
+    if (typeof updateStats === 'function') updateStats();
     renderTable();
     renderCustomers();
     showToast(firestoreUserMessage('read-visit-history', error), 'error');
@@ -712,8 +753,24 @@ function getReservationCreatedAt(reservation) {
   const value = reservation && (reservation.createdAt || reservation.created_at);
   if (!value) return 0;
   if (typeof value.toDate === 'function') return value.toDate().getTime();
+  if (typeof value.seconds === 'number') return value.seconds * 1000;
   const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getReservationUpdatedAt(reservation) {
+  const value = reservation && (reservation.updatedAt || reservation.updated_at);
+  if (!value) return 0;
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  if (typeof value.seconds === 'number') return value.seconds * 1000;
+  const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getReservationActivityTime(reservation) {
+  const created = getReservationCreatedAt(reservation);
+  const updated = getReservationUpdatedAt(reservation);
+  return Math.max(created, updated);
 }
 
 function addReservationToCustomer(profile, reservation) {
@@ -943,9 +1000,10 @@ function buildCustomerProfiles() {
 }
 
 function getVisitDate(visit) {
-  const value = visit && (visit.recordedAt || visit.visitedAt);
+  const value = visit && (visit.recordedAt || visit.visitedAt || visit.createdAt || visit.timestamp);
   if (!value) return 0;
   if (typeof value.toDate === 'function') return value.toDate().getTime();
+  if (typeof value.seconds === 'number') return value.seconds * 1000;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
@@ -1037,24 +1095,74 @@ function renderCustomers() {
     const reservations = selectedDate
       ? profile.reservations.filter(reservation => getReservationDateKey(reservation.date) === selectedDate)
       : profile.reservations;
-    return { ...profile, reservations, latestReservation: reservations[0] || null };
+    const visits = selectedDate
+      ? profile.visits.filter(visit => getVisitDateKey(visit) === selectedDate)
+      : profile.visits;
+    return { ...profile, reservations, visits, latestReservation: reservations[0] || null };
   });
   const filteredReservations = filteredProfiles.flatMap(profile => profile.reservations);
   const latestReservation = filteredReservations.reduce((latest, reservation) => (
-    !latest || getReservationCreatedAt(reservation) > getReservationCreatedAt(latest)
+    !latest || getReservationActivityTime(reservation) > getReservationActivityTime(latest)
       ? reservation
       : latest
   ), null);
+
+  const existingReservationIds = new Set(filteredReservations.map(r => r.id).filter(Boolean));
+  const additionalVisits = [];
+  const seenVisitIds = new Set();
+  filteredProfiles.forEach(profile => {
+    (profile.visits || []).forEach(visit => {
+      const vid = getVisitReservationId(visit) || visit.id;
+      if (vid && existingReservationIds.has(vid)) return;
+      if (vid && seenVisitIds.has(vid)) return;
+      if (vid) seenVisitIds.add(vid);
+      additionalVisits.push({ visit, profile });
+    });
+  });
+
+  const totalReservationCount = filteredReservations.length + additionalVisits.length;
+
   if (customerCountEl) {
     customerCountEl.textContent = reservationLoadState === 'local'
       ? `${filteredProfiles.length} · trên thiết bị`
       : String(filteredProfiles.length);
   }
-  if (reservationCountEl) reservationCountEl.textContent = String(filteredReservations.length);
+  if (reservationCountEl) reservationCountEl.textContent = String(totalReservationCount);
+
+  let latestDisplayDate = latestReservation ? String(latestReservation.date || 'Chưa có ngày') : '';
+  let latestDisplayTitle = '';
+  if (latestReservation) {
+    const name = getCustomerReservationName(latestReservation);
+    const time = formatTime(latestReservation.time);
+    latestDisplayTitle = name ? `${name} - ${latestReservation.date}${time ? ' (' + time + ')' : ''}` : '';
+  }
+
+  if (additionalVisits.length > 0) {
+    const latestVisitEntry = additionalVisits.reduce((latest, current) => {
+      if (!latest) return current;
+      return getVisitDate(current.visit) > getVisitDate(latest.visit) ? current : latest;
+    }, null);
+
+    if (latestVisitEntry) {
+      const visitDateStr = (latestVisitEntry.visit.reservationHistory && latestVisitEntry.visit.reservationHistory.date)
+        || getVisitDateKey(latestVisitEntry.visit)
+        || '';
+      const visitTimestamp = getVisitDate(latestVisitEntry.visit);
+      const reservationTimestamp = latestReservation ? getReservationActivityTime(latestReservation) : 0;
+
+      if (!latestReservation || (visitTimestamp > reservationTimestamp && visitDateStr)) {
+        latestDisplayDate = visitDateStr || latestDisplayDate || 'Chưa có ngày';
+        const name = latestVisitEntry.profile.name || (latestVisitEntry.visit.customer && latestVisitEntry.visit.customer.name) || '';
+        const time = (latestVisitEntry.visit.reservationHistory && formatTime(latestVisitEntry.visit.reservationHistory.time))
+          || getVisitTime(latestVisitEntry.visit);
+        latestDisplayTitle = name ? `${name} - ${visitDateStr}${time ? ' (' + time + ')' : ''}` : '';
+      }
+    }
+  }
+
   if (latestReservationEl) {
-    latestReservationEl.textContent = latestReservation
-      ? String(latestReservation.date || 'Chưa có ngày')
-      : 'Chưa có';
+    latestReservationEl.textContent = latestDisplayDate || 'Chưa có';
+    latestReservationEl.title = latestDisplayTitle;
   }
 
   if (filteredProfiles.length === 0) {
@@ -1080,13 +1188,27 @@ function renderCustomers() {
       const duplicateHint = profile.ambiguousPhoneMatch
         ? '<span class="customer-contact-line">Số điện thoại có hồ sơ email khác; chưa tự gộp</span>'
         : '';
+      const profileReservationIds = new Set((profile.reservations || []).map(r => r.id).filter(Boolean));
+      const profileExtraVisits = (profile.visits || []).filter(v => {
+        const vid = getVisitReservationId(v) || v.id;
+        return !vid || !profileReservationIds.has(vid);
+      });
+      const profileBookingCount = (profile.reservations ? profile.reservations.length : 0) + profileExtraVisits.length;
+
+      let profileLatestDate = profile.latestReservation && profile.latestReservation.date;
+      if (!profileLatestDate && profileExtraVisits.length > 0) {
+        const mostRecentExtraVisit = profileExtraVisits[0];
+        profileLatestDate = (mostRecentExtraVisit.reservationHistory && mostRecentExtraVisit.reservationHistory.date)
+          || getVisitDateKey(mostRecentExtraVisit)
+          || '';
+      }
       return `
         <tr>
           <td><strong>${escapeHtml(profile.name)}</strong>${duplicateHint}</td>
           <td>${emails}</td>
           <td>${phones}</td>
-          <td>${profile.reservations.length}</td>
-          <td>${escapeHtml(profile.latestReservation && profile.latestReservation.date || 'Chưa có')}</td>
+          <td>${profileBookingCount}</td>
+          <td>${escapeHtml(profileLatestDate || 'Chưa có')}</td>
           <td><button type="button" class="customer-open-profile" data-customer-key="${escapeHtml(profile.key)}">Xem hồ sơ</button></td>
         </tr>
       `;
@@ -1171,6 +1293,20 @@ function renderCustomerProfile(profile) {
     </tr>`;
   }).join('');
 
+  const profileReservationIds = new Set((profile.reservations || []).map(r => r.id).filter(Boolean));
+  const profileExtraVisits = (profile.visits || []).filter(v => {
+    const vid = getVisitReservationId(v) || v.id;
+    return !vid || !profileReservationIds.has(vid);
+  });
+  const totalBookings = profile.reservations.length + profileExtraVisits.length;
+  let profileLatestBookingDate = profile.latestReservation && profile.latestReservation.date;
+  if (!profileLatestBookingDate && profileExtraVisits.length > 0) {
+    const mostRecentExtraVisit = profileExtraVisits[0];
+    profileLatestBookingDate = (mostRecentExtraVisit.reservationHistory && mostRecentExtraVisit.reservationHistory.date)
+      || getVisitDateKey(mostRecentExtraVisit)
+      || '';
+  }
+
   const visitHistoryText = visitLoadState === 'ready'
     ? `${profile.visits.length} lượt ghé được ghi nhận`
     : getVisitLoadMessage();
@@ -1178,7 +1314,7 @@ function renderCustomerProfile(profile) {
     <div class="customer-profile-summary">
       <div><strong>Email</strong><span>${escapeHtml(emailText)}</span></div>
       <div><strong>Số điện thoại</strong><span>${escapeHtml(phoneText)}</span></div>
-      <div><strong>Lượt đặt bàn</strong><span>${profile.reservations.length}</span></div>
+      <div><strong>Lượt đặt bàn</strong><span>${totalBookings} lượt${profileLatestBookingDate ? `<br>Lần gần nhất: ${escapeHtml(profileLatestBookingDate)}` : ''}</span></div>
       <div><strong>Lượt ghé</strong><span>${escapeHtml(visitHistoryText)}<br>Lần gần nhất: ${escapeHtml(latestVisitText)}</span></div>
     </div>
     <h3 class="customer-history-heading">Lịch sử đặt bàn (${profile.reservations.length})</h3>
@@ -1317,8 +1453,23 @@ async function recordReservationVisit(reservationId) {
       return;
     }
 
+    const reservationGuests = parseInt(reservation && reservation.guests, 10) || 2;
+    if (typeof archivedVisitGuests !== 'undefined' && archivedVisitGuests.set) {
+      archivedVisitGuests.set(reservationId, reservationGuests);
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('mocha_archived_visit_guests');
+        let stored = {};
+        try { stored = JSON.parse(raw || '{}'); if (typeof stored !== 'object' || Array.isArray(stored)) stored = {}; } catch (e) { stored = {}; }
+        stored[reservationId] = reservationGuests;
+        localStorage.setItem('mocha_archived_visit_guests', JSON.stringify(stored));
+      }
+    } catch (e) {}
+
     serverAcknowledgedVisits.set(reservationId, result.visit);
     allVisits = mergeAcknowledgedVisits([...allVisits, result.visit]);
+    if (typeof updateStats === 'function') updateStats();
     renderCustomers();
     renderTable();
     showToast('Đã ghi nhận lượt ghé cho đặt bàn này.', 'success');
@@ -2050,6 +2201,26 @@ window.deleteBooking = async function(id) {
       });
       showToast(firestoreUserMessage('delete-reservation', error, transactionStep), 'error');
       return;
+    }
+  }
+
+  if (item) {
+    const hadVisit = (typeof allVisits !== 'undefined' && Array.isArray(allVisits))
+      && allVisits.some(v => (typeof getVisitReservationId === 'function' ? getVisitReservationId(v) : (v && (v.reservationId || v.id))) === reservationId);
+    if (hadVisit) {
+      const guestsCount = parseInt(item.guests, 10) || 2;
+      if (typeof archivedVisitGuests !== 'undefined' && archivedVisitGuests.set) {
+        archivedVisitGuests.set(reservationId, guestsCount);
+      }
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const raw = localStorage.getItem('mocha_archived_visit_guests');
+          let stored = {};
+          try { stored = JSON.parse(raw || '{}'); if (typeof stored !== 'object' || Array.isArray(stored)) stored = {}; } catch (e) { stored = {}; }
+          stored[reservationId] = guestsCount;
+          localStorage.setItem('mocha_archived_visit_guests', JSON.stringify(stored));
+        }
+      } catch (e) {}
     }
   }
 

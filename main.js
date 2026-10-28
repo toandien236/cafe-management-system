@@ -331,6 +331,18 @@ let customerSearchQuery = '';
 let selectedCustomerKey = null;
 const visitSavingIds = new Set();
 const serverAcknowledgedVisits = new Map();
+const archivedVisitGuests = new Map();
+try {
+  if (typeof localStorage !== 'undefined') {
+    const raw = localStorage.getItem('mocha_archived_visit_guests');
+    const stored = JSON.parse(raw || '{}');
+    if (stored && typeof stored === 'object' && !Array.isArray(stored)) {
+      Object.entries(stored).forEach(([id, count]) => {
+        archivedVisitGuests.set(id, parseInt(count, 10) || 2);
+      });
+    }
+  }
+} catch (e) {}
 let reservationVisitsUnsubscribe = null;
 let reservationVisitsListenerGeneration = 0;
 let revenueOrdersUnsubscribe = null;
@@ -474,6 +486,13 @@ function loadReservations() {
       // Sort newest first
       allReservations.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
+      // Cache guests of known reservations
+      allReservations.forEach(r => {
+        if (r.id && r.guests) {
+          archivedVisitGuests.set(r.id, parseInt(r.guests, 10) || 2);
+        }
+      });
+
       updateStats();
       renderTable();
       renderCustomers();
@@ -502,10 +521,30 @@ function updateStats() {
   const confirmedEl = document.getElementById('stat-confirmed');
   const guestsEl    = document.getElementById('stat-guests');
 
-  const total     = allReservations.length;
+  // Đếm các lượt ghé đã đến mà đơn đặt bàn gốc đã được xóa khỏi bảng
+  const reservationIdsInTable = new Set(allReservations.map(r => r.id));
+  const archivedVisits = allVisits.filter(v => {
+    const resId = getVisitReservationId(v);
+    return resId && !reservationIdsInTable.has(resId);
+  });
+  const archivedVisitsCount = archivedVisits.length;
+
+  let archivedVisitsGuests = 0;
+  archivedVisits.forEach(visit => {
+    const resId = getVisitReservationId(visit);
+    const count = (typeof archivedVisitGuests !== 'undefined' && archivedVisitGuests.get(resId))
+      || (visit.reservationHistory && parseInt(visit.reservationHistory.guests, 10))
+      || 2;
+    archivedVisitsGuests += count;
+  });
+
+  // Loại trừ các đơn đã hủy (cancelled) - khi hủy đặt bàn, số khách lập tức được trừ đi
+  const nonCancelled = allReservations.filter(r => (r.status || '').toLowerCase() !== 'cancelled');
+
+  const total     = allReservations.length + archivedVisitsCount;
   const pending   = allReservations.filter(r => (r.status || 'Pending').toLowerCase() === 'pending').length;
-  const confirmed = allReservations.filter(r => (r.status || '').toLowerCase() === 'confirmed').length;
-  const guests    = allReservations.reduce((sum, r) => sum + (parseInt(r.guests, 10) || 2), 0);
+  const confirmed = allReservations.filter(r => (r.status || '').toLowerCase() === 'confirmed').length + archivedVisitsCount;
+  const guests    = nonCancelled.reduce((sum, r) => sum + (parseInt(r.guests, 10) || 2), 0) + archivedVisitsGuests;
 
   if (totalEl) totalEl.textContent = total;
   if (pendingEl) pendingEl.textContent = pending;
@@ -555,6 +594,7 @@ function loadReservationVisits() {
     snapshot.forEach(doc => snapshotVisits.push({ ...doc.data(), id: doc.id }));
     allVisits = mergeAcknowledgedVisits(snapshotVisits);
     visitLoadState = 'ready';
+    if (typeof updateStats === 'function') updateStats();
     renderTable();
     renderCustomers();
   }, (error) => {
@@ -565,6 +605,7 @@ function loadReservationVisits() {
     });
     allVisits = mergeAcknowledgedVisits([]);
     visitLoadState = 'error';
+    if (typeof updateStats === 'function') updateStats();
     renderTable();
     renderCustomers();
     showToast(firestoreUserMessage('read-visit-history', error), 'error');
@@ -792,9 +833,10 @@ function buildCustomerProfiles() {
 }
 
 function getVisitDate(visit) {
-  const value = visit && (visit.recordedAt || visit.visitedAt);
+  const value = visit && (visit.recordedAt || visit.visitedAt || visit.createdAt || visit.timestamp);
   if (!value) return 0;
   if (typeof value.toDate === 'function') return value.toDate().getTime();
+  if (typeof value.seconds === 'number') return value.seconds * 1000;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
@@ -1114,8 +1156,23 @@ async function recordReservationVisit(reservationId) {
       return;
     }
 
+    const reservationGuests = parseInt(reservation && reservation.guests, 10) || 2;
+    if (typeof archivedVisitGuests !== 'undefined' && archivedVisitGuests.set) {
+      archivedVisitGuests.set(reservationId, reservationGuests);
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('mocha_archived_visit_guests');
+        let stored = {};
+        try { stored = JSON.parse(raw || '{}'); if (typeof stored !== 'object' || Array.isArray(stored)) stored = {}; } catch (e) { stored = {}; }
+        stored[reservationId] = reservationGuests;
+        localStorage.setItem('mocha_archived_visit_guests', JSON.stringify(stored));
+      }
+    } catch (e) {}
+
     serverAcknowledgedVisits.set(reservationId, result.visit);
     allVisits = mergeAcknowledgedVisits([...allVisits, result.visit]);
+    if (typeof updateStats === 'function') updateStats();
     renderCustomers();
     renderTable();
     showToast('Đã ghi nhận lượt ghé cho đặt bàn này.', 'success');
@@ -1665,6 +1722,26 @@ window.deleteBooking = async function(id) {
       });
       showToast(firestoreUserMessage('delete-reservation', error, transactionStep), 'error');
       return;
+    }
+  }
+
+  if (item) {
+    const hadVisit = (typeof allVisits !== 'undefined' && Array.isArray(allVisits))
+      && allVisits.some(v => (typeof getVisitReservationId === 'function' ? getVisitReservationId(v) : (v && (v.reservationId || v.id))) === reservationId);
+    if (hadVisit) {
+      const guestsCount = parseInt(item.guests, 10) || 2;
+      if (typeof archivedVisitGuests !== 'undefined' && archivedVisitGuests.set) {
+        archivedVisitGuests.set(reservationId, guestsCount);
+      }
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const raw = localStorage.getItem('mocha_archived_visit_guests');
+          let stored = {};
+          try { stored = JSON.parse(raw || '{}'); if (typeof stored !== 'object' || Array.isArray(stored)) stored = {}; } catch (e) { stored = {}; }
+          stored[reservationId] = guestsCount;
+          localStorage.setItem('mocha_archived_visit_guests', JSON.stringify(stored));
+        }
+      } catch (e) {}
     }
   }
 
