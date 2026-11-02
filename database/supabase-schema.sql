@@ -66,6 +66,7 @@ CREATE TABLE public.inventory (
     unit VARCHAR(50) NOT NULL DEFAULT 'kg',
     min_stock NUMERIC(12, 3) NOT NULL DEFAULT 0 CHECK (min_stock >= 0),
     price NUMERIC(12, 0) NOT NULL DEFAULT 0 CHECK (price >= 0),
+    supplier VARCHAR(255),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -82,6 +83,10 @@ CREATE TABLE public.stock_imports (
     cost_price NUMERIC(12, 0) NOT NULL DEFAULT 0 CHECK (cost_price >= 0),
     total_cost NUMERIC(12, 0) NOT NULL DEFAULT 0 CHECK (total_cost >= 0),
     supplier VARCHAR(255),
+    batch_number VARCHAR(100),
+    expiry_date DATE,
+    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL DEFAULT auth.uid(),
+    actor_name VARCHAR(255),
     note TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -96,6 +101,8 @@ CREATE TABLE public.stock_exports (
     quantity NUMERIC(12, 3) NOT NULL CHECK (quantity > 0),
     unit VARCHAR(50) NOT NULL,
     reason VARCHAR(255),
+    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL DEFAULT auth.uid(),
+    actor_name VARCHAR(255),
     note TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
