@@ -29,7 +29,7 @@ flowchart LR
 |---|---|---|
 | [`../index.html`](../index.html), [`../js/main.js`](../js/main.js) | Nội dung khách, gửi đặt bàn, email tùy chọn | Supabase `reservations`; EmailJS |
 | [`../order.html`](../order.html), [`../js/order.js`](../js/order.js) | Menu QR, giỏ hàng và gửi đơn | Firestore `orders` |
-| [`../admin.html`](../admin.html), [`../admin.js`](../admin.js) | Xử lý đặt bàn/đơn, doanh thu đã thanh toán | Firebase Auth, Firestore `reservations` và `orders` |
+| [`../admin.html`](../admin.html), [`../revenue.html`](../revenue.html), [`../admin.js`](../admin.js) | Xử lý đặt bàn/đơn, doanh thu đã thanh toán | Firebase Auth, Firestore `reservations` và `orders` |
 | [`../inventory.html`](../inventory.html), [`../js/inventory.js`](../js/inventory.js) | Tồn kho và phiếu nhập/xuất | Supabase `inventory`, `stock_imports`, `stock_exports` |
 | [`../hr.html`](../hr.html), [`../hr-auth.js`](../hr-auth.js), [`../employee-management.js`](../employee-management.js), [`../staff-operations.js`](../staff-operations.js) | Hồ sơ, ca, chấm công, bảng lương và báo cáo | Firebase Auth, Firestore `employees`, `employee_shifts`, `employee_attendance`, `employee_payroll` |
 | [`../database/supabase-schema.sql`](../database/supabase-schema.sql) | Schema khởi tạo cho project mới | Tập lệnh có `DROP TABLE`, chỉ chạy trên DB trống |
@@ -46,7 +46,9 @@ Trang QR tạo đơn trực tiếp trong collection Firestore `orders`, gồm m�
 
 **Lưu ý bảo mật:** trang QR là luồng khách công khai và ghi trực tiếp Firestore từ trình duyệt. Firestore Security Rules phải cho phép tạo đơn hợp lệ nhưng không cho khách đọc đơn, đổi trạng thái/thanh toán hoặc sửa giá/tổng đã lưu. Quy tắc hiện tại của project Firebase cần được xác minh; dữ liệu đầu vào và giá được tạo ở client trong luồng hiện có, nên trước vận hành thật nên chuyển xác thực giá, giới hạn món/số lượng và chống gửi trùng sang Cloud Function/endpoint đáng tin cậy.
 
-Dashboard quản trị cập nhật `status`, `payment_status` và `paid_at`. Doanh thu chỉ cộng đơn có `payment_status = 'paid'`; tổng theo ngày/tháng căn cứ `paid_at`, còn tổng toàn thời gian cộng mọi đơn đã thanh toán.
+Dashboard quản trị cập nhật `status`, `payment_status` và `paid_at`. Giá món và tổng đơn được lưu bằng VND nguyên (`currencyUnit: 'VND'`); dữ liệu cũ không có đơn vị được đọc là VND, còn dữ liệu đơn vị nghìn VND phải được đánh dấu tường minh `VND_THOUSANDS`. Doanh thu chỉ cộng đơn có `payment_status = 'paid'`; ngày/tháng được tính theo múi giờ nghiệp vụ `Asia/Ho_Chi_Minh` từ `paid_at`, còn tổng toàn thời gian cộng mọi đơn đã thanh toán.
+
+`admin.js` là entry point duy nhất cho cổng quản trị và trang doanh thu. `revenue.html` không tải thêm một bản sao script quản trị. `js/main.js` chỉ là entry point website khách hàng; không có root-level `main.js`.
 
 ### Xác thực và phân quyền
 

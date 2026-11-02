@@ -224,11 +224,14 @@ test('order date range filters by created day and refreshes from Firestore snaps
 test('order date presets select today, month, and year boundaries', () => {
   const { context, elements } = loadAdminScript();
   const now = new Date();
-  const today = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0')
-  ].join('-');
+  const dateParts = Object.fromEntries(new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(now).filter(part => ['year', 'month', 'day'].includes(part.type)).map(part => [part.type, part.value]));
+  const today = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+  const lastDayOfMonth = new Date(Number(dateParts.year), Number(dateParts.month), 0).getDate();
 
   context.window.setOrdersDatePreset('today');
   assert.equal(elements.get('orders-date-from').value, today);
@@ -236,11 +239,11 @@ test('order date presets select today, month, and year boundaries', () => {
 
   context.window.setOrdersDatePreset('this-month');
   assert.equal(elements.get('orders-date-from').value, `${today.slice(0, 7)}-01`);
-  assert.equal(elements.get('orders-date-to').value, `${today.slice(0, 7)}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`);
+  assert.equal(elements.get('orders-date-to').value, `${today.slice(0, 7)}-${String(lastDayOfMonth).padStart(2, '0')}`);
 
   context.window.setOrdersDatePreset('this-year');
-  assert.equal(elements.get('orders-date-from').value, `${now.getFullYear()}-01-01`);
-  assert.equal(elements.get('orders-date-to').value, `${now.getFullYear()}-12-31`);
+  assert.equal(elements.get('orders-date-from').value, `${dateParts.year}-01-01`);
+  assert.equal(elements.get('orders-date-to').value, `${dateParts.year}-12-31`);
 });
 
 test('custom order date picker uses Vietnamese month labels and formats selected dates', () => {
@@ -262,11 +265,7 @@ test('custom order date picker uses Vietnamese month labels and formats selected
 
   context.window.openOrdersDatePicker('to');
   context.window.selectOrdersCalendarToday();
-  const today = [
-    new Date().getFullYear(),
-    String(new Date().getMonth() + 1).padStart(2, '0'),
-    String(new Date().getDate()).padStart(2, '0')
-  ].join('-');
+  const today = context.getBusinessDateKey(new Date());
   assert.equal(elements.get('orders-date-to').value, today);
   assert.equal(elements.get('orders-date-to-display').value, today.split('-').reverse().join('/'));
 

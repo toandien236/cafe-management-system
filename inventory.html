@@ -72,9 +72,21 @@
 
         .inventory-stats {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 20px;
             margin-bottom: 30px;
+        }
+
+        @media (max-width: 900px) {
+            .inventory-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 500px) {
+            .inventory-stats {
+                grid-template-columns: 1fr;
+            }
         }
 
         .stat-card {
@@ -111,6 +123,13 @@
 
         .inventory-message[data-error="true"] {
             color: #a52d2d;
+        }
+
+        .workflow-help {
+            margin: 14px 0 0;
+            color: #806e64;
+            font-size: 13px;
+            line-height: 1.5;
         }
 
         .inventory-workflows {
@@ -178,7 +197,7 @@
         }
 
         .movement-table table {
-            min-width: 480px;
+            min-width: 760px;
             font-size: 13px;
         }
 
@@ -1223,16 +1242,24 @@
         </div>
 
 
-        <button
-            class="btn btn-add"
-            id="add-item-btn"
-            type="button"
-            aria-haspopup="dialog"
-            aria-controls="inventory-modal">
-
-            + Thêm nguyên liệu
-
-        </button>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button
+                class="btn"
+                id="seed-catalog-btn"
+                type="button"
+                style="background: #4a6741; color: white;"
+                title="Khởi tạo hoặc đặt lại danh sách 46 nguyên liệu mẫu từ thực đơn">
+                ⚡ Nạp 46 nguyên liệu mẫu
+            </button>
+            <button
+                class="btn btn-add"
+                id="add-item-btn"
+                type="button"
+                aria-haspopup="dialog"
+                aria-controls="inventory-modal">
+                + Thêm nguyên liệu
+            </button>
+        </div>
 
         <a class="inventory-login" href="admin.html">Đăng nhập quản trị</a>
 
@@ -1273,6 +1300,11 @@
 
         </div>
 
+        <div class="stat-card">
+            <h3>Tổng giá trị kho</h3>
+            <p id="total-value">0 ₫</p>
+        </div>
+
 
     </div>
 
@@ -1297,6 +1329,14 @@
                     <label for="import-supplier">Nhà cung cấp</label>
                     <input id="import-supplier" type="text" maxlength="120" required>
                 </div>
+                <div>
+                    <label for="import-batch">Mã lô</label>
+                    <input id="import-batch" type="text" maxlength="100" placeholder="Không bắt buộc">
+                </div>
+                <div>
+                    <label for="import-expiry">Hạn sử dụng</label>
+                    <input id="import-expiry" type="date">
+                </div>
                 <div class="workflow-wide">
                     <label for="import-note">Ghi chú</label>
                     <textarea id="import-note" maxlength="500"></textarea>
@@ -1305,10 +1345,11 @@
             </form>
             <div class="movement-table">
                 <table>
-                    <thead><tr><th>Thời gian</th><th>Nguyên liệu</th><th>Số lượng</th><th>Nhà cung cấp</th><th>Ghi chú</th></tr></thead>
-                    <tbody id="stock-imports-body"><tr><td colspan="5">Chưa có giao dịch nhập.</td></tr></tbody>
+                    <thead><tr><th>Thời gian</th><th>Nguyên liệu</th><th>Số lượng</th><th>Nhà cung cấp</th><th>Mã lô</th><th>Hạn sử dụng</th><th>Giá nhập</th><th>Thành tiền</th><th>Người thao tác</th><th>Ghi chú</th></tr></thead>
+                    <tbody id="stock-imports-body"><tr><td colspan="10">Chưa có giao dịch nhập.</td></tr></tbody>
                 </table>
             </div>
+            <p class="workflow-help">Mã lô và hạn sử dụng được lưu theo từng phiếu nhập; số lượng tồn hiện tại vẫn được tổng hợp theo nguyên liệu.</p>
         </section>
 
         <section class="workflow-panel" aria-labelledby="export-heading">
@@ -1337,8 +1378,8 @@
             </form>
             <div class="movement-table">
                 <table>
-                    <thead><tr><th>Thời gian</th><th>Nguyên liệu</th><th>Số lượng</th><th>Lý do</th><th>Ghi chú</th></tr></thead>
-                    <tbody id="stock-exports-body"><tr><td colspan="5">Chưa có giao dịch xuất.</td></tr></tbody>
+                    <thead><tr><th>Thời gian</th><th>Nguyên liệu</th><th>Số lượng</th><th>Lý do</th><th>Người thao tác</th><th>Ghi chú</th></tr></thead>
+                    <tbody id="stock-exports-body"><tr><td colspan="6">Chưa có giao dịch xuất.</td></tr></tbody>
                 </table>
             </div>
         </section>
@@ -1378,6 +1419,10 @@
 
                     <th>Trạng thái</th>
 
+                    <th>Cập nhật lần cuối</th>
+
+                    <th>Nhà cung cấp</th>
+
                     <th>Thao tác</th>
 
                 </tr>
@@ -1386,7 +1431,7 @@
 
 
             <tbody id="inventory-table-body">
-                <tr><td colspan="8" style="text-align:center">Đang kết nối kho...</td></tr>
+                <tr><td colspan="10" style="text-align:center">Đang kết nối kho...</td></tr>
             </tbody>
 
         </table>
@@ -1444,27 +1489,16 @@
                 </label>
 
                 <select id="item-category">
-
-                    <option value="Coffee">
-                        Coffee
-                    </option>
-
-                    <option value="Milk">
-                        Sữa
-                    </option>
-
-                    <option value="Tea">
-                        Trà
-                    </option>
-
-                    <option value="Sugar">
-                        Đường
-                    </option>
-
-                    <option value="Other">
-                        Khác
-                    </option>
-
+                    <option value="Cà phê">Cà phê</option>
+                    <option value="Sữa & Kem">Sữa & Kem</option>
+                    <option value="Trà & Bột">Trà & Bột</option>
+                    <option value="Bơ & Phô mai">Bơ & Phô mai</option>
+                    <option value="Nguyên liệu bánh & Mì">Nguyên liệu bánh & Mì</option>
+                    <option value="Topping & Syrup">Topping & Syrup</option>
+                    <option value="Hải sản & Thịt">Hải sản & Thịt</option>
+                    <option value="Rau củ & Trái cây">Rau củ & Trái cây</option>
+                    <option value="Gia vị & Khác">Gia vị & Khác</option>
+                    <option value="Khác">Khác</option>
                 </select>
 
             </div>
@@ -1477,10 +1511,11 @@
                 </label>
 
                 <input
-                    type="text"
+                    type="number"
+                    step="any"
+                    min="0"
                     id="item-quantity"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
+                    placeholder="Ví dụ: 25"
                     autocomplete="off"
                     required>
 
@@ -1502,6 +1537,15 @@
                     placeholder="Ví dụ: 180000"
                     required>
 
+            </div>
+
+            <div class="form-group">
+                <label for="item-supplier">Nhà cung cấp ưu tiên</label>
+                <input
+                    type="text"
+                    id="item-supplier"
+                    maxlength="120"
+                    placeholder="Không bắt buộc">
             </div>
 
 
@@ -1527,10 +1571,11 @@
                 </label>
 
                 <input
-                    type="text"
+                    type="number"
+                    step="any"
+                    min="0"
                     id="item-min"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
+                    placeholder="Ví dụ: 5"
                     autocomplete="off"
                     required>
 
@@ -1573,8 +1618,9 @@
 <!-- SUPABASE CLIENT SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/supabase.js"></script>
+<script src="js/inventory-catalog.js"></script>
 
 <!-- JAVASCRIPT QUẢN LÝ KHO -->
-<script src="js/inventory.js"></script>
+<script src="js/inventory.js?v=20261102-catalog-preview"></script>
 </body>
 </html>

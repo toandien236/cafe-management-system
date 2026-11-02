@@ -213,6 +213,7 @@ async function submitOrder() {
       tableNumber: normalizedTableNumber,
       items,
       total,
+      currencyUnit: 'VND',
       note: orderNote,
       status: 'new',
       paymentStatus: 'unpaid',

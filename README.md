@@ -64,6 +64,8 @@ Các bước dưới đây chỉ áp dụng cho quản lý kho. Website đặt b
    ```
 
    Thay email mẫu bằng email thực. Đăng xuất rồi đăng nhập lại sau khi thay role để JWT nhận metadata mới. HR không sử dụng tài khoản Supabase; đăng nhập bằng tài khoản Firebase quản trị hiện có.
+6. Để khởi tạo đầy đủ 46 nguyên liệu vào kho kèm số lượng tồn, giá nhập, mức tồn tối thiểu và nhà cung cấp chuẩn từ thực đơn 15 món, chạy [`database/seed-inventory.sql`](./database/seed-inventory.sql) trong Supabase SQL Editor.
+7. Giao diện [`inventory.html`](./inventory.html) hỗ trợ thêm, sửa, xóa, nhập/xuất kho trực tiếp. Nút **⚡ Nạp 46 nguyên liệu mẫu** cho phép nạp nhanh toàn bộ 46 nguyên liệu mẫu vào kho (với cơ chế đồng bộ Supabase và lưu trữ dự phòng Local Storage khi mạng/Supabase tạm ngắt).
 
 `employee-hr.sql` là schema Supabase cũ, không cần chạy cho HR hiện tại. Dữ liệu HR đã lưu tại Supabase không bị ứng dụng mới sửa hoặc xóa, nhưng cần một bước migration riêng nếu muốn đưa các bản ghi đó sang Firestore. Chưa có migration HR tự động.
 
