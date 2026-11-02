@@ -105,7 +105,9 @@
       setDoc,
       updateDoc,
       deleteDoc,
-      runTransaction
+      runTransaction,
+      query,
+      where
     } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
     try {
@@ -131,7 +133,9 @@
         setDoc,
         updateDoc,
         deleteDoc,
-        runTransaction
+        runTransaction,
+        query,
+        where
       };
     } catch (error) {
       console.error('[Firebase HR Setup Error]', error);
