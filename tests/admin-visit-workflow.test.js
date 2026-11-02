@@ -16,6 +16,7 @@ function extractSource(startMarker, endMarker) {
 }
 
 const diagnosticSource = extractSource('const ADMIN_EMAIL =', '\nfunction initAdminAuth(');
+const dashboardDataSource = extractSource('function isRecord(', '\nfunction initAdminDashboard(');
 const customerDataSource = extractSource('function normalizeCustomerEmail(', '\nfunction renderCustomers(');
 const visitLoadSource = extractSource('function stopReservationVisitsListener()', '\nfunction normalizeCustomerEmail(');
 const visitSource = extractSource('async function recordReservationVisit(', '\nfunction loadOrders()');
@@ -130,6 +131,7 @@ function createHarness({
   vm.createContext(sandbox);
   vm.runInContext(diagnosticSource, sandbox);
   vm.runInContext('adminSessionActive = true;', sandbox);
+  vm.runInContext(dashboardDataSource, sandbox);
   vm.runInContext(customerDataSource, sandbox);
   vm.runInContext(renderTableSource, sandbox);
   vm.runInContext(visitLoadSource, sandbox);
@@ -256,7 +258,9 @@ test('creates one visit for a confirmed reservation', async () => {
   assert.deepEqual(events.reads, ['/reservations/r-1', '/reservationVisits/r-1']);
   assert.equal(events.writes.length, 1);
   assert.equal(events.writes[0].ref.path, '/reservationVisits/r-1');
-  assert.deepEqual(Object.keys(events.writes[0].value).sort(), ['customer', 'recordedAt', 'recordedBy', 'reservationId', 'source']);
+  assert.deepEqual(Object.keys(events.writes[0].value).sort(), [
+    'customer', 'recordedAt', 'recordedBy', 'reservationHistory', 'reservationId', 'source'
+  ]);
   assert.equal(events.writes[0].value.recordedBy, 'private-test-uid');
   assert.deepEqual(JSON.parse(JSON.stringify(events.writes[0].value.customer)), {
     key: 'email:guest@example.com', name: 'Guest One', email: 'guest@example.com',
@@ -443,26 +447,29 @@ test('deletes a reservation without a visit after Firestore confirms it exists',
   assert.equal(sandbox.allReservations.length, 0);
 });
 
-test('deletes a booking with a visit while preserving and backfilling its independent history', async () => {
+test('archives a booking with a visit while preserving and backfilling its independent history', async () => {
   const { sandbox, events } = createDeleteHarness({ existingVisit: true });
   await sandbox.window.deleteBooking('r-1');
 
-  assert.deepEqual(events.deletes, ['/reservations/r-1']);
-  assert.equal(events.updates.length, 1);
+  assert.deepEqual(events.deletes, []);
+  assert.equal(events.updates.length, 2);
   assert.equal(events.updates[0].path, '/reservationVisits/r-1');
+  assert.equal(events.updates[1].path, '/reservations/r-1');
+  assert.ok(events.updates[1].value.archivedAt);
   assert.equal(events.visitAfterTransaction.reservationId, 'r-1');
   assert.equal(events.visitAfterTransaction.recordedAt, '2030-01-01T19:00:00Z');
   assert.equal(events.visitAfterTransaction.recordedBy, 'staff-1');
   assert.equal(events.visitAfterTransaction.source, 'staff-confirmed');
   assert.equal(events.visitAfterTransaction.customer.key, 'email:guest@example.com');
-  assert.equal(sandbox.allReservations.length, 0);
+  assert.equal(sandbox.allReservations.length, 1);
+  assert.ok(sandbox.allReservations[0].archivedAt);
   assert.equal(sandbox.allVisits.length, 1);
 
   const [profile] = sandbox.buildCustomerProfiles();
   assert.equal(profile.name, 'Guest One');
   assert.deepEqual(JSON.parse(JSON.stringify(profile.emails)), ['guest@example.com']);
   assert.deepEqual(JSON.parse(JSON.stringify(profile.phones)), ['0901234567']);
-  assert.equal(profile.reservations.length, 0);
+  assert.equal(profile.reservations.length, 1);
   assert.equal(profile.visits.length, 1);
   assert.equal(profile.latestVisit.reservationId, 'r-1');
   assert.equal(sandbox.getVisitDate(profile.latestVisit), Date.parse('2030-01-01T19:00:00Z'));
@@ -478,13 +485,15 @@ test('deletes a booking with a visit while preserving and backfilling its indepe
 test('deleting a booking leaves a complete visit record unchanged', async () => {
   const visit = {
     reservationId: 'r-1', recordedAt: '2030-01-01T19:00:00Z', recordedBy: 'staff-1', source: 'staff-confirmed',
-    customer: { key: 'email:guest@example.com', name: 'Guest One', email: 'guest@example.com', phone: '0901234567', phoneNormalized: '0901234567' }
+    customer: { key: 'email:guest@example.com', name: 'Guest One', email: 'guest@example.com', phone: '0901234567', phoneNormalized: '0901234567' },
+    reservationHistory: { date: '2030-01-01', time: '1900', guests: 2, notes: '', status: 'confirmed' }
   };
   const { sandbox, events } = createDeleteHarness({ visitData: visit });
   await sandbox.window.deleteBooking('r-1');
 
-  assert.deepEqual(events.updates, []);
-  assert.deepEqual(events.deletes, ['/reservations/r-1']);
+  assert.equal(events.updates.length, 1);
+  assert.equal(events.updates[0].path, '/reservations/r-1');
+  assert.deepEqual(events.deletes, []);
   assert.deepEqual(JSON.parse(JSON.stringify(events.visitAfterTransaction)), visit);
   assert.equal(sandbox.allVisits.length, 1);
   assert.equal(sandbox.buildCustomerProfiles()[0].visits.length, 1);
@@ -533,7 +542,8 @@ test('logs planned transaction operations when Firestore denies the atomic commi
   assert.deepEqual(JSON.parse(JSON.stringify(events.logs[0][1].operations)), [
     { action: 'get', path: '/reservations/r-1' },
     { action: 'get', path: '/reservationVisits/r-1' },
-    { action: 'delete', path: '/reservations/r-1' },
+    { action: 'update', path: '/reservationVisits/r-1', fields: ['reservationHistory'] },
+    { action: 'update', path: '/reservations/r-1', fields: ['archivedAt'] },
     { action: 'commit' }
   ]);
   assert.match(events.toasts.at(-1).message, /commit transaction xóa/);
@@ -571,7 +581,7 @@ test('keeps the admin rule private and normalizes the email claim', () => {
   assert.match(rulesSource, /match \/reservationVisits\/{reservationId}/);
   assert.match(rulesSource, /hasAll\(\['reservationId', 'recordedAt', 'recordedBy', 'source', 'customer'\]\)/);
   assert.match(rulesSource, /allow read: if isAdmin\(\)/);
-  assert.match(rulesSource, /allow update: if isAdmin\(\)[\s\S]*affectedKeys\(\)\.hasOnly\(\['customer', 'reservationId'\]\)/);
+  assert.match(rulesSource, /allow update: if isAdmin\(\)[\s\S]*affectedKeys\(\)\.hasOnly\(\['customer', 'reservationId', 'reservationHistory'\]\)/);
   assert.match(rulesSource, /allow delete: if false/);
   assert.match(rulesSource, /isValidVisitCustomerSnapshot\(\s*getAfter\(/);
   assert.doesNotMatch(rulesSource, /allow read: if true/);
@@ -580,7 +590,7 @@ test('keeps the admin rule private and normalizes the email claim', () => {
 test('admin actions have click handlers and the page loads the current script version', () => {
   assert.match(adminHtml, /firebase-firestore-compat\.js/);
   assert.match(adminHtml, /firebase\.firestore\(app\)/);
-  assert.match(adminHtml, /admin\.js\?v=orders-date-filter-vi-20261019/);
+  assert.match(adminHtml, /admin\.js\?v=reliable-programming-20261102/);
   assert.match(adminSource, /bookingsBody\.addEventListener\('click'/);
   assert.match(adminSource, /customersBody\.addEventListener\('click'/);
   assert.match(adminSource, /closest\('\[data-visit-res-id\]'\)/);

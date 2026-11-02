@@ -40,6 +40,7 @@ if (document.readyState === 'loading') {
   ────────────────────────────────────────────────────────── */
 
 const ADMIN_EMAIL = 'lehwangduong@gmail.com';
+const BUSINESS_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 let adminSessionActive = false;
 
 function normalizeAdminEmail(value) {
@@ -228,19 +229,27 @@ function initAdminAuth(authInstance) {
         const passwordInput = document.getElementById('admin-password');
         if (passwordInput) passwordInput.value = '';
       }
-      loadReservations();
-      loadReservationVisits();
-      loadOrders();
+      if (document.getElementById('bookings-tbody')) {
+        loadReservations();
+        loadReservationVisits();
+      }
+      if (document.getElementById('orders-tbody') || document.getElementById('revenue-tbody')) loadOrders();
     } else {
       // Not authenticated: show login
       adminSessionActive = false;
       setAdminView(false);
+      stopReservationsListener();
       stopReservationVisitsListener();
       serverAcknowledgedVisits.clear();
       if (ordersUnsubscribe) {
         ordersUnsubscribe();
         ordersUnsubscribe = null;
       }
+      ordersLoadState = 'unavailable';
+      orderSavingIds.clear();
+      renderDataSourceStatus('orders-source-status', '', 'unavailable');
+      renderDataSourceStatus('revenue-source-status', '', 'unavailable');
+      renderDataSourceStatus('reservations-source-status', '', 'unavailable');
       const customerModal = document.getElementById('customer-profile-modal');
       const customerProfileBody = document.getElementById('customer-profile-body');
       const replyModal = document.getElementById('reply-modal');
@@ -365,12 +374,17 @@ function showLoginError(msg) {
 let allReservations = [];
 let activeFilter    = 'all';
 let searchQuery     = '';
+let reservationsUnsubscribe = null;
+let reservationListenerGeneration = 0;
 let allOrders       = [];
 let ordersUnsubscribe = null;
+let ordersLoadState = 'loading';
+let orderSavingIds = new Set();
 const ORDERS_PER_PAGE = 15;
 let currentOrdersPage = 1;
 let ordersCalendarTarget = '';
-let ordersCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+const initialBusinessDate = getBusinessDateParts(new Date());
+let ordersCalendarMonth = new Date(Number(initialBusinessDate.year), Number(initialBusinessDate.month) - 1, 1);
 let customerSearchDate = '';
 let allVisits       = [];
 let visitLoadState   = 'loading';
@@ -381,6 +395,113 @@ const visitSavingIds = new Set();
 const serverAcknowledgedVisits = new Map();
 let reservationVisitsUnsubscribe = null;
 let reservationVisitsListenerGeneration = 0;
+
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isValidOptionalTextFields(record, fields, maxLength) {
+  return fields.every(field => record[field] === undefined || record[field] === null
+    || (typeof record[field] === 'string' && record[field].length <= maxLength));
+}
+
+function isValidTimestampValue(value) {
+  if (value === undefined || value === null) return true;
+  try {
+    if (value && typeof value.toDate === 'function') {
+      const date = value.toDate();
+      return Boolean(date && typeof date.getTime === 'function' && Number.isFinite(date.getTime()));
+    }
+    if (value && typeof value.getTime === 'function') return Number.isFinite(value.getTime());
+    if (typeof value === 'number') return Number.isFinite(value);
+    return typeof value === 'string' && value.trim() !== '' && Number.isFinite(Date.parse(value));
+  } catch (error) {
+    return false;
+  }
+}
+
+function isValidDashboardReservation(record) {
+  if (!isRecord(record)
+      || !isValidOptionalTextFields(record,
+        ['name', 'customerName', 'email', 'phone', 'date', 'time', 'specialRequest', 'notes', 'status', 'emailStatus', 'email_status'], 1000)) {
+    return false;
+  }
+  if (!['createdAt', 'updatedAt', 'archivedAt'].every(field => isValidTimestampValue(record[field]))) return false;
+  if (record.guests !== undefined && record.guests !== null) {
+    const guests = Number(record.guests);
+    if (record.guests === '' || !Number.isInteger(guests) || guests < 1 || guests > 12) return false;
+  }
+  if (record.status !== undefined && record.status !== null
+      && !['pending', 'confirmed', 'cancelled'].includes(String(record.status).toLowerCase())) return false;
+  return true;
+}
+
+function normalizeDashboardReservation(record, id, isLocal = false) {
+  if (!isValidDashboardReservation(record)) return null;
+  return { ...record, id: String(id), isLocal };
+}
+
+function isValidDashboardOrder(record) {
+  if (!isRecord(record)
+      || !isValidOptionalTextFields(record,
+        ['orderId', 'order_id', 'tableNumber', 'table_number', 'note', 'status', 'paymentStatus', 'payment_status'], 1000)) {
+    return false;
+  }
+  const currencyUnit = record.currencyUnit || record.currency_unit || 'VND';
+  if (!['VND', 'VND_THOUSANDS'].includes(currencyUnit)) return false;
+  if (!['createdAt', 'created_at', 'updatedAt', 'updated_at', 'paidAt', 'paid_at']
+    .every(field => isValidTimestampValue(record[field]))) return false;
+  if (record.total !== undefined && record.total !== null
+      && (record.total === '' || !Number.isSafeInteger(Number(record.total)) || Number(record.total) < 0)) return false;
+  if ((record.paymentStatus || record.payment_status || '').toLowerCase() === 'paid'
+      && (record.total === undefined || record.total === null)) return false;
+  const status = String(record.status || 'new').toLowerCase();
+  const paymentStatus = String(record.paymentStatus || record.payment_status || 'unpaid').toLowerCase();
+  if (!['new', 'preparing', 'in_progress', 'served', 'completed', 'cancelled'].includes(status)
+      || !['unpaid', 'paid'].includes(paymentStatus)) return false;
+  if (record.items !== undefined && !Array.isArray(record.items)) return false;
+  return !Array.isArray(record.items) || record.items.every(item => (
+    isRecord(item)
+    && isValidOptionalTextFields(item, ['id', 'name'], 500)
+    && (item.price === undefined || (item.price !== '' && Number.isSafeInteger(Number(item.price)) && Number(item.price) >= 0))
+    && (item.quantity === undefined || (item.quantity !== '' && Number.isInteger(Number(item.quantity)) && Number(item.quantity) > 0 && Number(item.quantity) <= 99))
+  ));
+}
+
+function normalizeDashboardOrder(record, id) {
+  if (!isValidDashboardOrder(record)) return null;
+  return { ...record, id: String(id) };
+}
+
+function normalizeDashboardVisit(record, id) {
+  if (!isRecord(record)
+      || !isValidOptionalTextFields(record, ['reservationId', 'recordedBy', 'source'], 500)
+      || !['recordedAt', 'visitedAt'].every(field => isValidTimestampValue(record[field]))) {
+    return null;
+  }
+  return { ...record, id: String(id), reservationId: String(record.reservationId || id) };
+}
+
+function logInvalidDashboardRecord(collectionName) {
+  console.warn(`[Admin Data] Skipping invalid ${collectionName} record.`);
+}
+
+function renderDataSourceStatus(elementId, message, state) {
+  const element = document.getElementById(elementId);
+  if (!element) return;
+  element.textContent = message;
+  if (element.dataset) element.dataset.state = state;
+  element.hidden = !message;
+}
+
+function getDataUpdatedLabel(date = new Date()) {
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone: BUSINESS_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).format(date);
+}
 
 function initAdminDashboard() {
   document.addEventListener('click', event => {
@@ -504,38 +625,47 @@ function initAdminDashboard() {
 }
 
 function loadReservations() {
+  stopReservationsListener();
+  const listenerGeneration = reservationListenerGeneration;
   const tbody = document.getElementById('bookings-tbody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px;">Đang tải danh sách đặt bàn…</td></tr>';
   reservationLoadState = 'loading';
+  renderDataSourceStatus('reservations-source-status', 'Đang tải đặt bàn từ Firestore…', 'loading');
   renderCustomers();
 
   // Read local backup array
   let localData = [];
   try {
-    localData = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
-    localData = localData.map((item, idx) => ({
-      ...item,
-      id: `local_${idx}_${item.createdAt || ''}`,
-      isLocal: true
-    }));
+    const storedReservations = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
+    if (!Array.isArray(storedReservations)) throw new TypeError('Local reservation data must be an array.');
+    localData = storedReservations.reduce((validReservations, item, idx) => {
+      const localReservation = normalizeDashboardReservation(item, `local_${idx}_${item && item.createdAt || ''}`, true);
+      if (localReservation) validReservations.push(localReservation);
+      else logInvalidDashboardRecord('local reservation');
+      return validReservations;
+    }, []);
   } catch (err) {
-    console.warn('LocalStorage read error:', err);
+    console.warn('[Admin Data] Local reservation backup could not be read.', err && err.name || 'storage-error');
   }
 
   // Try Firestore live listener
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
 
   if (dbInstance && typeof dbInstance.collection === 'function') {
-    dbInstance.collection('reservations').onSnapshot((snapshot) => {
-      if (!adminSessionActive) return;
+    reservationsUnsubscribe = dbInstance.collection('reservations').onSnapshot((snapshot) => {
+      if (!adminSessionActive || listenerGeneration !== reservationListenerGeneration) return;
       const remoteData = [];
       snapshot.forEach(doc => {
-        remoteData.push({ ...doc.data(), id: doc.id, isLocal: false });
+        const reservation = normalizeDashboardReservation(doc.data(), doc.id);
+        if (reservation) remoteData.push(reservation);
+        else logInvalidDashboardRecord('reservation');
       });
 
       // Firestore is authoritative when connected; local drafts are not global bookings.
       allReservations = remoteData;
       reservationLoadState = 'ready';
+      renderDataSourceStatus('reservations-source-status',
+        `Nguồn dữ liệu: Firestore · cập nhật lúc ${getDataUpdatedLabel()}`, 'ready');
       // Sort newest first
       allReservations.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
@@ -543,10 +673,12 @@ function loadReservations() {
       renderTable();
       renderCustomers();
     }, (error) => {
-      if (!adminSessionActive) return;
+      if (!adminSessionActive || listenerGeneration !== reservationListenerGeneration) return;
       console.warn('Firestore snapshot notice, rendering local backup:', error);
       allReservations = localData;
       reservationLoadState = 'error';
+      renderDataSourceStatus('reservations-source-status',
+        'Firestore chưa tải được. Đang hiển thị bản sao cục bộ trên thiết bị này; dữ liệu có thể thiếu hoặc chưa đồng bộ.', 'error');
       updateStats();
       renderTable();
       renderCustomers();
@@ -555,10 +687,18 @@ function loadReservations() {
   } else {
     allReservations = localData;
     reservationLoadState = 'local';
+    renderDataSourceStatus('reservations-source-status',
+      'Firestore chưa kết nối. Đang hiển thị dữ liệu cục bộ trên thiết bị này; dữ liệu không đồng bộ giữa các thiết bị.', 'local');
     updateStats();
     renderTable();
     renderCustomers();
   }
+}
+
+function stopReservationsListener() {
+  reservationListenerGeneration += 1;
+  if (typeof reservationsUnsubscribe === 'function') reservationsUnsubscribe();
+  reservationsUnsubscribe = null;
 }
 
 function updateStats() {
@@ -617,7 +757,11 @@ function loadReservationVisits() {
   reservationVisitsUnsubscribe = dbInstance.collection('reservationVisits').onSnapshot((snapshot) => {
     if (!adminSessionActive || listenerGeneration !== reservationVisitsListenerGeneration) return;
     const snapshotVisits = [];
-    snapshot.forEach(doc => snapshotVisits.push({ ...doc.data(), id: doc.id }));
+    snapshot.forEach(doc => {
+      const visit = normalizeDashboardVisit(doc.data(), doc.id);
+      if (visit) snapshotVisits.push(visit);
+      else logInvalidDashboardRecord('reservation visit');
+    });
     allVisits = mergeAcknowledgedVisits(snapshotVisits);
     visitLoadState = 'ready';
     renderTable();
@@ -1007,8 +1151,10 @@ function getVisitLoadMessage() {
 
 function updateCustomerListViewport() {
   const tbody = document.getElementById('customers-tbody');
-  const viewport = tbody && tbody.closest('.customer-care-list-scroll');
-  const table = tbody && tbody.closest('table');
+  const viewport = tbody && typeof tbody.closest === 'function'
+    ? tbody.closest('.customer-care-list-scroll')
+    : null;
+  const table = tbody && typeof tbody.closest === 'function' ? tbody.closest('table') : null;
   if (!viewport || !table) return;
 
   const headerHeight = table.tHead ? table.tHead.getBoundingClientRect().height : 0;
@@ -1377,29 +1523,47 @@ async function recordReservationVisit(reservationId) {
 
 function loadOrders() {
   const tbody = document.getElementById('orders-tbody');
-  if (!tbody) return;
+  const revenueTbody = document.getElementById('revenue-tbody');
+  if (!tbody && !revenueTbody) return;
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
   if (!dbInstance || typeof dbInstance.collection !== 'function') {
     allOrders = [];
+    ordersLoadState = 'unavailable';
     currentOrdersPage = 1;
     renderOrders();
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px;">Chưa kết nối được hệ thống đơn gọi món.</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px;">Chưa kết nối được hệ thống đơn gọi món.</td></tr>';
     renderRevenueLoadMessage('Chưa kết nối được hệ thống đơn gọi món.');
+    renderDataSourceStatus('orders-source-status', 'Firestore chưa kết nối; chưa có dữ liệu đơn gọi món từ máy chủ.', 'unavailable');
+    renderDataSourceStatus('revenue-source-status', 'Firestore chưa kết nối; chưa có dữ liệu doanh thu từ máy chủ.', 'unavailable');
     return;
   }
 
   if (ordersUnsubscribe) ordersUnsubscribe();
+  ordersLoadState = 'loading';
+  renderDataSourceStatus('orders-source-status', 'Đang tải đơn gọi món từ Firestore…', 'loading');
+  renderDataSourceStatus('revenue-source-status', 'Đang tải doanh thu từ Firestore…', 'loading');
   ordersUnsubscribe = dbInstance.collection('orders').onSnapshot((snapshot) => {
     if (!adminSessionActive) return;
     allOrders = [];
-    snapshot.forEach(doc => allOrders.push({ id: doc.id, ...doc.data() }));
+    snapshot.forEach(doc => {
+      const order = normalizeDashboardOrder(doc.data(), doc.id);
+      if (order) allOrders.push(order);
+      else logInvalidDashboardRecord('order');
+    });
+    ordersLoadState = 'ready';
+    const sourceMessage = `Nguồn dữ liệu: Firestore · cập nhật lúc ${getDataUpdatedLabel()}`;
+    renderDataSourceStatus('orders-source-status', sourceMessage, 'ready');
+    renderDataSourceStatus('revenue-source-status', sourceMessage, 'ready');
     allOrders.sort((a, b) => getOrderCreatedAt(b) - getOrderCreatedAt(a));
     renderOrders();
     renderRevenue();
   }, (error) => {
     if (!adminSessionActive) return;
+    ordersLoadState = 'error';
     console.warn('Orders snapshot notice:', error);
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px;">Không thể tải đơn gọi món.</td></tr>';
+    renderDataSourceStatus('orders-source-status', 'Không thể tải dữ liệu đơn từ Firestore. Danh sách máy chủ chưa được xác nhận.', 'error');
+    renderDataSourceStatus('revenue-source-status', 'Không thể tải doanh thu từ Firestore; số liệu chưa được xác nhận.', 'error');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px;">Không thể tải đơn gọi món.</td></tr>';
     const summary = document.getElementById('orders-summary');
     const pagination = document.getElementById('orders-pagination');
     if (summary) summary.textContent = 'Không thể tải danh sách đơn gọi món.';
@@ -1413,15 +1577,12 @@ function renderRevenueLoadMessage(message) {
   if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:30px;">${escapeHtml(message)}</td></tr>`;
 }
 
-function getOrderAmountVnd(value, items) {
-  const amount = Number(value || 0);
-  const itemPrices = Array.isArray(items)
-    ? items.map(item => Number(item.price)).filter(Number.isFinite)
-    : [];
-  const amountUsesThousands = itemPrices.length
-    ? itemPrices.every(price => Math.abs(price) < 1000)
-    : Math.abs(amount) < 1000;
-  return amountUsesThousands ? amount * 1000 : amount;
+function getOrderAmountVnd(value, currencyUnit = 'VND') {
+  const amount = Number(value);
+  if (!Number.isSafeInteger(amount) || amount < 0) return null;
+  if (currencyUnit === 'VND') return amount;
+  if (currencyUnit === 'VND_THOUSANDS' && Number.isSafeInteger(amount * 1000)) return amount * 1000;
+  return null;
 }
 
 function getOrderCreatedAt(order) {
@@ -1446,7 +1607,7 @@ function getFilteredOrders() {
       if (!from && !to) return true;
       const createdAt = getOrderCreatedAt(order);
       if (!createdAt) return false;
-      const createdDate = getLocalDateKey(new Date(createdAt));
+      const createdDate = getBusinessDateKey(new Date(createdAt));
       return (!from || createdDate >= from) && (!to || createdDate <= to);
     })
     .sort((a, b) => getOrderCreatedAt(b) - getOrderCreatedAt(a));
@@ -1485,7 +1646,7 @@ function renderOrdersCalendar() {
   );
   daysContainer.innerHTML = Array.from({ length: 42 }, (_, index) => {
     const day = new Date(firstCellDate.getFullYear(), firstCellDate.getMonth(), firstCellDate.getDate() + index);
-    const dateValue = getLocalDateKey(day);
+    const dateValue = getCalendarDateKey(day);
     const classes = [
       'orders-calendar-day',
       day.getMonth() !== ordersCalendarMonth.getMonth() ? 'orders-calendar-day--outside' : '',
@@ -1505,8 +1666,8 @@ window.openOrdersDatePicker = function(target) {
     const [year, month] = selectedValue.split('-').map(Number);
     ordersCalendarMonth = new Date(year, month - 1, 1);
   } else {
-    const now = new Date();
-    ordersCalendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const { year, month } = getBusinessDateParts(new Date());
+    ordersCalendarMonth = new Date(Number(year), Number(month) - 1, 1);
   }
   const calendar = document.getElementById('orders-calendar');
   if (calendar) calendar.hidden = false;
@@ -1544,7 +1705,7 @@ window.clearOrdersCalendarDate = function() {
 };
 
 window.selectOrdersCalendarToday = function() {
-  window.selectOrdersCalendarDate(getLocalDateKey(new Date()));
+  window.selectOrdersCalendarDate(getBusinessDateKey(new Date()));
 };
 
 window.applyOrdersDateFilter = function() {
@@ -1557,16 +1718,17 @@ window.setOrdersDatePreset = function(preset) {
   const toInput = document.getElementById('orders-date-to');
   if (!fromInput || !toInput) return;
   const now = new Date();
-  const today = getLocalDateKey(now);
+  const { year, month, day } = getBusinessDateParts(now);
+  const today = `${year}-${month}-${day}`;
   if (preset === 'today') {
     fromInput.value = today;
     toInput.value = today;
   } else if (preset === 'this-month') {
     fromInput.value = `${today.slice(0, 7)}-01`;
-    toInput.value = `${today.slice(0, 7)}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+    toInput.value = `${today.slice(0, 7)}-${String(new Date(Number(year), Number(month), 0).getDate()).padStart(2, '0')}`;
   } else if (preset === 'this-year') {
-    fromInput.value = `${now.getFullYear()}-01-01`;
-    toInput.value = `${now.getFullYear()}-12-31`;
+    fromInput.value = `${year}-01-01`;
+    toInput.value = `${year}-12-31`;
   } else if (preset === 'all') {
     fromInput.value = '';
     toInput.value = '';
@@ -1588,19 +1750,42 @@ function formatVnd(amount) {
   }).format(amount);
 }
 
-function formatOrderMoney(value, items) {
-  return formatVnd(getOrderAmountVnd(value, items));
+function formatOrderMoney(value, items, currencyUnit = 'VND') {
+  const amount = getOrderAmountVnd(value, currencyUnit);
+  return amount === null ? '—' : formatVnd(amount);
 }
 
 function getOrderPaidDate(order) {
-  const value = order.paidAt || order.paid_at;
-  if (!value) return null;
-
-  const date = typeof value.toDate === 'function' ? value.toDate() : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  try {
+    const value = order.paidAt || order.paid_at;
+    if (!value) return null;
+    const date = typeof value.toDate === 'function' ? value.toDate() : new Date(value);
+    const timestamp = date && typeof date.getTime === 'function' ? date.getTime() : NaN;
+    return Number.isFinite(timestamp) ? new Date(timestamp) : null;
+  } catch (error) {
+    console.warn('[Admin Data] Invalid order payment timestamp.', error && error.name || 'date-error');
+    return null;
+  }
 }
 
-function getLocalDateKey(date) {
+function getBusinessDateParts(date) {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  return Object.fromEntries(parts
+    .filter(part => ['year', 'month', 'day'].includes(part.type))
+    .map(part => [part.type, part.value]));
+}
+
+function getBusinessDateKey(date) {
+  const { year, month, day } = getBusinessDateParts(date);
+  return `${year}-${month}-${day}`;
+}
+
+function getCalendarDateKey(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -1612,7 +1797,7 @@ function renderRevenue() {
   const monthElement = document.getElementById('revenue-month');
   const totalElement = document.getElementById('revenue-total');
   const tbody = document.getElementById('revenue-tbody');
-  const todayKey = getLocalDateKey(new Date());
+  const todayKey = getBusinessDateKey(new Date());
   const monthKey = todayKey.slice(0, 7);
   const paidOrders = allOrders.filter(order =>
     (order.paymentStatus || order.payment_status || '').toLowerCase() === 'paid'
@@ -1623,12 +1808,13 @@ function renderRevenue() {
   let totalRevenue = 0;
 
   paidOrders.forEach(order => {
-    const amount = getOrderAmountVnd(order.total, order.items);
+    const amount = getOrderAmountVnd(order.total, order.currencyUnit || order.currency_unit || 'VND');
     const paidDate = getOrderPaidDate(order);
+    if (amount === null) return;
     totalRevenue += amount;
     if (!paidDate) return;
 
-    const paidDateKey = getLocalDateKey(paidDate);
+    const paidDateKey = getBusinessDateKey(paidDate);
     if (paidDateKey === todayKey) todayTotal += amount;
     if (paidDateKey.slice(0, 7) === monthKey) monthTotal += amount;
   });
@@ -1650,12 +1836,16 @@ function renderRevenue() {
       const orderId = order.orderId || order.order_id || order.id;
       const tableNumber = order.tableNumber || order.table_number || '--';
       const dateLabel = paidDate
-        ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(paidDate)
+        ? new Intl.DateTimeFormat('vi-VN', {
+          timeZone: BUSINESS_TIME_ZONE,
+          dateStyle: 'short',
+          timeStyle: 'short'
+        }).format(paidDate)
         : '—';
       return `<tr>
         <td>${escapeHtml(dateLabel)}</td>
         <td>${escapeHtml(orderId)} · Bàn ${escapeHtml(tableNumber)}</td>
-        <td><strong>${formatOrderMoney(order.total, order.items)}</strong></td>
+        <td><strong>${formatOrderMoney(order.total, order.items, order.currencyUnit || order.currency_unit || 'VND')}</strong></td>
         <td>Đã thanh toán</td>
       </tr>`;
     }).join('');
@@ -1728,14 +1918,14 @@ function renderOrders() {
         <td>${firstOrderNumber + index + 1}</td>
         <td><strong>${escapeHtml(order.orderId || order.id)}</strong><br><span class="order-table-number">Bàn ${escapeHtml(order.tableNumber || '--')}</span></td>
         <td>${items.map(item => `<div>${escapeHtml(item.name)} <strong>×${Number(item.quantity) || 0}</strong></div>`).join('')}${order.note ? `<small class="order-note">${escapeHtml(order.note)}</small>` : ''}</td>
-        <td><strong>${formatOrderMoney(order.total, items)}</strong></td>
+        <td><strong>${formatOrderMoney(order.total, items, order.currencyUnit || order.currency_unit || 'VND')}</strong></td>
         <td><span class="order-status order-status--${escapeHtml(status)}">${getOrderStatusLabel(status)}</span></td>
         <td><span class="payment-status payment-status--${escapeHtml(paymentStatus)}">${paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}</span></td>
         <td><div class="order-actions">
-          ${status === 'new' ? `<button class="btn-action btn-action--approve" type="button" onclick="updateOrderStatus('${order.id}', 'preparing')">Bắt đầu làm</button>` : ''}
-          ${status === 'in_progress' || status === 'preparing' ? `<button class="btn-action btn-action--approve" type="button" onclick="updateOrderStatus('${order.id}', 'served')">Đã mang ra</button>` : ''}
-          ${status === 'served' && paymentStatus !== 'paid' ? `<button class="btn-action btn-action--approve" type="button" onclick="markOrderPaid('${order.id}')">Đã thanh toán</button>` : ''}
-          ${status !== 'completed' && status !== 'cancelled' ? `<button class="btn-action btn-action--cancel" type="button" onclick="updateOrderStatus('${order.id}', 'cancelled')">Hủy</button>` : ''}
+          ${status === 'new' ? `<button class="btn-action btn-action--approve" type="button" ${orderSavingIds.has(order.id) ? 'disabled' : ''} onclick="updateOrderStatus('${escapeHtml(order.id)}', 'preparing')">Bắt đầu làm</button>` : ''}
+          ${status === 'in_progress' || status === 'preparing' ? `<button class="btn-action btn-action--approve" type="button" ${orderSavingIds.has(order.id) ? 'disabled' : ''} onclick="updateOrderStatus('${escapeHtml(order.id)}', 'served')">Đã mang ra</button>` : ''}
+          ${status === 'served' && paymentStatus !== 'paid' ? `<button class="btn-action btn-action--approve" type="button" ${orderSavingIds.has(order.id) ? 'disabled' : ''} onclick="markOrderPaid('${escapeHtml(order.id)}')">Đã thanh toán</button>` : ''}
+          ${status !== 'completed' && status !== 'cancelled' ? `<button class="btn-action btn-action--cancel" type="button" ${orderSavingIds.has(order.id) ? 'disabled' : ''} onclick="updateOrderStatus('${escapeHtml(order.id)}', 'cancelled')">Hủy</button>` : ''}
         </div></td>
       </tr>`;
   }).join('');
@@ -1750,18 +1940,80 @@ function renderOrders() {
   if (scrollContainer) scrollContainer.scrollTop = 0;
 }
 
-window.updateOrderStatus = function(id, status) {
+window.updateOrderStatus = async function(id, status) {
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  if (!dbInstance || !id) return;
-  dbInstance.collection('orders').doc(id).update({ status, updatedAt: new Date().toISOString() })
-    .catch(error => console.warn('Order status update notice:', error));
+  const orderId = String(id || '');
+  const order = allOrders.find(item => item.id === orderId);
+  const targetStatus = String(status || '').toLowerCase();
+  const currentStatus = String(order && order.status || 'new').toLowerCase();
+  const validTransition = (currentStatus === 'new' && targetStatus === 'preparing')
+    || (['preparing', 'in_progress'].includes(currentStatus) && targetStatus === 'served')
+    || (!['completed', 'cancelled'].includes(currentStatus) && targetStatus === 'cancelled');
+  if (!orderId || !order || !validTransition) {
+    showToast('Không thể cập nhật trạng thái đơn này. Tải lại danh sách rồi thử lại.', 'error');
+    return;
+  }
+  if (orderSavingIds.has(orderId)) return;
+  if (!dbInstance || typeof dbInstance.collection !== 'function') {
+    showToast('Firestore chưa sẵn sàng; trạng thái đơn chưa được cập nhật.', 'error');
+    return;
+  }
+
+  orderSavingIds.add(orderId);
+  renderOrders();
+  const updatedAt = new Date().toISOString();
+  try {
+    await dbInstance.collection('orders').doc(orderId).update({ status: targetStatus, updatedAt });
+    order.status = targetStatus;
+    order.updatedAt = updatedAt;
+    showToast('Đã cập nhật trạng thái đơn gọi món.', 'success');
+  } catch (error) {
+    console.warn('[Order Status Update Error]', error && error.code || 'unknown');
+    showToast('Không cập nhật được trạng thái đơn trên Firestore. Trạng thái cũ vẫn được giữ; hãy thử lại.', 'error');
+  } finally {
+    orderSavingIds.delete(orderId);
+    renderOrders();
+  }
 };
 
-window.markOrderPaid = function(id) {
+window.markOrderPaid = async function(id) {
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
-  if (!dbInstance || !id) return;
-  dbInstance.collection('orders').doc(id).update({ paymentStatus: 'paid', status: 'completed', paidAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
-    .catch(error => console.warn('Order payment update notice:', error));
+  const orderId = String(id || '');
+  const order = allOrders.find(item => item.id === orderId);
+  const paymentStatus = String(order && (order.paymentStatus || order.payment_status) || 'unpaid').toLowerCase();
+  if (!orderId || !order || String(order.status || '').toLowerCase() !== 'served' || paymentStatus === 'paid') {
+    showToast('Chỉ đơn đã phục vụ và chưa thanh toán mới có thể được thanh toán.', 'error');
+    return;
+  }
+  if (orderSavingIds.has(orderId)) return;
+  if (!dbInstance || typeof dbInstance.collection !== 'function') {
+    showToast('Firestore chưa sẵn sàng; thanh toán chưa được ghi nhận.', 'error');
+    return;
+  }
+
+  orderSavingIds.add(orderId);
+  renderOrders();
+  const paidAt = new Date().toISOString();
+  try {
+    await dbInstance.collection('orders').doc(orderId).update({
+      paymentStatus: 'paid',
+      status: 'completed',
+      paidAt,
+      updatedAt: paidAt
+    });
+    order.paymentStatus = 'paid';
+    order.status = 'completed';
+    order.paidAt = paidAt;
+    order.updatedAt = paidAt;
+    renderRevenue();
+    showToast('Đã ghi nhận thanh toán đơn gọi món.', 'success');
+  } catch (error) {
+    console.warn('[Order Payment Error]', error && error.code || 'unknown');
+    showToast('Không ghi nhận được thanh toán trên Firestore. Đơn chưa được đánh dấu đã thanh toán; hãy thử lại.', 'error');
+  } finally {
+    orderSavingIds.delete(orderId);
+    renderOrders();
+  }
 };
 
 function renderTable() {
@@ -1960,29 +2212,38 @@ window.updateBookingStatus = async function(id, newStatus) {
     }
   }
 
+  if (isLocalReservation) {
+    try {
+      const local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
+      if (!Array.isArray(local)) throw new TypeError('Local reservation data must be an array.');
+      const localIndexMatch = reservationId.match(/^local_(\d+)_/);
+      const localIndex = localIndexMatch ? Number(localIndexMatch[1]) : -1;
+      const record = local[localIndex];
+      if (!record || !isValidDashboardReservation(record)) {
+        throw new Error('Local reservation record is missing or invalid.');
+      }
+      record.status = targetStatus;
+      record.updatedAt = nowIso;
+      localStorage.setItem('mocha_reservations', JSON.stringify(local));
+    } catch (error) {
+      console.warn('[Local Reservation Update Error]', error && error.name || 'storage-error');
+      showToast('Không lưu được thay đổi trên thiết bị này. Trạng thái đặt bàn chưa được cập nhật.', 'error');
+      return;
+    }
+    item.status = targetStatus;
+    item.updatedAt = nowIso;
+    updateStats();
+    renderTable();
+    renderCustomers();
+    showToast(`Đã cập nhật trạng thái đặt bàn cục bộ thành "${getStatusLabel(newStatus)}".`, 'info');
+    return;
+  }
+
   item.status = newStatus;
   item.updatedAt = nowIso;
   updateStats();
   renderTable();
   renderCustomers();
-
-  if (isLocalReservation) {
-    try {
-      const local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
-      local.forEach(record => {
-        if ((record.email === item.email || record.reservationId === item.reservationId)
-            && record.date === item.date && record.time === item.time) {
-          record.status = targetStatus;
-          record.updatedAt = nowIso;
-        }
-      });
-      localStorage.setItem('mocha_reservations', JSON.stringify(local));
-    } catch (error) {
-      console.warn('Local reservation update notice:', error && error.name || 'storage-error');
-    }
-    showToast(`Đã cập nhật trạng thái đặt bàn cục bộ thành "${getStatusLabel(newStatus)}".`, 'info');
-    return;
-  }
 
   try {
     await dbInstance.collection('reservations').doc(reservationId).update({
@@ -2058,6 +2319,7 @@ window.deleteBooking = async function(id) {
             throw Object.assign(new Error('Only a confirmed reservation can be archived with a visit'), { code: 'failed-precondition' });
           }
           const visitUpdate = {};
+          preservedVisit = { ...existingVisit, id: reservationId, reservationId };
           if (!isVisitCustomerSnapshotValid(existingVisit.customer)) {
             visitUpdate.customer = buildVisitCustomerSnapshot(reservationData, reservationId);
           }
@@ -2068,10 +2330,9 @@ window.deleteBooking = async function(id) {
           if (Object.keys(visitUpdate).length) {
             transactionStep = 'preserve-visit-history';
             transactionOperations.push({ action: 'update', path: visitRef.path, fields: Object.keys(visitUpdate).sort() });
-            preservedVisit.customer = buildVisitCustomerSnapshot(reservationSnapshot.data() || {}, reservationId);
+            preservedVisit = { ...preservedVisit, ...visitUpdate };
             transaction.update(visitRef, visitUpdate);
           }
-          preservedVisit = { ...existingVisit, ...visitUpdate, id: reservationId, reservationId };
           transactionStep = 'archive-reservation';
           transactionOperations.push({ action: 'update', path: reservationRef.path, fields: ['archivedAt'] });
           const fieldValue = window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue;

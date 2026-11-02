@@ -54,6 +54,7 @@ test('table order submission writes a Firebase order with normalized table and V
   assert.match(savedOrder.orderId, /^ORD-/);
   assert.equal(savedOrder.tableNumber, '01');
   assert.equal(savedOrder.total, 70000);
+  assert.equal(savedOrder.currencyUnit, 'VND');
   assert.equal(savedOrder.items[0].price, 35000);
   assert.equal(savedOrder.items[0].quantity, 2);
   assert.equal(savedOrder.note, 'Ít đá');
