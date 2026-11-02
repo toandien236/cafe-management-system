@@ -10,7 +10,7 @@
   <script src="js/menu-data.js"></script>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import { getFirestore, collection, addDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    import { getFirestore, collection, addDoc, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
     window.firebaseFirestoreReady = (async () => {
       try {
@@ -21,7 +21,7 @@
 
         const app = initializeApp(config);
         const db = getFirestore(app);
-        const methods = { collection, addDoc };
+        const methods = { collection, addDoc, doc, onSnapshot };
         window.firebaseApp = app;
         window.firebaseDb = db;
         window.firebaseFirestoreMethods = methods;
@@ -32,7 +32,7 @@
       }
     })();
   </script>
-  <script src="js/order.js?v=shared-menu" defer></script>
+  <script src="js/order.js?v=order-tracking-v2" defer></script>
 </head>
 <body>
   <main class="order-shell">
@@ -83,10 +83,53 @@
     </section>
 
     <section class="order-state" id="order-success" hidden>
-      <div class="state-icon">✓</div>
-      <p class="eyebrow">Đơn đã được gửi</p>
-      <h2>Nhân viên đang tiếp nhận món</h2>
-      <p>Mã đơn: <strong id="success-order-id"></strong></p>
+      <div class="state-icon" id="order-status-icon">✓</div>
+      <p class="eyebrow" id="order-status-eyebrow">Đơn đã được gửi</p>
+      <h2 id="order-status-heading">Nhân viên đang tiếp nhận món</h2>
+      <p id="order-status-desc" class="order-status-desc">Đơn món của bạn đã chuyển tới quầy bar/bếp và đang được xử lý.</p>
+      
+      <!-- Live Status Pill -->
+      <div class="live-status-pill" id="live-status-pill">
+        <span class="pulsing-dot"></span>
+        <span id="tracker-live-text">Đang cập nhật trực tiếp</span>
+      </div>
+
+      <!-- 4-Phase Visual Stepper (ORD-07) -->
+      <div class="order-tracker" id="order-tracker" aria-label="Tiến độ đơn hàng">
+        <div class="tracker-step active" id="step-new" data-step="new">
+          <div class="step-circle">1</div>
+          <div class="step-label">Đã gửi</div>
+        </div>
+        <div class="tracker-line" id="line-1"></div>
+        <div class="tracker-step" id="step-preparing" data-step="preparing">
+          <div class="step-circle">2</div>
+          <div class="step-label">Đang pha chế</div>
+        </div>
+        <div class="tracker-line" id="line-2"></div>
+        <div class="tracker-step" id="step-served" data-step="served">
+          <div class="step-circle">3</div>
+          <div class="step-label">Đã phục vụ</div>
+        </div>
+        <div class="tracker-line" id="line-3"></div>
+        <div class="tracker-step" id="step-completed" data-step="completed">
+          <div class="step-circle">4</div>
+          <div class="step-label">Hoàn tất</div>
+        </div>
+      </div>
+
+      <!-- Order Summary Card -->
+      <div class="order-summary-box" id="order-summary-box">
+        <div class="order-meta-row">
+          <span>Bàn: <strong id="order-table-display">--</strong></span>
+          <span>Mã đơn: <strong id="success-order-id"></strong></span>
+        </div>
+        <div class="order-items-list" id="order-summary-items"></div>
+        <div class="order-total-row">
+          <span>Tổng tiền:</span>
+          <strong id="order-summary-total">0 ₫</strong>
+        </div>
+      </div>
+
       <button class="order-submit secondary" id="new-order" type="button">Gọi thêm món</button>
     </section>
   </main>

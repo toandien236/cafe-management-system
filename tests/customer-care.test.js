@@ -145,3 +145,30 @@ test('Firestore reservation errors are visible in the customer directory', () =>
   assert.equal(elements.get('customer-load-notice').hidden, false);
   assert.match(elements.get('customer-load-notice').textContent, /Không tải được đặt bàn từ Firestore/);
 });
+
+test('preserves stats, reservation count and latest reservation date when reservations are deleted but visits remain', () => {
+  const { context, elements } = loadAdminScript();
+  const visits = [
+    {
+      id: 'visit-1',
+      reservationId: 'res-archived-1',
+      recordedAt: '2026-10-28T10:00:00Z',
+      customer: { key: 'email:guest@example.com', name: 'Guest A', email: 'guest@example.com', phone: '0901234567' }
+    }
+  ];
+  context.visitsForTest = visits;
+  vm.runInContext('allReservations = []; allVisits = visitsForTest; reservationLoadState = "ready"; visitLoadState = "ready"; customerSearchQuery = ""', context);
+  context.updateStats();
+  context.renderCustomers();
+
+  assert.equal(elements.get('stat-total').textContent, 1);
+  assert.equal(elements.get('stat-confirmed').textContent, 1);
+  assert.equal(elements.get('stat-guests').textContent, 2);
+  assert.equal(elements.get('care-customer-count').textContent, '1');
+  assert.equal(elements.get('care-reservation-count').textContent, '1');
+  assert.equal(elements.get('care-last-reservation').textContent, '2026-10-28');
+  assert.match(elements.get('customers-tbody').innerHTML, /Guest A/);
+  assert.match(elements.get('customers-tbody').innerHTML, /<td>1<\/td>/);
+  assert.match(elements.get('customers-tbody').innerHTML, /<td>2026-10-28<\/td>/);
+});
+
