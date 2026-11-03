@@ -108,7 +108,7 @@ function renderMenu() {
   gridEl.innerHTML = visible.map(item => `
     <article class="menu-item">
       <img src="${item.image}" alt="${item.name}" loading="lazy" />
-      <div>
+      <div class="menu-item-content">
         <h3>${item.name}</h3>
         <p>${item.description}</p>
         <div class="menu-item-footer">
