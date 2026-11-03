@@ -312,6 +312,15 @@ body.cursor-hover .cursor-ring {
 body.cursor-text .cursor-dot { transform: scale(5); opacity: 0.1; }
 body.cursor-text .cursor-ring { opacity: 0; }
 
+/* Disable custom cursor on touch/pointer-coarse devices */
+@media (hover: none) and (pointer: coarse) {
+  .cursor,
+  .cursor-dot,
+  .cursor-ring {
+    display: none !important;
+  }
+}
+
 /* ----------------------------------------------------------------
    7. PAGE LOADER
    ---------------------------------------------------------------- */
@@ -2095,6 +2104,9 @@ img, video, svg, iframe {
   background-color: var(--cream);
   color: var(--ink);
   min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 /* Admin Login Screen */
@@ -2438,11 +2450,14 @@ img, video, svg, iframe {
 
 .admin-table-wrap {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .admin-table {
   width: 100%;
+  min-width: 680px;
   border-collapse: collapse;
   text-align: left;
   font-size: 14px;
@@ -2967,7 +2982,7 @@ img, video, svg, iframe {
 }
 
 .customer-table {
-  min-width: 980px;
+  min-width: 680px;
 }
 
 .customer-table td {
@@ -2991,9 +3006,7 @@ img, video, svg, iframe {
 .customer-visit-unavailable {
   display: block;
   max-width: 170px;
-  .customer-care-filters { display: grid; grid-template-columns: 1fr; }
   color: var(--warm-gray);
-  .customer-date-label .customer-date-input { min-width: 0; }
   font-size: 11px;
   line-height: 1.4;
 }
@@ -3574,3 +3587,454 @@ img, video, svg, iframe {
 .employee-toolbar { display: flex; align-items: center; gap: 10px; }
 .employee-toolbar input { min-width: min(340px, 42vw); }
 @media (max-width: 640px) { .staff-tabs { gap: 8px; } .staff-tabs button { padding: 8px 12px; } .staff-form { padding: 15px; } }
+
+/* ================================================================
+   23. COMPREHENSIVE RESPONSIVE STYLES (TABLET & MOBILE)
+   ================================================================ */
+@media (max-width: 768px) {
+  /* Prevent iOS Safari auto-zoom on input focus by enforcing 16px font-size */
+  input,
+  select,
+  textarea,
+  .form-input,
+  .admin-search-input,
+  .customer-date-input,
+  .orders-date-control input,
+  .admin-revenue-field input,
+  .staff-field input,
+  .staff-field select,
+  .staff-filter input,
+  .staff-report-filters input {
+    font-size: 16px !important;
+  }
+
+  /* Admin Header */
+  .admin-header {
+    padding: 12px 0;
+  }
+
+  .admin-header-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .admin-logo-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .admin-user-info {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  .admin-email-text {
+    width: 100%;
+    font-size: 12px;
+    order: -1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.85;
+    margin-bottom: 2px;
+  }
+
+  .admin-user-info .admin-top-link,
+  .admin-user-info .btn-logout {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 7px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Admin Main Layout */
+  .admin-main {
+    padding: 24px 0 60px;
+  }
+
+  .admin-section-heading {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .admin-section-actions {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .admin-section-title {
+    font-size: 24px;
+  }
+
+  /* Controls Bar & Filter Tabs */
+  .admin-controls-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .admin-filter-group {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 4px;
+  }
+
+  .admin-filter-group::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-filter-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 8px 14px;
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .admin-search-input {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+
+  /* Stats / KPI Grid (2 columns on mobile) */
+  .admin-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    padding: 14px 12px;
+  }
+
+  .stat-num {
+    font-size: 26px;
+  }
+
+  .stat-label {
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+  }
+
+  .stat-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Customer Care Section */
+  .customer-care-section {
+    margin-top: 36px;
+  }
+
+  .customer-care-section .admin-section-heading {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .customer-care-filters {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .customer-search-label,
+  .customer-date-label {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .customer-search-label .admin-search-input,
+  .customer-date-label .customer-date-input {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+
+  .customer-care-stats {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  /* Table Orders Section */
+  .admin-orders-section {
+    margin-top: 36px;
+  }
+
+  .orders-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .orders-filter-label {
+    align-self: flex-start;
+  }
+
+  .orders-filter-dates {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .orders-date-field {
+    width: 100%;
+  }
+
+  .orders-date-control {
+    width: 100%;
+  }
+
+  .orders-date-control input[type="text"] {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .orders-filter-separator {
+    display: none;
+  }
+
+  .orders-filter-presets {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .orders-filter-button {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+
+  .orders-calendar {
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    max-width: calc(100vw - 32px);
+    width: 294px;
+  }
+
+  /* Revenue Form */
+  .admin-revenue-form {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .admin-revenue-description {
+    grid-column: auto;
+  }
+
+  .admin-revenue-search-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .admin-revenue-search-actions .admin-revenue-submit {
+    width: 100%;
+  }
+
+  /* Employee & Staff Management */
+  .employee-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .employee-toolbar input {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+
+  .employee-toolbar button {
+    width: 100%;
+  }
+
+  .staff-tabs {
+    gap: 8px;
+  }
+
+  .staff-tabs button {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .staff-form {
+    padding: 16px;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .staff-summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .staff-report-filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .staff-report-filters label,
+  .staff-filter label {
+    width: 100%;
+  }
+
+  .staff-report-filters input,
+  .staff-filter input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .staff-report-filters button {
+    width: 100%;
+  }
+
+  /* Modals & Dialogs */
+  .admin-modal-overlay {
+    padding: 12px;
+  }
+
+  .admin-modal-card {
+    padding: 20px 16px;
+    max-width: 100%;
+    max-height: 90vh;
+    border-radius: var(--radius-md);
+    overflow-y: auto;
+  }
+
+  .admin-modal-actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .admin-modal-actions .btn {
+    width: 100%;
+  }
+
+  .customer-profile-card {
+    padding: 20px 14px;
+    max-width: 100%;
+    max-height: 92vh;
+  }
+
+  .customer-profile-heading {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .customer-profile-summary {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .customer-history-contact {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .customer-history-table {
+    min-width: 600px;
+  }
+
+  .res-modal-overlay {
+    padding: 12px;
+  }
+
+  .res-modal-card {
+    padding: 28px 16px 20px;
+    max-width: 100%;
+  }
+
+  .res-modal-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .res-modal-actions .btn {
+    width: 100%;
+  }
+
+  .admin-login-card {
+    padding: 28px 20px;
+  }
+
+  .reservation-form-wrap {
+    padding: 24px 16px;
+    border-radius: var(--radius-md);
+  }
+}
+
+/* Extra Compact Phones (≤ 480px) */
+@media (max-width: 480px) {
+  .admin-header-title {
+    font-size: 18px;
+  }
+
+  .admin-user-info .admin-top-link,
+  .admin-user-info .btn-logout {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .stat-card {
+    padding: 12px 10px;
+  }
+
+  .stat-num {
+    font-size: 24px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+  }
+}
+
+/* Ultra-Small Phones (≤ 360px, e.g. iPhone SE 1st Gen) */
+@media (max-width: 360px) {
+  .admin-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-header-title {
+    font-size: 16px;
+  }
+
+  .admin-badge {
+    font-size: 9.5px;
+    padding: 2px 6px;
+  }
+
+  .admin-table {
+    min-width: 580px;
+  }
+}
