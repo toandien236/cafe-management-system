@@ -2156,6 +2156,38 @@ img, video, svg, iframe {
   box-shadow: var(--shadow-md);
 }
 
+.admin-header .admin-top-link,
+.admin-header a.btn.btn-outline,
+.admin-header .btn-logout {
+  color: var(--cream);
+  border-color: rgba(248, 245, 242, 0.45);
+  font-family: var(--font-sans);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 92px;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.15;
+  text-align: center;
+  border-radius: var(--radius-sm);
+  transform: none;
+}
+
+.admin-header .admin-top-link:hover,
+.admin-header a.btn.btn-outline:hover,
+.admin-header .btn-logout:hover {
+  color: var(--cream);
+  border-color: var(--cream);
+  background: rgba(248, 245, 242, 0.15);
+  border-radius: var(--radius-sm);
+  transform: none;
+}
+
 .admin-header-inner {
   display: flex;
   align-items: center;
