@@ -10,7 +10,7 @@
   <script src="js/menu-data.js"></script>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import { getFirestore, collection, addDoc, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    import { getFirestore, collection, addDoc, doc, onSnapshot, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
     window.firebaseFirestoreReady = (async () => {
       try {
@@ -21,7 +21,7 @@
 
         const app = initializeApp(config);
         const db = getFirestore(app);
-        const methods = { collection, addDoc, doc, onSnapshot };
+        const methods = { collection, addDoc, doc, onSnapshot, getDoc };
         window.firebaseApp = app;
         window.firebaseDb = db;
         window.firebaseFirestoreMethods = methods;
@@ -32,7 +32,7 @@
       }
     })();
   </script>
-  <script src="js/order.js?v=order-mobile-fit-2" defer></script>
+  <script src="js/order.js?v=order-mobile-fit-3" defer></script>
 </head>
 <body>
   <main class="order-shell">

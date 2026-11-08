@@ -17,9 +17,17 @@ function loadOrderScript(firebaseFirestoreReady, alert) {
       return elements.get(id);
     }
   };
+  const localStorageStore = new Map();
   const context = vm.createContext({
     document,
-    window: { location: { search: '?table=1' }, firebaseFirestoreReady },
+    window: {
+      location: { search: '?table=1' },
+      localStorage: {
+        getItem: key => localStorageStore.get(key) || null,
+        setItem: (key, value) => localStorageStore.set(key, String(value))
+      },
+      firebaseFirestoreReady
+    },
     URLSearchParams,
     Intl,
     Date,
@@ -32,7 +40,7 @@ function loadOrderScript(firebaseFirestoreReady, alert) {
   vm.runInContext(menuSource, context, { filename: 'js/menu-data.js' });
   vm.runInContext(source, context, { filename: 'js/order.js' });
   vm.runInContext('cart = [{ id: "espresso", quantity: 2 }]', context);
-  return { context, elements };
+  return { context, elements, localStorageStore };
 }
 
 test('table order submission writes a Firebase order with normalized table and VND total', async () => {
@@ -47,7 +55,7 @@ test('table order submission writes a Firebase order with normalized table and V
       }
     }
   });
-  const { context, elements } = loadOrderScript(firebaseFirestoreReady, () => assert.fail('Unexpected alert'));
+  const { context, elements, localStorageStore } = loadOrderScript(firebaseFirestoreReady, () => assert.fail('Unexpected alert'));
 
   await context.submitOrder();
 
@@ -64,6 +72,7 @@ test('table order submission writes a Firebase order with normalized table and V
   assert.equal(savedOrder.updatedAt, savedOrder.createdAt);
   assert.equal(elements.get('success-order-id').textContent, savedOrder.orderId);
   assert.equal(elements.get('order-success').hidden, false);
+  assert.equal(JSON.parse(localStorageStore.get('mocha_active_order_01')).orderId, savedOrder.orderId);
 });
 
 test('table order submission does not show success when Firebase is unavailable', async () => {

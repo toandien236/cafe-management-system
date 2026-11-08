@@ -4,9 +4,12 @@ if (!Array.isArray(ORDER_MENU)) throw new Error('Shared cafe menu data is unavai
 const money = value => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value) || 0);
 const tableNumber = new URLSearchParams(window.location.search).get('table');
 const normalizedTableNumber = String(tableNumber || '').trim().padStart(2, '0');
+const activeOrderStorageKey = `mocha_active_order_${normalizedTableNumber}`;
 let cart = [];
 let activeCategory = 'Tất cả';
 let isSubmittingOrder = false;
+let orderStatusPoller = null;
+let isCheckingOrderStatus = false;
 
 /* ──────────────────────────────────────────────────────────
    SAFE STORAGE HELPER (Idempotency & Tracking State)
@@ -38,6 +41,31 @@ const safeStorage = {
     memoryStorage.delete(key);
   }
 };
+
+function saveActiveOrder(order) {
+  const serializedOrder = JSON.stringify(order);
+  try {
+    if (window.localStorage) {
+      window.localStorage.setItem(activeOrderStorageKey, serializedOrder);
+      return;
+    }
+  } catch (error) {
+    console.warn('[Order Tracking Storage Warning] Could not save order in local storage.', error);
+  }
+  safeStorage.setItem('mocha_active_order', serializedOrder);
+}
+
+function getSavedActiveOrder() {
+  try {
+    if (window.localStorage) {
+      const savedOrder = window.localStorage.getItem(activeOrderStorageKey);
+      if (savedOrder) return savedOrder;
+    }
+  } catch (error) {
+    console.warn('[Order Tracking Storage Warning] Could not read order from local storage.', error);
+  }
+  return safeStorage.getItem('mocha_active_order');
+}
 
 function generateUuidV4() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -235,7 +263,7 @@ async function submitOrder() {
 
     // Save active order for live status tracking
     const orderRecord = { ...orderDoc, docId };
-    safeStorage.setItem('mocha_active_order', JSON.stringify(orderRecord));
+    saveActiveOrder(orderRecord);
 
     const successOrderIdEl = document.getElementById('success-order-id');
     if (successOrderIdEl) successOrderIdEl.textContent = orderId;
@@ -383,30 +411,55 @@ function listenToOrderUpdates(docId, orderId, firestore) {
 
   try {
     const docRef = methods.doc(firestore.db, 'orders', docId);
-    methods.onSnapshot(docRef, snapshot => {
+    const updateTracker = snapshot => {
       if (snapshot && typeof snapshot.data === 'function') {
         const data = snapshot.data();
         if (data) {
           data.docId = docId;
-          safeStorage.setItem('mocha_active_order', JSON.stringify(data));
+          saveActiveOrder(data);
           renderOrderStatusTracker(data);
+          if (data.status === 'completed' || data.status === 'cancelled') {
+            if (orderStatusPoller !== null) clearInterval(orderStatusPoller);
+            orderStatusPoller = null;
+          }
         }
       }
-    }, error => {
+    };
+
+    methods.onSnapshot(docRef, updateTracker, error => {
       console.warn('[Order Status Listener Warning]', error);
     });
+
+    if (typeof methods.getDoc === 'function' && typeof setInterval === 'function') {
+      if (orderStatusPoller !== null) clearInterval(orderStatusPoller);
+      orderStatusPoller = setInterval(async () => {
+        if (isCheckingOrderStatus) return;
+        isCheckingOrderStatus = true;
+        try {
+          const snapshot = await methods.getDoc(docRef);
+          if (snapshot && typeof snapshot.exists === 'function' && snapshot.exists()) {
+            updateTracker(snapshot);
+          }
+        } catch (error) {
+          console.warn('[Order Status Refresh Warning]', error);
+        } finally {
+          isCheckingOrderStatus = false;
+        }
+      }, 5000);
+    }
   } catch (err) {
     console.warn('[Order Status Setup Error]', err);
   }
 }
 
 function restoreActiveOrderTracking() {
-  const activeOrderRaw = safeStorage.getItem('mocha_active_order');
+  const activeOrderRaw = getSavedActiveOrder();
   if (!activeOrderRaw) return;
 
   try {
     const activeOrder = JSON.parse(activeOrderRaw);
     if (activeOrder && activeOrder.orderId && activeOrder.tableNumber === normalizedTableNumber) {
+      saveActiveOrder(activeOrder);
       const orderSuccessEl = document.getElementById('order-success');
       if (orderSuccessEl) orderSuccessEl.hidden = false;
 
@@ -419,7 +472,9 @@ function restoreActiveOrderTracking() {
         }
       });
     }
-  } catch (e) {}
+  } catch (error) {
+    console.warn('[Order Tracking Storage Warning] Saved order data is invalid.', error);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

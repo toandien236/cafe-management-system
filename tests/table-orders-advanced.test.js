@@ -134,7 +134,7 @@ function createMockClassList() {
   };
 }
 
-function createOrderDOMContext({ table = '03', existingActiveOrder = null } = {}) {
+function createOrderDOMContext({ table = '03', existingActiveOrder = null, localStorageStore = new Map() } = {}) {
   const elements = new Map([
     ['table-label', { textContent: '' }],
     ['invalid-table', { hidden: true }],
@@ -168,7 +168,8 @@ function createOrderDOMContext({ table = '03', existingActiveOrder = null } = {}
 
   const sessionStore = new Map();
   if (existingActiveOrder) {
-    sessionStore.set('mocha_active_order', JSON.stringify(existingActiveOrder));
+    const normalizedTable = String(table).padStart(2, '0');
+    localStorageStore.set(`mocha_active_order_${normalizedTable}`, JSON.stringify(existingActiveOrder));
   }
 
   const document = {
@@ -176,11 +177,16 @@ function createOrderDOMContext({ table = '03', existingActiveOrder = null } = {}
     getElementById: id => elements.get(id),
     querySelectorAll: () => []
   };
+  const intervalCallbacks = [];
 
   const context = vm.createContext({
     document,
     window: {
       location: { search: `?table=${table}` },
+      localStorage: {
+        getItem: key => localStorageStore.get(key) || null,
+        setItem: (key, value) => localStorageStore.set(key, String(value))
+      },
       sessionStorage: {
         getItem: k => sessionStore.get(k) || null,
         setItem: (k, v) => sessionStore.set(k, String(v)),
@@ -196,6 +202,11 @@ function createOrderDOMContext({ table = '03', existingActiveOrder = null } = {}
     Intl,
     Date,
     Math,
+    setInterval: callback => {
+      intervalCallbacks.push(callback);
+      return intervalCallbacks.length;
+    },
+    clearInterval() {},
     console: { error() {}, warn() {} },
     alert: () => {}
   });
@@ -205,7 +216,7 @@ function createOrderDOMContext({ table = '03', existingActiveOrder = null } = {}
   vm.runInContext(menuSource, context, { filename: 'js/menu-data.js' });
   vm.runInContext(orderSource, context, { filename: 'js/order.js' });
 
-  return { context, elements, sessionStore };
+  return { context, elements, sessionStore, localStorageStore, intervalCallbacks };
 }
 
 test('ORD-07: Tracker updates visual steps and messages as order transitions from new -> preparing -> served -> completed', () => {
@@ -249,7 +260,7 @@ test('ORD-07: Tracker updates visual steps and messages as order transitions fro
   assert.ok(elements.get('line-3').classList.contains('completed'));
 });
 
-test('ORD-07: Restores active order tracking screen when customer refreshes the page', () => {
+test('ORD-07: Restores the saved active order from persistent storage after a page reload', () => {
   const savedOrder = {
     orderId: 'ORD-88889999-RELOAD',
     tableNumber: '07',
@@ -258,11 +269,68 @@ test('ORD-07: Restores active order tracking screen when customer refreshes the 
     total: 55000
   };
 
-  const { context, elements } = createOrderDOMContext({ table: '07', existingActiveOrder: savedOrder });
+  const localStorageStore = new Map();
+  const firstPage = createOrderDOMContext({ table: '07', localStorageStore });
+  firstPage.context.saveActiveOrder(savedOrder);
+
+  const { context, elements } = createOrderDOMContext({ table: '07', localStorageStore });
 
   context.restoreActiveOrderTracking();
 
   assert.equal(elements.get('order-success').hidden, false);
   assert.equal(elements.get('success-order-id').textContent, 'ORD-88889999-RELOAD');
   assert.equal(elements.get('order-status-heading').textContent, 'Barista đang pha chế món');
+});
+
+test('ORD-07: Keeps active-order tracking separate for each table', () => {
+  const localStorageStore = new Map();
+  const savedOrder = {
+    orderId: 'ORD-22223333-TEST',
+    tableNumber: '01',
+    status: 'preparing',
+    items: [{ id: 'matcha', name: 'Matcha latte Uji', price: 55000, quantity: 1 }],
+    total: 55000
+  };
+  const tableOne = createOrderDOMContext({ table: '01', localStorageStore });
+  tableOne.context.saveActiveOrder(savedOrder);
+
+  const tableTwo = createOrderDOMContext({ table: '02', localStorageStore });
+  tableTwo.context.restoreActiveOrderTracking();
+
+  assert.equal(tableTwo.elements.get('order-success').hidden, true);
+});
+
+test('ORD-07: Refreshes order status when the realtime listener misses an update', async () => {
+  const { context, elements, intervalCallbacks, localStorageStore } = createOrderDOMContext({ table: '01' });
+  let latestOrder = {
+    orderId: 'ORD-11112222-TEST',
+    tableNumber: '01',
+    status: 'preparing',
+    items: [{ id: 'matcha', name: 'Matcha latte Uji', price: 55000, quantity: 1 }],
+    total: 55000
+  };
+  const firestore = {
+    db: {},
+    methods: {
+      doc: (_db, collection, id) => ({ collection, id }),
+      onSnapshot() {},
+      getDoc: async () => ({
+        exists: () => true,
+        data: () => ({ ...latestOrder })
+      })
+    }
+  };
+
+  context.listenToOrderUpdates('firestore-document-id', latestOrder.orderId, firestore);
+  assert.equal(intervalCallbacks.length, 1);
+  await intervalCallbacks[0]();
+
+  assert.equal(elements.get('order-status-heading').textContent, 'Barista đang pha chế món');
+  assert.ok(elements.get('step-preparing').classList.contains('active'));
+  assert.equal(JSON.parse(localStorageStore.get('mocha_active_order_01')).status, 'preparing');
+
+  latestOrder = { ...latestOrder, status: 'served' };
+  await intervalCallbacks[0]();
+  assert.equal(elements.get('order-status-heading').textContent, 'Món đã được mang ra bàn');
+  assert.ok(elements.get('step-served').classList.contains('active'));
 });
