@@ -1507,13 +1507,16 @@ async function recordReservationVisit(reservationId) {
 
 function loadOrders() {
   const tbody = document.getElementById('orders-tbody');
-  if (!tbody) return;
+  const revenueTbody = document.getElementById('revenue-tbody');
+  if (!tbody && !revenueTbody) return;
   const dbInstance = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
   if (!dbInstance || typeof dbInstance.collection !== 'function') {
     allOrders = [];
     currentOrdersPage = 1;
     renderOrders();
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px;">Chưa kết nối được hệ thống đơn gọi món.</td></tr>';
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px;">Chưa kết nối được hệ thống đơn gọi món.</td></tr>';
+    }
     renderRevenueLoadMessage('Chưa kết nối được hệ thống đơn gọi món.');
     return;
   }
@@ -1529,11 +1532,13 @@ function loadOrders() {
   }, (error) => {
     if (!adminSessionActive) return;
     console.warn('Orders snapshot notice:', error);
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px;">Không thể tải đơn gọi món.</td></tr>';
-    const summary = document.getElementById('orders-summary');
-    const pagination = document.getElementById('orders-pagination');
-    if (summary) summary.textContent = 'Không thể tải danh sách đơn gọi món.';
-    if (pagination) pagination.hidden = true;
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px;">Không thể tải đơn gọi món.</td></tr>';
+      const summary = document.getElementById('orders-summary');
+      const pagination = document.getElementById('orders-pagination');
+      if (summary) summary.textContent = 'Không thể tải danh sách đơn gọi món.';
+      if (pagination) pagination.hidden = true;
+    }
     renderRevenueLoadMessage('Không thể tải dữ liệu doanh thu từ Firestore.');
   });
 }
@@ -1784,9 +1789,9 @@ function renderRevenue() {
         : '—';
       return `<tr>
         <td>${escapeHtml(dateLabel)}</td>
-        <td>${escapeHtml(orderId)} · Bàn ${escapeHtml(tableNumber)}</td>
+        <td>${escapeHtml(orderId)}</td>
+        <td>Bàn ${escapeHtml(tableNumber)}</td>
         <td><strong>${formatOrderMoney(order.total, order.items)}</strong></td>
-        <td>Đã thanh toán</td>
       </tr>`;
     }).join('');
 }
