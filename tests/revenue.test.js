@@ -4,12 +4,13 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-function loadAdminScript() {
+function loadAdminScript({ missingElements = [] } = {}) {
   const elements = new Map();
   const document = {
     readyState: 'loading',
     addEventListener() {},
     getElementById(id) {
+      if (missingElements.includes(id)) return null;
       if (!elements.has(id)) elements.set(id, { textContent: '', innerHTML: '' });
       return elements.get(id);
     }
@@ -25,7 +26,7 @@ function loadAdminScript() {
   });
   const source = fs.readFileSync(path.join(__dirname, '..', 'admin.js'), 'utf8');
   vm.runInContext(source, context, { filename: 'admin.js' });
-  return { context, elements };
+  return { context, elements, document };
 }
 
 test('revenue totals only paid orders and groups them by payment date', () => {
@@ -64,8 +65,8 @@ test('revenue totals only paid orders and groups them by payment date', () => {
   assert.equal(elements.get('revenue-today').textContent, formatVnd(70000));
   assert.equal(elements.get('revenue-month').textContent, formatVnd(70000));
   assert.equal(elements.get('revenue-total').textContent, formatVnd(135000));
-  assert.match(elements.get('revenue-tbody').innerHTML, /ORD-TODAY · Bàn 01/);
-  assert.match(elements.get('revenue-tbody').innerHTML, /ORD-OLD · Bàn 02/);
+  assert.match(elements.get('revenue-tbody').innerHTML, /ORD-TODAY<\/td>\s*<td>Bàn 01/);
+  assert.match(elements.get('revenue-tbody').innerHTML, /ORD-OLD<\/td>\s*<td>Bàn 02/);
   assert.doesNotMatch(elements.get('revenue-tbody').innerHTML, /unpaid/);
 });
 
@@ -115,8 +116,56 @@ test('Firestore order snapshots refresh revenue totals and payment history', () 
   assert.equal(elements.get('revenue-today').textContent, expectedRevenue);
   assert.equal(elements.get('revenue-month').textContent, expectedRevenue);
   assert.equal(elements.get('revenue-total').textContent, expectedRevenue);
-  assert.match(elements.get('revenue-tbody').innerHTML, /ORD-PAID · Bàn 03/);
+  assert.match(elements.get('revenue-tbody').innerHTML, /ORD-PAID<\/td>\s*<td>Bàn 03/);
   assert.doesNotMatch(elements.get('revenue-tbody').innerHTML, /ORD-UNPAID/);
+});
+
+test('revenue page loads paid table orders without an orders table', () => {
+  const { context, elements } = loadAdminScript({ missingElements: ['orders-tbody'] });
+  const orders = [
+    {
+      id: 'paid-order',
+      orderId: 'ORD-TABLE-PAID',
+      tableNumber: '05',
+      total: 90000,
+      paymentStatus: 'paid',
+      paidAt: new Date().toISOString()
+    },
+    {
+      id: 'unpaid-order',
+      orderId: 'ORD-TABLE-UNPAID',
+      tableNumber: '06',
+      total: 40000,
+      paymentStatus: 'unpaid'
+    }
+  ];
+  context.window.firebaseDb = {
+    collection(name) {
+      assert.equal(name, 'orders');
+      return {
+        onSnapshot(onData) {
+          onData({
+            forEach(callback) {
+              orders.forEach(order => callback({ id: order.id, data: () => order }));
+            }
+          });
+          return () => {};
+        }
+      };
+    }
+  };
+
+  vm.runInContext('adminSessionActive = true; loadOrders()', context);
+
+  const expectedRevenue = new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0
+  }).format(90000);
+  assert.equal(elements.get('revenue-total').textContent, expectedRevenue);
+  assert.match(elements.get('revenue-tbody').innerHTML, /ORD-TABLE-PAID<\/td>\s*<td>Bàn 05<\/td>/);
+  assert.ok(elements.get('revenue-tbody').innerHTML.includes(`<td><strong>${expectedRevenue}</strong></td>`));
+  assert.doesNotMatch(elements.get('revenue-tbody').innerHTML, /ORD-TABLE-UNPAID/);
 });
 
 test('table orders show 15 numbered orders per scrollable page and count active orders', () => {
