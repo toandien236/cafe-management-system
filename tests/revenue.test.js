@@ -216,6 +216,8 @@ test('table orders show 15 numbered orders per scrollable page and count active 
 test('admin table orders include date history controls, calendar, and scroll pagination', () => {
   const adminHtml = fs.readFileSync(path.join(__dirname, '..', 'admin.html'), 'utf8');
 
+  assert.match(adminHtml, /admin\.js\?v=14/);
+  assert.doesNotMatch(adminHtml, /<script src="main\.js/);
   assert.match(adminHtml, /id="orders-date-from"/);
   assert.match(adminHtml, /id="orders-date-to"/);
   assert.match(adminHtml, /id="orders-calendar"/);
