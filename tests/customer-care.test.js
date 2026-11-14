@@ -64,6 +64,16 @@ function loadAdminScript(reservations = [], snapshotError = null) {
   return { context, elements };
 }
 
+test('customer directory provides a scrollable table and page controls', () => {
+  const adminHtml = fs.readFileSync(path.join(__dirname, '..', 'admin.html'), 'utf8');
+
+  assert.match(adminHtml, /style\.css\?v=customer-history-scroll-20261114/);
+  assert.match(adminHtml, /class="customer-care-list-scroll"/);
+  assert.match(adminHtml, /id="customer-pagination"/);
+  assert.match(adminHtml, /onclick="changeCustomersPage\(-1\)"/);
+  assert.match(adminHtml, /onclick="changeCustomersPage\(1\)"/);
+});
+
 test('customer profiles merge normalized emails and order reservations newest first', () => {
   const { context } = loadAdminScript();
   context.reservationsForTest = [
@@ -112,6 +122,7 @@ test('customer directory renders counts, supports search, and escapes table valu
   context.renderCustomers();
 
   assert.equal(elements.get('care-customer-count').textContent, '1');
+  assert.equal(elements.get('customer-summary').textContent, 'Hồ sơ khách: 1–1 / 1');
   assert.equal(elements.get('care-reservation-count').textContent, '2');
   assert.equal(elements.get('care-last-reservation').textContent, '2026-01-03');
   assert.match(elements.get('customers-tbody').innerHTML, /&lt;img src=x&gt;/);
@@ -120,6 +131,40 @@ test('customer directory renders counts, supports search, and escapes table valu
   vm.runInContext('customerSearchQuery = "missing"', context);
   context.renderCustomers();
   assert.match(elements.get('customers-tbody').innerHTML, /Không tìm thấy/);
+});
+
+test('customer directory paginates 15 profiles and keeps the visit count column aligned', () => {
+  const { context, elements } = loadAdminScript();
+  context.reservationsForTest = Array.from({ length: 32 }, (_, index) => ({
+    id: `reservation-${index + 1}`,
+    name: `Guest ${index + 1}`,
+    email: `guest-${index + 1}@example.com`,
+    created_at: new Date(2026, 0, index + 1).toISOString(),
+    date: `2026-01-${String(index + 1).padStart(2, '0')}`
+  }));
+  vm.runInContext('allReservations = reservationsForTest; reservationLoadState = "ready"; customerSearchQuery = ""', context);
+  context.renderCustomers();
+
+  const rowsOnPage = () => (elements.get('customers-tbody').innerHTML.match(/<tr>/g) || []).length;
+  assert.equal(rowsOnPage(), 15);
+  assert.equal(elements.get('customer-page-label').textContent, '1–15 / 32 khách · Trang 1/3');
+  assert.equal(elements.get('customer-previous-page').disabled, true);
+  assert.equal(elements.get('customer-next-page').disabled, false);
+  assert.match(elements.get('customers-tbody').innerHTML, /<td>0<\/td>\s*<td>2026-01-/);
+
+  context.window.changeCustomersPage(1);
+  assert.equal(rowsOnPage(), 15);
+  assert.equal(elements.get('customer-page-label').textContent, '16–30 / 32 khách · Trang 2/3');
+
+  context.window.changeCustomersPage(1);
+  assert.equal(rowsOnPage(), 2);
+  assert.equal(elements.get('customer-page-label').textContent, '31–32 / 32 khách · Trang 3/3');
+  assert.equal(elements.get('customer-next-page').disabled, true);
+
+  vm.runInContext('customerSearchQuery = "guest-1@example.com"', context);
+  context.renderCustomers();
+  assert.equal(rowsOnPage(), 1);
+  assert.equal(elements.get('customer-page-label').textContent, '1–1 / 1 khách · Trang 1/1');
 });
 
 test('loading Firestore reservations populates the customer directory', () => {
@@ -171,4 +216,3 @@ test('preserves stats, reservation count and latest reservation date when reserv
   assert.match(elements.get('customers-tbody').innerHTML, /<td>1<\/td>/);
   assert.match(elements.get('customers-tbody').innerHTML, /<td>2026-10-28<\/td>/);
 });
-

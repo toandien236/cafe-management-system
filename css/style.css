@@ -3242,8 +3242,9 @@ img, video, svg, iframe {
 
 .customer-care-list-scroll {
   overflow: auto;
-  max-height: 360px;
+  max-height: 480px;
   scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
 .customer-care-table thead th {

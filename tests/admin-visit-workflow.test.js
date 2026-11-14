@@ -579,7 +579,7 @@ test('keeps the admin rule private and normalizes the email claim', () => {
 
 test('admin actions have click handlers and the page loads the current script version', () => {
   assert.match(adminHtml, /firebase-firestore-compat\.js/);
-  assert.match(adminHtml, /admin\.js\?v=14/);
+  assert.match(adminHtml, /admin\.js\?v=15/);
   assert.doesNotMatch(adminHtml, /<script src="main\.js/);
   assert.match(adminSource, /bookingsBody\.addEventListener\('click'/);
   assert.match(adminSource, /customersBody\.addEventListener\('click'/);

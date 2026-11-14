@@ -388,6 +388,8 @@ let allOrders       = [];
 let ordersUnsubscribe = null;
 const ORDERS_PER_PAGE = 15;
 let currentOrdersPage = 1;
+const CUSTOMERS_PER_PAGE = 15;
+let currentCustomersPage = 1;
 let ordersCalendarTarget = '';
 let ordersCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let customerSearchDate = '';
@@ -449,6 +451,7 @@ function initAdminDashboard() {
   if (customerSearchInput) {
     customerSearchInput.addEventListener('input', (e) => {
       customerSearchQuery = e.target.value;
+      currentCustomersPage = 1;
       renderCustomers();
     });
   }
@@ -457,6 +460,7 @@ function initAdminDashboard() {
   if (customerDateFilter) {
     customerDateFilter.addEventListener('change', (e) => {
       customerSearchDate = e.target.value;
+      currentCustomersPage = 1;
       renderCustomers();
     });
   }
@@ -473,8 +477,6 @@ function initAdminDashboard() {
       if (visitButton) recordReservationVisit(visitButton.dataset.visitResId);
     });
   }
-
-  window.addEventListener('resize', updateCustomerListViewport);
 
   const bookingsBody = document.getElementById('bookings-tbody');
   if (bookingsBody) {
@@ -1048,22 +1050,41 @@ function getVisitLoadMessage() {
   return 'Chưa có lượt ghé được xác nhận';
 }
 
-function updateCustomerListViewport() {
-  const tbody = document.getElementById('customers-tbody');
-  const viewport = tbody && typeof tbody.closest === 'function' ? tbody.closest('.customer-care-list-scroll') : null;
-  const table = tbody && typeof tbody.closest === 'function' ? tbody.closest('table') : null;
-  if (!viewport || !table) return;
-
-  const headerHeight = table.tHead && typeof table.tHead.getBoundingClientRect === 'function' ? table.tHead.getBoundingClientRect().height : 0;
-  const customerRowsHeight = Array.from(tbody.rows || [])
-    .slice(0, 5)
-    .reduce((height, row) => height + (typeof row.getBoundingClientRect === 'function' ? row.getBoundingClientRect().height : 0), 0);
-  viewport.style.maxHeight = `${headerHeight + customerRowsHeight}px`;
+function getFilteredCustomerProfiles(profiles) {
+  const normalizedQuery = normalizeCustomerSearch(customerSearchQuery);
+  const queryDigits = normalizeCustomerPhone(customerSearchQuery);
+  const selectedDate = customerSearchDate;
+  return profiles.filter(profile => {
+    const dateMatch = !selectedDate || profile.reservations.some(reservation => (
+      getReservationDateKey(reservation.date) === selectedDate
+    )) || profile.visits.some(visit => (
+      getVisitDateKey(visit) === selectedDate
+    ));
+    if (!dateMatch) return false;
+    if (!normalizedQuery) return true;
+    const values = [profile.name, ...profile.names, ...profile.emails, ...profile.phones];
+    const textMatch = values.some(value => normalizeCustomerSearch(value).includes(normalizedQuery));
+    const phoneMatch = queryDigits.length >= 3 && profile.phones.some(phone => normalizeCustomerPhone(phone).includes(queryDigits));
+    return textMatch || phoneMatch;
+  }).map(profile => {
+    const reservations = selectedDate
+      ? profile.reservations.filter(reservation => getReservationDateKey(reservation.date) === selectedDate)
+      : profile.reservations;
+    const visits = selectedDate
+      ? profile.visits.filter(visit => getVisitDateKey(visit) === selectedDate)
+      : profile.visits;
+    return { ...profile, reservations, visits, latestReservation: reservations[0] || null };
+  });
 }
 
 function renderCustomers() {
   const tbody = document.getElementById('customers-tbody');
   const customerCountEl = document.getElementById('care-customer-count');
+  const summaryEl = document.getElementById('customer-summary');
+  const pagination = document.getElementById('customer-pagination');
+  const pageLabel = document.getElementById('customer-page-label');
+  const previousButton = document.getElementById('customer-previous-page');
+  const nextButton = document.getElementById('customer-next-page');
   const reservationCountEl = document.getElementById('care-reservation-count');
   const latestReservationEl = document.getElementById('care-last-reservation');
   const noticeEl = document.getElementById('customer-load-notice');
@@ -1074,7 +1095,6 @@ function renderCustomers() {
     if (reservationLoadState === 'error') {
       notices.push('Không tải được đặt bàn từ Firestore; dữ liệu đang hiển thị chỉ là bản sao cục bộ trên thiết bị này.');
     } else if (reservationLoadState === 'local') {
-    updateCustomerListViewport();
       notices.push('Chưa kết nối Firestore; hồ sơ chỉ gồm dữ liệu đặt bàn cục bộ trên thiết bị này.');
     }
     if (visitLoadState === 'error') notices.push('Không tải được lịch sử lượt ghé.');
@@ -1087,38 +1107,16 @@ function renderCustomers() {
 
   if (reservationLoadState === 'loading') {
     if (customerCountEl) customerCountEl.textContent = '…';
+    if (summaryEl) summaryEl.textContent = 'Đang tải hồ sơ khách…';
     if (reservationCountEl) reservationCountEl.textContent = '…';
     if (latestReservationEl) latestReservationEl.textContent = 'Đang tải…';
-    tbody.innerHTML = '<tr><td colspan="6" class="customer-care-empty">Đang tải hồ sơ khách…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="customer-care-empty">Đang tải hồ sơ khách…</td></tr>';
+    if (pagination) pagination.hidden = true;
     return;
   }
 
   const profiles = buildCustomerProfiles();
-  const normalizedQuery = normalizeCustomerSearch(customerSearchQuery);
-  const queryDigits = normalizeCustomerPhone(customerSearchQuery);
-  const selectedDate = customerSearchDate;
-  const filtered = profiles.filter(profile => {
-    const dateMatch = !selectedDate || profile.reservations.some(reservation => (
-      getReservationDateKey(reservation.date) === selectedDate
-    )) || profile.visits.some(visit => (
-      getVisitDateKey(visit) === selectedDate
-    ));
-    if (!dateMatch) return false;
-    if (!normalizedQuery) return true;
-    const values = [profile.name, ...profile.names, ...profile.emails, ...profile.phones];
-    const textMatch = values.some(value => normalizeCustomerSearch(value).includes(normalizedQuery));
-    const phoneMatch = queryDigits.length >= 3 && profile.phones.some(phone => normalizeCustomerPhone(phone).includes(queryDigits));
-    return textMatch || phoneMatch;
-  });
-  const filteredProfiles = filtered.map(profile => {
-    const reservations = selectedDate
-      ? profile.reservations.filter(reservation => getReservationDateKey(reservation.date) === selectedDate)
-      : profile.reservations;
-    const visits = selectedDate
-      ? profile.visits.filter(visit => getVisitDateKey(visit) === selectedDate)
-      : profile.visits;
-    return { ...profile, reservations, visits, latestReservation: reservations[0] || null };
-  });
+  const filteredProfiles = getFilteredCustomerProfiles(profiles);
   const filteredReservations = filteredProfiles.flatMap(profile => profile.reservations);
   const latestReservation = filteredReservations.reduce((latest, reservation) => (
     !latest || getReservationActivityTime(reservation) > getReservationActivityTime(latest)
@@ -1146,6 +1144,21 @@ function renderCustomers() {
       ? `${filteredProfiles.length} · trên thiết bị`
       : String(filteredProfiles.length);
   }
+  const pageCount = Math.ceil(filteredProfiles.length / CUSTOMERS_PER_PAGE);
+  currentCustomersPage = pageCount
+    ? Math.min(Math.max(1, currentCustomersPage), pageCount)
+    : 1;
+  const firstProfileIndex = (currentCustomersPage - 1) * CUSTOMERS_PER_PAGE;
+  const pageProfiles = filteredProfiles.slice(firstProfileIndex, firstProfileIndex + CUSTOMERS_PER_PAGE);
+  if (summaryEl) {
+    summaryEl.textContent = filteredProfiles.length
+      ? `Hồ sơ khách: ${firstProfileIndex + 1}–${Math.min(firstProfileIndex + CUSTOMERS_PER_PAGE, filteredProfiles.length)} / ${filteredProfiles.length}`
+      : `Hồ sơ khách: 0 / ${profiles.length}`;
+  }
+  if (pagination) pagination.hidden = pageCount <= 1;
+  if (pageLabel) pageLabel.textContent = `${firstProfileIndex + 1}–${Math.min(firstProfileIndex + CUSTOMERS_PER_PAGE, filteredProfiles.length)} / ${filteredProfiles.length} khách · Trang ${currentCustomersPage}/${pageCount || 1}`;
+  if (previousButton) previousButton.disabled = currentCustomersPage === 1;
+  if (nextButton) nextButton.disabled = currentCustomersPage === pageCount;
   if (reservationCountEl) reservationCountEl.textContent = String(totalReservationCount);
 
   let latestDisplayDate = latestReservation ? String(latestReservation.date || 'Chưa có ngày') : '';
@@ -1192,12 +1205,12 @@ function renderCustomers() {
         : reservationLoadState === 'local'
           ? 'Chưa có dữ liệu đặt bàn trên thiết bị này.'
           : 'Chưa có dữ liệu đặt bàn để tổng hợp hồ sơ.';
-    } else if (selectedDate) {
-      message = `Không tìm thấy khách có đặt bàn ngày ${escapeHtml(selectedDate)}.`;
+    } else if (customerSearchDate) {
+      message = `Không tìm thấy khách có đặt bàn ngày ${escapeHtml(customerSearchDate)}.`;
     }
-    tbody.innerHTML = `<tr><td colspan="6" class="customer-care-empty">${message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="customer-care-empty">${message}</td></tr>`;
   } else {
-    tbody.innerHTML = filteredProfiles.map(profile => {
+    tbody.innerHTML = pageProfiles.map(profile => {
       const emails = profile.emails.length
         ? profile.emails.map(email => `<span class="customer-contact-line">${escapeHtml(email)}</span>`).join('')
         : '<span class="customer-contact-line">Chưa cung cấp</span>';
@@ -1227,6 +1240,7 @@ function renderCustomers() {
           <td>${emails}</td>
           <td>${phones}</td>
           <td>${profileBookingCount}</td>
+          <td>${profile.visits.length}</td>
           <td>${escapeHtml(profileLatestDate || 'Chưa có')}</td>
           <td><button type="button" class="customer-open-profile" data-customer-key="${escapeHtml(profile.key)}">Xem hồ sơ</button></td>
         </tr>
@@ -1234,12 +1248,18 @@ function renderCustomers() {
     }).join('');
   }
 
-  updateCustomerListViewport();
-
   if (selectedCustomerKey) {
     const currentProfile = profiles.find(profile => profile.key === selectedCustomerKey);
     if (currentProfile) renderCustomerProfile(currentProfile);
   }
+}
+
+window.changeCustomersPage = function(direction) {
+  const pageCount = Math.ceil(getFilteredCustomerProfiles(buildCustomerProfiles()).length / CUSTOMERS_PER_PAGE);
+  const nextPage = currentCustomersPage + Number(direction);
+  if (nextPage < 1 || nextPage > pageCount) return;
+  currentCustomersPage = nextPage;
+  renderCustomers();
 }
 
 function openCustomerProfile(key) {

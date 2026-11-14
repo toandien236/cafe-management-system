@@ -18,7 +18,7 @@
   <!-- GSAP CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
 
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=customer-history-scroll-20261114" />
 </head>
 
 <body class="admin-body">
@@ -176,8 +176,9 @@
               <div>
                 <p class="admin-section-eyebrow">Chăm sóc khách hàng</p>
                 <h2 class="admin-section-title" id="customer-care-heading">Hồ sơ khách</h2>
+                <p class="admin-orders-summary" id="customer-summary"></p>
               </div>
-                <span class="admin-live-indicator" id="customer-count">Đang tải...</span>
+              <span class="admin-live-indicator" id="care-customer-count">Đang tải...</span>
               <label class="customer-search-label" for="customer-search">Tìm khách
                 <input type="search" id="customer-search" class="admin-search-input"
                   placeholder="Tên, email hoặc số điện thoại" autocomplete="off" />
@@ -187,7 +188,7 @@
               <p class="customer-load-notice" id="customer-load-notice" role="status" aria-live="polite" hidden></p>
 
             <div class="admin-table-card">
-              <div class="admin-table-wrap">
+              <div class="customer-care-list-scroll">
                 <table class="admin-table customer-care-table">
                   <thead>
                     <tr>
@@ -204,6 +205,15 @@
                       <tr><td colspan="7" class="customer-care-empty">Đang tải hồ sơ khách…</td></tr>
                   </tbody>
                 </table>
+              </div>
+              <div class="orders-pagination" id="customer-pagination" hidden>
+                <span id="customer-page-label"></span>
+                <div class="orders-pagination-controls">
+                  <button class="btn btn-outline orders-page-button" id="customer-previous-page"
+                    type="button" onclick="changeCustomersPage(-1)">Trang trước</button>
+                  <button class="btn btn-outline orders-page-button" id="customer-next-page"
+                    type="button" onclick="changeCustomersPage(1)">Trang sau</button>
+                </div>
               </div>
             </div>
           </section>
@@ -399,7 +409,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
   <script src="firebase.js?v=4" defer></script>
-  <script src="admin.js?v=14" defer></script>
+  <script src="admin.js?v=15" defer></script>
 </body>
 
 </html>
