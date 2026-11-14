@@ -213,6 +213,18 @@ test('table orders show 15 numbered orders per scrollable page and count active 
   assert.equal(elements.get('orders-page-label').textContent, '16–30 / 32 đơn · Trang 2/3');
 });
 
+test('admin table orders include date history controls, calendar, and scroll pagination', () => {
+  const adminHtml = fs.readFileSync(path.join(__dirname, '..', 'admin.html'), 'utf8');
+
+  assert.match(adminHtml, /id="orders-date-from"/);
+  assert.match(adminHtml, /id="orders-date-to"/);
+  assert.match(adminHtml, /id="orders-calendar"/);
+  assert.match(adminHtml, /setOrdersDatePreset\('today'\)">Hôm nay/);
+  assert.match(adminHtml, /setOrdersDatePreset\('yesterday'\)">Hôm qua/);
+  assert.match(adminHtml, /id="orders-scroll-container"/);
+  assert.match(adminHtml, /id="orders-pagination"/);
+});
+
 test('order date range filters by created day and refreshes from Firestore snapshots', () => {
   const { context, elements } = loadAdminScript();
   const orderAtLocalTime = (day, orderId) => ({
@@ -286,6 +298,12 @@ test('order date presets select today, month, and year boundaries', () => {
   assert.equal(elements.get('orders-date-from').value, today);
   assert.equal(elements.get('orders-date-to').value, today);
 
+  context.window.setOrdersDatePreset('yesterday');
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+  assert.equal(elements.get('orders-date-from').value, yesterdayKey);
+  assert.equal(elements.get('orders-date-to').value, yesterdayKey);
+
   context.window.setOrdersDatePreset('this-month');
   assert.equal(elements.get('orders-date-from').value, `${today.slice(0, 7)}-01`);
   assert.equal(elements.get('orders-date-to').value, `${today.slice(0, 7)}-${String(lastDayOfMonth).padStart(2, '0')}`);
@@ -314,7 +332,7 @@ test('custom order date picker uses Vietnamese month labels and formats selected
 
   context.window.openOrdersDatePicker('to');
   context.window.selectOrdersCalendarToday();
-  const today = context.getBusinessDateKey(new Date());
+  const today = context.getLocalDateKey(new Date());
   assert.equal(elements.get('orders-date-to').value, today);
   assert.equal(elements.get('orders-date-to-display').value, today.split('-').reverse().join('/'));
 

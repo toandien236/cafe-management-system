@@ -213,14 +213,78 @@
               <div>
                 <p class="admin-section-eyebrow">Đơn tại quán</p>
                 <h2 class="admin-section-title" id="admin-orders-title">Đơn gọi món theo bàn</h2>
+                <p class="admin-orders-summary" id="orders-summary"></p>
               </div>
               <a class="btn btn-outline admin-top-link" href="qr.html">Tạo mã QR bàn</a>
             </div>
+            <div class="orders-filter" aria-label="Lọc đơn gọi món theo ngày">
+              <span class="orders-filter-label">Xem đơn theo ngày</span>
+              <div class="orders-filter-dates">
+                <div class="orders-date-field">
+                  <label for="orders-date-from-display">Từ ngày</label>
+                  <div class="orders-date-control">
+                    <input id="orders-date-from" type="date" hidden />
+                    <input id="orders-date-from-display" type="text" readonly
+                      placeholder="dd/mm/yyyy"
+                      aria-label="Chọn ngày bắt đầu"
+                      onclick="openOrdersDatePicker('from')" />
+                    <button class="orders-calendar-trigger" type="button"
+                      aria-label="Mở lịch chọn ngày bắt đầu"
+                      onclick="openOrdersDatePicker('from')">▦</button>
+                  </div>
+                </div>
+                <span class="orders-filter-separator">đến</span>
+                <div class="orders-date-field">
+                  <label for="orders-date-to-display">Đến ngày</label>
+                  <div class="orders-date-control">
+                    <input id="orders-date-to" type="date" hidden />
+                    <input id="orders-date-to-display" type="text" readonly
+                      placeholder="dd/mm/yyyy"
+                      aria-label="Chọn ngày kết thúc"
+                      onclick="openOrdersDatePicker('to')" />
+                    <button class="orders-calendar-trigger" type="button"
+                      aria-label="Mở lịch chọn ngày kết thúc"
+                      onclick="openOrdersDatePicker('to')">▦</button>
+                  </div>
+                </div>
+                <div class="orders-calendar" id="orders-calendar" role="dialog"
+                  aria-label="Chọn ngày" hidden>
+                  <div class="orders-calendar-heading">
+                    <button class="orders-calendar-nav" type="button"
+                      aria-label="Tháng trước" onclick="changeOrdersCalendarMonth(-1)">‹</button>
+                    <strong id="orders-calendar-month"></strong>
+                    <button class="orders-calendar-nav" type="button"
+                      aria-label="Tháng sau" onclick="changeOrdersCalendarMonth(1)">›</button>
+                  </div>
+                  <div class="orders-calendar-weekdays" aria-hidden="true">
+                    <span>T2</span><span>T3</span><span>T4</span><span>T5</span>
+                    <span>T6</span><span>T7</span><span>CN</span>
+                  </div>
+                  <div class="orders-calendar-days" id="orders-calendar-days"></div>
+                  <div class="orders-calendar-footer">
+                    <button type="button" onclick="clearOrdersCalendarDate()">Xóa ngày</button>
+                    <button type="button" onclick="selectOrdersCalendarToday()">Hôm nay</button>
+                  </div>
+                </div>
+              </div>
+              <div class="orders-filter-presets" aria-label="Khoảng ngày nhanh">
+                <button class="orders-filter-button" type="button"
+                  onclick="setOrdersDatePreset('today')">Hôm nay</button>
+                <button class="orders-filter-button" type="button"
+                  onclick="setOrdersDatePreset('yesterday')">Hôm qua</button>
+                <button class="orders-filter-button" type="button"
+                  onclick="setOrdersDatePreset('this-month')">Tháng này</button>
+                <button class="orders-filter-button orders-filter-button--clear" type="button"
+                  onclick="setOrdersDatePreset('all')">Tất cả</button>
+              </div>
+            </div>
+            <p class="orders-filter-period" id="orders-filter-period"></p>
             <div class="admin-table-card">
-              <div class="admin-table-wrap">
+              <div class="orders-scroll-container" id="orders-scroll-container">
                 <table class="admin-table admin-orders-table">
                   <thead>
                     <tr>
+                      <th>STT</th>
                       <th>Mã đơn / Bàn</th>
                       <th>Món gọi</th>
                       <th>Tổng tiền</th>
@@ -230,9 +294,18 @@
                     </tr>
                   </thead>
                   <tbody id="orders-tbody">
-                    <tr><td colspan="6" style="text-align:center; padding:30px;">Đang tải đơn gọi món…</td></tr>
+                    <tr><td colspan="7" style="text-align:center; padding:30px;">Đang tải đơn gọi món…</td></tr>
                   </tbody>
                 </table>
+              </div>
+              <div class="orders-pagination" id="orders-pagination" hidden>
+                <span id="orders-page-label"></span>
+                <div class="orders-pagination-controls">
+                  <button class="btn btn-outline orders-page-button" id="orders-previous-page"
+                    type="button" onclick="changeOrdersPage(-1)">Trang trước</button>
+                  <button class="btn btn-outline orders-page-button" id="orders-next-page"
+                    type="button" onclick="changeOrdersPage(1)">Trang sau</button>
+                </div>
               </div>
             </div>
           </section>
@@ -327,7 +400,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
   <script src="firebase.js?v=4" defer></script>
   <script src="main.js?v=8" defer></script>
-  <script src="admin.js?v=12" defer></script>
+  <script src="admin.js?v=13" defer></script>
 </body>
 
 </html>

@@ -1696,6 +1696,11 @@ window.setOrdersDatePreset = function(preset) {
   if (preset === 'today') {
     fromInput.value = today;
     toInput.value = today;
+  } else if (preset === 'yesterday') {
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const yesterdayKey = getLocalDateKey(yesterday);
+    fromInput.value = yesterdayKey;
+    toInput.value = yesterdayKey;
   } else if (preset === 'this-month') {
     fromInput.value = `${today.slice(0, 7)}-01`;
     toInput.value = `${today.slice(0, 7)}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
@@ -1798,7 +1803,7 @@ function renderRevenue() {
 
 window.changeOrdersPage = function(direction) {
   const nextPage = currentOrdersPage + Number(direction);
-  const pageCount = Math.ceil(allOrders.length / ORDERS_PER_PAGE);
+  const pageCount = Math.ceil(getFilteredOrders().length / ORDERS_PER_PAGE);
   if (nextPage < 1 || nextPage > pageCount) return;
   currentOrdersPage = nextPage;
   renderOrders();
