@@ -273,5 +273,16 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Inventory and stock movement data are restricted to the configured admin.
+    match /inventory/{itemId} {
+      allow read, write: if isAdmin();
+    }
+    match /stock_imports/{importId} {
+      allow read, write: if isAdmin();
+    }
+    match /stock_exports/{exportId} {
+      allow read, write: if isAdmin();
+    }
+
   }
 }

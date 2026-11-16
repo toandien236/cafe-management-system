@@ -19,6 +19,35 @@
             font-family: Arial, sans-serif;
         }
 
+        #inventory-app[hidden],
+        #inventory-auth-required[hidden] {
+            display: none !important;
+        }
+
+        .inventory-auth-required {
+            max-width: 560px;
+            margin: 80px auto;
+            padding: 32px;
+            border-radius: 12px;
+            background: #fff;
+            text-align: center;
+            box-shadow: 0 8px 28px rgba(49, 35, 25, .12);
+        }
+
+        .inventory-auth-required p[data-error="true"] {
+            color: #b3261e;
+        }
+
+        .inventory-low-stock {
+            margin: 16px 0;
+            padding: 14px 18px;
+            border-left: 4px solid #ef6c00;
+            border-radius: 6px;
+            background: #fff3e0;
+            color: #8a3b00;
+            font-weight: 600;
+        }
+
         .inventory-container {
             max-width: 1200px;
             margin: 40px auto;
@@ -496,7 +525,7 @@
         }
 
         .inventory-stats {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 16px;
             margin: 0 0 26px;
         }
@@ -1206,6 +1235,712 @@
             }
         }
 
+        .inventory-header-actions {
+            display: flex;
+            flex: 0 1 auto !important;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .table-container {
+            min-width: 0;
+        }
+
+        .table-container > table {
+            min-width: 1000px;
+            table-layout: fixed;
+        }
+
+        .table-container > table th:nth-child(1) { width: 19%; }
+        .table-container > table th:nth-child(2) { width: 8%; }
+        .table-container > table th:nth-child(3) { width: 8%; }
+        .table-container > table th:nth-child(4) { width: 8%; }
+        .table-container > table th:nth-child(5) { width: 8%; }
+        .table-container > table th:nth-child(6) { width: 8%; }
+        .table-container > table th:nth-child(7) { width: 18%; }
+        .table-container > table th:nth-child(8) { width: 12%; }
+        .table-container > table th:nth-child(9) { width: 11%; }
+
+        .table-container > table th {
+            padding: 12px 10px;
+            font-size: 12px;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .table-container > table td {
+            padding: 12px 10px;
+            font-size: 14px;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .table-container > table td.inventory-item-identity-cell {
+            overflow-wrap: normal;
+        }
+
+        .inventory-item-identity {
+            display: grid;
+            gap: 3px;
+        }
+
+        .inventory-item-identity strong {
+            color: #4b3025;
+            font-size: 14px;
+            line-height: 1.35;
+        }
+
+        .inventory-item-identity span {
+            color: #806e64;
+            font-size: 11px;
+        }
+
+        .inventory-date-cell {
+            display: grid;
+            gap: 5px;
+            color: #5e4d44;
+            font-size: 12px !important;
+        }
+
+        .inventory-item-actions {
+            white-space: nowrap;
+        }
+
+        .inventory-item-actions button {
+            min-height: 36px;
+            padding: 6px 9px !important;
+        }
+
+        .inventory-mobile-card {
+            display: none;
+        }
+
+        .item-search {
+            width: min(100%, 420px);
+            min-height: 44px;
+        }
+
+        .workflow-panel {
+            min-width: 0;
+        }
+
+        .workflow-form > div {
+            min-width: 0;
+        }
+
+        .workflow-form input,
+        .workflow-form select,
+        .workflow-form textarea {
+            min-width: 0;
+        }
+
+        .admin-header-inner {
+            gap: 16px;
+        }
+
+        .admin-user-info {
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 8px 12px;
+        }
+
+        .admin-header .admin-user-info .admin-top-link {
+            border-color: rgba(248, 245, 242, 0.3);
+            color: var(--cream);
+        }
+
+        .admin-header .admin-user-info .admin-top-link:hover {
+            border-color: var(--cream);
+            background: rgba(248, 245, 242, 0.12);
+            color: var(--cream);
+        }
+
+        @media (max-width: 900px) {
+            .inventory-stats {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .admin-header-inner {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .admin-user-info {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .inventory-workflows {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        @media (max-width: 700px) {
+            .admin-header {
+                position: static;
+                padding: 14px 0;
+            }
+
+            .admin-header .container {
+                width: 100%;
+                padding-right: 14px;
+                padding-left: 14px;
+            }
+
+            .admin-header-inner {
+                align-items: stretch;
+                gap: 12px;
+            }
+
+            .admin-logo-group {
+                justify-content: space-between;
+                gap: 8px;
+            }
+
+            .admin-header-title {
+                font-size: 19px;
+            }
+
+            .admin-user-info {
+                display: flex;
+                align-items: stretch;
+                gap: 8px;
+            }
+
+            .admin-user-info > a,
+            .admin-user-info > button {
+                display: flex;
+                flex: 1 1 calc(50% - 8px);
+                align-items: center;
+                justify-content: center;
+                min-width: 0;
+                min-height: 42px;
+                padding: 8px 10px;
+                text-align: center;
+                white-space: normal;
+            }
+
+            .admin-user-info > .admin-email-text {
+                flex: 1 0 100%;
+                overflow-wrap: anywhere;
+                text-align: center;
+            }
+
+            .inventory-container {
+                display: flex;
+                flex-direction: column;
+                width: min(100% - 28px, 560px);
+                padding-top: 20px;
+            }
+
+            .inventory-header { order: 0; }
+            .inventory-message { order: 1; }
+            .inventory-low-stock { order: 2; }
+            .inventory-list-heading { order: 3; }
+            .item-search {
+                position: sticky;
+                top: 10px;
+                z-index: 30;
+                order: 4;
+                margin: 0 0 12px;
+                background: #fff;
+                box-shadow: 0 4px 14px rgba(60, 42, 36, 0.1);
+            }
+            .table-container { order: 5; }
+            .inventory-stats { order: 6; }
+            .inventory-workflows { order: 7; }
+
+            .inventory-auth-required {
+                width: min(100% - 28px, 560px);
+                margin: 32px auto;
+                padding: 22px;
+            }
+
+            .inventory-header {
+                display: flex;
+                align-items: stretch;
+                gap: 16px;
+                margin-bottom: 18px;
+                padding: 18px;
+            }
+
+            .inventory-header > div {
+                flex: 1 1 100%;
+                min-width: 0;
+            }
+
+            .inventory-header h1 {
+                font-size: clamp(32px, 9vw, 42px);
+            }
+
+            .inventory-header-actions {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+            }
+
+            .inventory-header-actions .btn {
+                width: 100%;
+                min-width: 0;
+                min-height: 48px;
+                padding: 10px;
+                line-height: 1.35;
+                white-space: normal;
+            }
+
+            .inventory-stats {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+                margin-bottom: 18px;
+            }
+
+            .stat-card {
+                display: flex;
+                min-height: 94px;
+                flex-direction: column;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 8px;
+                padding: 14px;
+            }
+
+            .stat-card h3 {
+                min-height: 0;
+                margin: 0;
+                font-size: 12px;
+                line-height: 1.4;
+            }
+
+            .stat-card p {
+                margin: 0;
+                font-size: clamp(20px, 6vw, 26px);
+                line-height: 1.2;
+                text-align: left;
+            }
+
+            #total-value {
+                font-size: clamp(15px, 4.5vw, 21px);
+                white-space: nowrap;
+            }
+
+            .inventory-workflows {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 14px;
+            }
+
+            .workflow-panel {
+                padding: 15px;
+            }
+
+            .workflow-form {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 12px 10px;
+            }
+
+            .workflow-form > div:first-child,
+            .workflow-form .workflow-wide {
+                grid-column: 1 / -1;
+            }
+
+            .workflow-form input,
+            .workflow-form select,
+            .workflow-form textarea {
+                font-size: 16px;
+            }
+
+            .workflow-form button {
+                width: 100%;
+            }
+
+            .table-container {
+                overflow: visible;
+                padding: 10px;
+            }
+
+            .table-container > table,
+            .table-container > table tbody,
+            .movement-table table,
+            .movement-table tbody {
+                display: block;
+                width: 100%;
+                min-width: 0;
+            }
+
+            .table-container > table thead,
+            .movement-table thead {
+                display: none;
+            }
+
+            .table-container > table tbody tr,
+            .movement-table tbody tr {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 6px 12px;
+                margin: 8px 0;
+                padding: 12px;
+                border: 1px solid #eee6de;
+                border-radius: 10px;
+                background: #fffdfa;
+                box-shadow: 0 3px 10px rgba(60, 42, 36, 0.04);
+            }
+
+            .table-container > table tbody tr {
+                display: block;
+                padding: 0;
+            }
+
+            .table-container > table tbody tr.row-low {
+                border-left: 4px solid #ef6c00;
+            }
+
+            .table-container > table tbody tr.row-out {
+                border-left: 4px solid #c62828;
+            }
+
+            .table-container > table tbody td,
+            .movement-table tbody td {
+                display: flex;
+                min-width: 0;
+                flex-direction: column;
+                gap: 2px;
+                padding: 3px 2px;
+                border: 0;
+                overflow-wrap: anywhere;
+                font-size: 13px;
+                line-height: 1.45;
+                white-space: normal;
+            }
+
+            .movement-table tbody td {
+                grid-column: auto;
+            }
+
+            .movement-table tbody td:nth-child(4),
+            .movement-table tbody td:nth-child(5) {
+                grid-column: auto;
+            }
+
+            .table-container > table tbody td::before,
+            .movement-table tbody td::before {
+                color: #8a776d;
+                content: "Thông tin";
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.035em;
+                line-height: 1.35;
+                text-transform: uppercase;
+            }
+
+            .table-container > table tbody td:nth-child(1)::before { content: "Mã"; }
+            .table-container > table tbody td:nth-child(2)::before { content: "Nguyên liệu"; }
+            .table-container > table tbody td:nth-child(3)::before { content: "Danh mục"; }
+            .table-container > table tbody td:nth-child(4)::before { content: "Tồn kho"; }
+            .table-container > table tbody td:nth-child(5)::before { content: "Giá nhập"; }
+            .table-container > table tbody td:nth-child(6)::before { content: "Đơn vị"; }
+            .table-container > table tbody td:nth-child(7)::before { content: "Mức tối thiểu"; }
+            .table-container > table tbody td:nth-child(8)::before { content: "Trạng thái"; }
+            .table-container > table tbody td:nth-child(9)::before { content: "Ngày nhập gần nhất"; }
+            .table-container > table tbody td:nth-child(10)::before { content: "Cập nhật lần cuối"; }
+            .table-container > table tbody td:nth-child(11)::before { content: "Nhà cung cấp"; }
+
+            .table-container > table tbody td:nth-child(2) {
+                grid-column: 1 / -1;
+                font-weight: 700;
+            }
+
+            .table-container > table tbody td:last-child {
+                grid-column: 1 / -1;
+                flex-direction: row;
+                gap: 8px;
+                padding-top: 9px;
+                border-top: 1px solid #f0e9e2;
+            }
+
+            .table-container > table tbody td:last-child::before {
+                display: none;
+            }
+
+            .table-container > table tbody td:not(.inventory-mobile-card):not([colspan]) {
+                display: none;
+            }
+
+            .table-container > table tbody td.inventory-mobile-card {
+                display: block;
+                grid-column: auto;
+                align-items: stretch;
+                padding: 0;
+                color: inherit;
+                text-align: left;
+            }
+
+            .table-container > table tbody td.inventory-mobile-card::before {
+                display: none;
+            }
+
+            .inventory-mobile-card-content {
+                display: grid;
+                gap: 10px;
+                padding: 13px;
+            }
+
+            .inventory-mobile-card-heading {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 10px;
+            }
+
+            .inventory-mobile-card-controls {
+                display: grid;
+                flex: 0 0 auto;
+                justify-items: end;
+                gap: 6px;
+            }
+
+            .inventory-mobile-card-controls .btn-secondary {
+                min-height: 36px;
+                flex: 0 0 auto;
+                padding: 6px 12px !important;
+            }
+
+            .inventory-mobile-card-identity {
+                display: grid;
+                min-width: 0;
+                gap: 2px;
+            }
+
+            .inventory-mobile-card-identity strong {
+                color: #4b3025;
+                font-size: 15px;
+                line-height: 1.3;
+                overflow-wrap: anywhere;
+            }
+
+            .inventory-mobile-card-identity > span {
+                color: #806e64;
+                font-size: 11px;
+            }
+
+            .inventory-mobile-status {
+                flex: 0 0 auto;
+                padding: 4px 8px;
+                border-radius: 999px;
+                background: #e8f2e7;
+                color: #2e7d32;
+                font-size: 11px;
+                font-weight: 700;
+            }
+
+            .inventory-mobile-status.is-low {
+                background: #fff1d9;
+                color: #a45b00;
+            }
+
+            .inventory-mobile-status.is-out {
+                background: #fde9e7;
+                color: #b3261e;
+            }
+
+            .inventory-mobile-stock,
+            .inventory-mobile-details-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+            }
+
+            .inventory-mobile-stock {
+                padding: 9px 10px;
+                border-radius: 8px;
+                background: #f7f3ed;
+            }
+
+            .inventory-mobile-detail {
+                display: grid;
+                min-width: 0;
+                gap: 2px;
+                overflow-wrap: anywhere;
+            }
+
+            .inventory-mobile-detail > span:first-child {
+                color: #8a776d;
+                font-size: 10px;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+
+            .inventory-mobile-stock .inventory-mobile-detail > span:last-child {
+                color: #3c2a24;
+                font-size: 14px;
+                font-weight: 700;
+            }
+
+            .inventory-mobile-details {
+                border-top: 1px solid #eee6de;
+                border-bottom: 1px solid #eee6de;
+            }
+
+            .inventory-mobile-details summary {
+                min-height: 38px;
+                padding: 10px 0;
+                color: #604638;
+                cursor: pointer;
+                font-size: 12px;
+                font-weight: 700;
+            }
+
+            .inventory-mobile-details-grid {
+                padding: 0 0 10px;
+            }
+
+            .inventory-mobile-actions {
+                display: flex;
+                justify-content: flex-end;
+                gap: 8px;
+            }
+
+            .inventory-mobile-actions button {
+                min-height: 40px;
+                flex: 0 0 auto;
+                min-width: 88px;
+            }
+
+            .table-container .btn-secondary,
+            .table-container .btn-logout {
+                min-height: 40px;
+                flex: 1;
+                margin: 0 !important;
+                padding: 8px 12px !important;
+            }
+
+            .table-container > table tbody td[colspan],
+            .movement-table tbody td[colspan] {
+                grid-column: 1 / -1;
+                align-items: center;
+                padding: 15px 8px;
+                color: #806e64;
+                text-align: center;
+            }
+
+            .table-container > table tbody td[colspan]::before,
+            .movement-table tbody td[colspan]::before {
+                display: none;
+            }
+
+            .movement-table {
+                overflow: visible;
+            }
+
+            .movement-table tbody td:nth-child(1)::before { content: "Thời gian"; }
+            .movement-table tbody td:nth-child(2)::before { content: "Nguyên liệu"; }
+            .movement-table tbody td:nth-child(3)::before { content: "Số lượng"; }
+
+            .movement-table--imports tbody td:nth-child(4)::before { content: "Nhà cung cấp"; }
+            .movement-table--imports tbody td:nth-child(5)::before { content: "Mã lô"; }
+            .movement-table--imports tbody td:nth-child(6)::before { content: "Hạn sử dụng"; }
+            .movement-table--imports tbody td:nth-child(7)::before { content: "Giá nhập / đơn vị"; }
+            .movement-table--imports tbody td:nth-child(8)::before { content: "Thành tiền"; }
+            .movement-table--imports tbody td:nth-child(9)::before { content: "Người thao tác"; }
+            .movement-table--imports tbody td:nth-child(10)::before { content: "Ghi chú"; }
+            .movement-table--exports tbody td:nth-child(4)::before { content: "Lý do"; }
+            .movement-table--exports tbody td:nth-child(5)::before { content: "Người thao tác"; }
+            .movement-table--exports tbody td:nth-child(6)::before { content: "Ghi chú"; }
+
+            .movement-table--imports tbody td:nth-child(2),
+            .movement-table--imports tbody td:nth-child(10),
+            .movement-table--exports tbody td:nth-child(2),
+            .movement-table--exports tbody td:nth-child(6) {
+                grid-column: 1 / -1;
+            }
+
+            .inventory-list-heading {
+                align-items: flex-start;
+                gap: 6px;
+                margin-top: 24px;
+            }
+
+            .item-search {
+                max-width: none;
+                margin-bottom: 12px;
+            }
+
+            .modal {
+                align-items: flex-start;
+                overflow-y: auto;
+                padding: 12px;
+            }
+
+            .modal-content {
+                width: 100%;
+                max-width: 480px;
+                max-height: calc(100vh - 24px);
+                margin: auto;
+                padding: 20px;
+            }
+
+            .modal-content h2 {
+                font-size: 26px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .inventory-header-actions {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .workflow-form {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .workflow-form > div:first-child,
+            .workflow-form .workflow-wide {
+                grid-column: auto;
+            }
+
+            .workflow-form button.workflow-wide {
+                grid-column: auto;
+            }
+
+            .inventory-stats {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .stat-card {
+                min-height: 76px;
+                flex-direction: row;
+                align-items: center;
+            }
+
+            .stat-card p {
+                text-align: right;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .inventory-container {
+                width: calc(100% - 20px);
+            }
+
+            .inventory-header {
+                padding: 15px;
+            }
+
+            .table-container {
+                padding: 7px;
+            }
+
+            .table-container > table tbody tr,
+            .movement-table tbody tr {
+                gap: 5px 8px;
+                padding: 10px;
+            }
+
+            .admin-logo-group {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
+
         @media (prefers-reduced-motion: reduce) {
             *,
             *::before,
@@ -1222,7 +1957,29 @@
 
 <body>
 
-<div class="inventory-container">
+<header class="admin-header">
+    <div class="container admin-header-inner">
+        <div class="admin-logo-group">
+            <h2 class="admin-header-title">Mocha &amp; Miso</h2>
+            <span class="admin-badge">Quản lý kho</span>
+        </div>
+        <nav class="admin-user-info" aria-label="Điều hướng quản trị">
+            <a href="admin.html" class="btn btn-outline admin-top-link">Bảng điều khiển</a>
+            <a href="admin.html#admin-revenue-title" class="btn btn-outline admin-top-link">Doanh thu</a>
+            <a href="hr.html" class="btn-logout">Quản lý nhân sự</a>
+            <span class="admin-email-text" id="inventory-admin-email"></span>
+            <button type="button" class="btn-logout" id="inventory-logout-btn">Đăng xuất</button>
+        </nav>
+    </div>
+</header>
+
+<section class="inventory-auth-required" id="inventory-auth-required" role="status">
+    <h1>Đăng nhập quản trị</h1>
+    <p id="inventory-auth-message">Đang kiểm tra phiên Firebase...</p>
+    <a class="btn btn-primary" href="admin.html">Mở cổng quản trị</a>
+</section>
+
+<div class="inventory-container" id="inventory-app" hidden>
 
 
     <!-- TIÊU ĐỀ -->
@@ -1242,7 +1999,7 @@
         </div>
 
 
-        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <div class="inventory-header-actions">
             <button
                 class="btn"
                 id="seed-catalog-btn"
@@ -1261,12 +2018,11 @@
             </button>
         </div>
 
-        <a class="inventory-login" href="admin.html">Đăng nhập quản trị</a>
-
     </div>
 
 
     <p class="inventory-message" id="inventory-message" role="status" aria-live="polite"></p>
+    <div class="inventory-low-stock" id="low-stock-alert" role="alert" hidden></div>
 
 
     <!-- THỐNG KÊ -->
@@ -1318,6 +2074,10 @@
                     <select id="import-item" required></select>
                 </div>
                 <div>
+                    <label for="import-date">Ngày nhập</label>
+                    <input id="import-date" type="date" required>
+                </div>
+                <div>
                     <label for="import-quantity">Số lượng nhập</label>
                     <input id="import-quantity" type="number" min="1" step="any" required>
                 </div>
@@ -1343,7 +2103,7 @@
                 </div>
                 <button class="btn btn-add workflow-wide" type="submit">Xác nhận nhập kho</button>
             </form>
-            <div class="movement-table">
+            <div class="movement-table movement-table--imports">
                 <table>
                     <thead><tr><th>Thời gian</th><th>Nguyên liệu</th><th>Số lượng</th><th>Nhà cung cấp</th><th>Mã lô</th><th>Hạn sử dụng</th><th>Giá nhập</th><th>Thành tiền</th><th>Người thao tác</th><th>Ghi chú</th></tr></thead>
                     <tbody id="stock-imports-body"><tr><td colspan="10">Chưa có giao dịch nhập.</td></tr></tbody>
@@ -1376,7 +2136,7 @@
                 </div>
                 <button class="btn btn-delete workflow-wide" type="submit">Xác nhận xuất kho</button>
             </form>
-            <div class="movement-table">
+            <div class="movement-table movement-table--exports">
                 <table>
                     <thead><tr><th>Thời gian</th><th>Nguyên liệu</th><th>Số lượng</th><th>Lý do</th><th>Người thao tác</th><th>Ghi chú</th></tr></thead>
                     <tbody id="stock-exports-body"><tr><td colspan="6">Chưa có giao dịch xuất.</td></tr></tbody>
@@ -1405,24 +2165,14 @@
 
                 <tr>
 
-                    <th>Tên nguyên liệu</th>
-
+                    <th>Nguyên liệu</th>
                     <th>Danh mục</th>
-
-                    <th>Số lượng</th>
-
+                    <th>Tồn kho</th>
                     <th>Giá nhập</th>
-
-                    <th>Đơn vị</th>
-
                     <th>Mức tối thiểu</th>
-
                     <th>Trạng thái</th>
-
-                    <th>Cập nhật lần cuối</th>
-
+                    <th>Ngày nhập / cập nhật</th>
                     <th>Nhà cung cấp</th>
-
                     <th>Thao tác</th>
 
                 </tr>
@@ -1431,7 +2181,7 @@
 
 
             <tbody id="inventory-table-body">
-                <tr><td colspan="10" style="text-align:center">Đang kết nối kho...</td></tr>
+                <tr><td colspan="9" style="text-align:center">Đang kết nối kho...</td></tr>
             </tbody>
 
         </table>
@@ -1466,6 +2216,11 @@
                 type="hidden"
                 id="item-id">
 
+
+            <div class="form-group">
+                <label for="item-code">Mã nguyên liệu</label>
+                <input type="text" id="item-code" readonly placeholder="Tự động tạo khi lưu">
+            </div>
 
             <div class="form-group">
 
@@ -1615,12 +2370,17 @@
 </div>
 
 
-<!-- SUPABASE CLIENT SDK -->
+<!-- Giữ client Supabase legacy trong giai đoạn di trú; không còn là backend thao tác của kho. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/supabase.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="firebase.js?v=4"></script>
 <script src="js/inventory-catalog.js"></script>
 
 <!-- JAVASCRIPT QUẢN LÝ KHO -->
-<script src="js/inventory.js?v=20261102-catalog-preview"></script>
+<script src="js/inventory.js?v=20261116-desktop-table"></script>
 </body>
 </html>

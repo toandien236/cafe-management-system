@@ -6,6 +6,7 @@ const modal = document.getElementById("inventory-modal");
 const modalTitle = document.getElementById("modal-title");
 const form = document.getElementById("inventory-form");
 const itemId = document.getElementById("item-id");
+const itemCode = document.getElementById("item-code");
 const itemName = document.getElementById("item-name");
 const itemCategory = document.getElementById("item-category");
 const itemQuantity = document.getElementById("item-quantity");
@@ -19,125 +20,23 @@ const inventoryMessage = document.getElementById("inventory-message");
 const importForm = document.getElementById("stock-import-form");
 const exportForm = document.getElementById("stock-export-form");
 const itemSearch = document.getElementById("item-search");
+const ADMIN_EMAIL = "lehwangduong@gmail.com";
+const INVENTORY_FIREBASE_PROJECT_ID = "project-quan-cafe";
+const INVENTORY_COLUMNS = 9;
 
 let inventoryItems = [];
-let inventoryChannels = [];
+let currentUser = null;
 let searchTerm = "";
-let isCatalogPreview = false;
+let inventoryUnsubscribe = null;
+let importsUnsubscribe = null;
+let exportsUnsubscribe = null;
 
-const INVENTORY_STORAGE_KEY = "mocha_inventory";
-const IMPORTS_STORAGE_KEY = "mocha_stock_imports";
-const EXPORTS_STORAGE_KEY = "mocha_stock_exports";
-
-function saveToLocalStorage(items) {
-    try {
-        if (typeof window !== "undefined" && window.localStorage) {
-            window.localStorage.setItem(INVENTORY_STORAGE_KEY, JSON.stringify(items));
-        }
-    } catch (e) {
-        console.warn("Không thể lưu kho vào localStorage:", e);
-    }
+function getFirestore() {
+    return window.firebaseDb || window.db || null;
 }
 
-function loadFromLocalStorage() {
-    try {
-        if (typeof window !== "undefined" && window.localStorage) {
-            const data = window.localStorage.getItem(INVENTORY_STORAGE_KEY);
-            if (data) {
-                const parsed = JSON.parse(data);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-            }
-        }
-    } catch (e) {
-        console.warn("Không thể đọc kho từ localStorage:", e);
-    }
-    return null;
-}
-
-function saveLocalHistory(table, record) {
-    try {
-        if (typeof window !== "undefined" && window.localStorage) {
-            const key = "mocha_" + table;
-            const existing = JSON.parse(window.localStorage.getItem(key) || "[]");
-            existing.unshift(record);
-            window.localStorage.setItem(key, JSON.stringify(existing.slice(0, 50)));
-        }
-    } catch (e) {
-        console.warn("Không thể lưu lịch sử cục bộ:", e);
-    }
-}
-
-function loadLocalHistory(table) {
-    try {
-        if (typeof window !== "undefined" && window.localStorage) {
-            const key = "mocha_" + table;
-            return JSON.parse(window.localStorage.getItem(key) || "[]");
-        }
-    } catch (e) {
-        console.warn("Không thể đọc lịch sử cục bộ:", e);
-    }
-    return [];
-}
-
-function getStarterCatalogWithData() {
-    const catalog = Array.isArray(window.INVENTORY_STARTER_CATALOG)
-        ? window.INVENTORY_STARTER_CATALOG
-        : [];
-    const now = new Date().toISOString();
-    return catalog.map(function (item, index) {
-        return {
-            id: "cat-" + (index + 1),
-            name: item.name,
-            category: item.category || "Khác",
-            unit: item.unit || "",
-            quantity: Number(item.quantity) || 0,
-            min_stock: Number(item.min_stock) || 0,
-            price: Number(item.price) || 0,
-            supplier: item.supplier || "—",
-            updated_at: now
-        };
-    });
-}
-
-async function seedStarterCatalog(isManual = false) {
-    const items = getStarterCatalogWithData();
-    inventoryItems = items;
-    saveToLocalStorage(items);
-    setCatalogPreview(false);
-    renderInventory();
-
-    const client = getSupabase();
-    let supabaseSaved = false;
-    if (client && typeof client.from === "function") {
-        try {
-            const rowsToInsert = items.map(function (item) {
-                return {
-                    name: item.name,
-                    category: item.category,
-                    quantity: item.quantity,
-                    unit: item.unit,
-                    min_stock: item.min_stock,
-                    price: item.price,
-                    supplier: item.supplier !== "—" ? item.supplier : null
-                };
-            });
-            const { error } = await client.from("inventory").upsert(rowsToInsert, { onConflict: "name" });
-            if (!error) supabaseSaved = true;
-        } catch (e) {
-            console.warn("Lỗi seed Supabase:", e);
-        }
-    }
-
-    if (isManual) {
-        showMessage(supabaseSaved
-            ? "✅ Đã nạp thành công 46 nguyên liệu vào kho (Đã đồng bộ Supabase & Cục bộ)!"
-            : "✅ Đã nạp thành công 46 nguyên liệu vào kho (Lưu trong bộ nhớ cục bộ)!"
-        );
-    }
-}
-
-function getSupabase() {
-    return window.supabaseClient || window.supabaseDb || (typeof supabaseClient !== "undefined" ? supabaseClient : null);
+function getAuth() {
+    return window.firebaseAuth || window.auth || null;
 }
 
 function showMessage(message, isError = false) {
@@ -146,63 +45,49 @@ function showMessage(message, isError = false) {
     inventoryMessage.dataset.error = String(isError);
 }
 
-function setCatalogPreview(isPreview) {
-    isCatalogPreview = isPreview;
-    if (addItemBtn) addItemBtn.disabled = false;
-
-    [importForm, exportForm].forEach(function (stockForm) {
-        if (!stockForm) return;
-        stockForm.querySelectorAll("input, select, textarea, button").forEach(function (control) {
-            control.disabled = isPreview;
-        });
-    });
-
-    const stats = document.querySelector(".inventory-stats");
-    if (stats) stats.hidden = isPreview;
+function inventoryErrorMessage(error, fallback) {
+    if (error && error.code === "permission-denied") {
+        const activeProjectId = window.firebaseProjectId || "không xác định";
+        if (activeProjectId !== INVENTORY_FIREBASE_PROJECT_ID) {
+            return `Kho đang kết nối Firebase project "${activeProjectId}", cần dùng "${INVENTORY_FIREBASE_PROJECT_ID}". Kiểm tra cấu hình mocha_firebase_config trong trình duyệt.`;
+        }
+        return `Firestore từ chối quyền ghi trên project "${activeProjectId}". Hãy triển khai firestore.rules lên đúng project này.`;
+    }
+    return error && error.message ? error.message : fallback;
 }
 
-function showCatalogPreview(reason) {
-    const catalog = Array.isArray(window.INVENTORY_STARTER_CATALOG)
-        ? window.INVENTORY_STARTER_CATALOG
-        : [];
-    inventoryItems = catalog.map(function (item, index) {
-        return {
-            id: "catalog-preview-" + index,
-            name: item.name,
-            category: item.category,
-            unit: item.unit,
-            quantity: null,
-            min_stock: null,
-            price: null,
-            supplier: null,
-            updated_at: null
-        };
-    });
-    setCatalogPreview(true);
-    renderInventory();
-    showMessage(
-        reason + " Đang hiển thị danh sách mẫu " + inventoryItems.length +
-        " nguyên liệu để bạn xem. Đây chưa phải dữ liệu đã lưu; hãy kết nối Supabase và chạy database/seed-inventory.sql để lưu vào kho.",
-        true
-    );
+function showAuthMessage(message, isError = false) {
+    const messageElement = document.getElementById("inventory-auth-message");
+    if (messageElement) {
+        messageElement.textContent = message;
+        messageElement.dataset.error = String(isError);
+    }
 }
 
-function showTableMessage(message) {
-    if (!tableBody) return;
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
+function closeFirestoreListeners() {
+    [inventoryUnsubscribe, importsUnsubscribe, exportsUnsubscribe].forEach(function (unsubscribe) {
+        if (typeof unsubscribe === "function") unsubscribe();
+    });
+    inventoryUnsubscribe = null;
+    importsUnsubscribe = null;
+    exportsUnsubscribe = null;
+}
 
-    cell.colSpan = 10;
-    cell.style.textAlign = "center";
-    cell.textContent = message;
-    row.appendChild(cell);
-    tableBody.replaceChildren(row);
+function serverTimestamp() {
+    return window.firebase.firestore.FieldValue.serverTimestamp();
+}
+
+function getActor() {
+    const actorName = currentUser && (currentUser.displayName || currentUser.email || currentUser.uid);
+    if (!currentUser || !currentUser.uid || !actorName) {
+        throw new Error("Không xác định được tài khoản quản trị đang đăng nhập.");
+    }
+    return { created_by: currentUser.uid, actor_name: actorName };
 }
 
 function parseDecimal(value) {
     if (value == null) return NaN;
-    const str = String(value).trim().replace(',', '.');
-    return parseFloat(str);
+    return parseFloat(String(value).trim().replace(",", "."));
 }
 
 function getQuantity(value) {
@@ -211,9 +96,7 @@ function getQuantity(value) {
 }
 
 function formatQuantity(value) {
-    return getQuantity(value).toLocaleString("vi-VN", {
-        maximumFractionDigits: 3
-    });
+    return getQuantity(value).toLocaleString("vi-VN", { maximumFractionDigits: 3 });
 }
 
 function formatCurrency(value) {
@@ -224,36 +107,52 @@ function formatCurrency(value) {
     }).format(Number(value) || 0);
 }
 
-function formatDate(value) {
-    if (!value) return "—";
+function toDate(value) {
+    if (!value) return null;
+    if (typeof value.toDate === "function") return value.toDate();
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("vi-VN");
+    return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function formatExpiryDate(value) {
+function formatDate(value) {
+    const date = toDate(value);
+    return date ? date.toLocaleString("vi-VN") : "—";
+}
+
+function formatDateOnly(value) {
     if (!value) return "—";
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
-    return match ? `${match[3]}/${match[2]}/${match[1]}` : "—";
+    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+    return formatDate(value);
 }
 
-async function getActor(client) {
-    if (!client || !client.auth || typeof client.auth.getUser !== "function") {
-        return { created_by: "local-user", actor_name: "Quản trị viên kho" };
-    }
+function todayDateInput() {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
 
-    try {
-        const { data, error } = await client.auth.getUser();
-        if (error) throw error;
-        const user = data && data.user;
-        const actorName = user && (user.user_metadata?.full_name || user.email || user.phone || user.id);
-        if (user && user.id && actorName) {
-            return { created_by: user.id, actor_name: actorName };
-        }
-    } catch (e) {
-        // Fall back safely to admin
-    }
+function setAuthenticatedView(user) {
+    const app = document.getElementById("inventory-app");
+    const authGate = document.getElementById("inventory-auth-required");
+    const isAdmin = Boolean(user && String(user.email || "").toLowerCase() === ADMIN_EMAIL);
+    if (app) app.hidden = !isAdmin;
+    if (authGate) authGate.hidden = isAdmin;
+    const email = document.getElementById("inventory-admin-email");
+    if (email) email.textContent = user && user.email ? user.email : "";
+}
 
-    return { created_by: "admin", actor_name: "Quản trị viên kho" };
+function showTableMessage(message) {
+    if (!tableBody) return;
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = INVENTORY_COLUMNS;
+    cell.style.textAlign = "center";
+    cell.textContent = message;
+    row.appendChild(cell);
+    tableBody.replaceChildren(row);
 }
 
 function renderIngredientOptions() {
@@ -276,7 +175,7 @@ function renderIngredientOptions() {
             .forEach(function (item) {
                 const option = document.createElement("option");
                 option.value = item.id;
-                option.textContent = item.name + " (" + (item.unit || "") + " - còn " + formatQuantity(item.quantity) + ")";
+                option.textContent = `${item.code || item.id} · ${item.name} (${item.unit || ""} - còn ${formatQuantity(item.quantity)})`;
                 select.appendChild(option);
             });
 
@@ -287,20 +186,37 @@ function renderIngredientOptions() {
 }
 
 function updateStats() {
-    if (totalItems) totalItems.textContent = String(inventoryItems.length);
-    if (lowItems) lowItems.textContent = String(inventoryItems.filter(function (item) {
+    const lowStock = inventoryItems.filter(function (item) {
         const quantity = getQuantity(item.quantity);
-        return quantity > 0 && quantity <= getQuantity(item.min_stock || item.minQuantity);
-    }).length);
-    if (outItems) outItems.textContent = String(inventoryItems.filter(function (item) {
+        return quantity > 0 && quantity <= getQuantity(item.min_stock);
+    });
+    const outOfStock = inventoryItems.filter(function (item) {
         return getQuantity(item.quantity) <= 0;
-    }).length);
+    });
+
+    if (totalItems) totalItems.textContent = String(inventoryItems.length);
+    if (lowItems) lowItems.textContent = String(lowStock.length);
+    if (outItems) outItems.textContent = String(outOfStock.length);
+
     const totalValueEl = document.getElementById("total-value");
     if (totalValueEl) {
         const sumValue = inventoryItems.reduce(function (sum, item) {
-            return sum + (getQuantity(item.quantity) * (Number(item.price) || 0));
+            return sum + getQuantity(item.quantity) * (Number(item.price) || 0);
         }, 0);
         totalValueEl.textContent = formatCurrency(sumValue);
+    }
+
+    const alert = document.getElementById("low-stock-alert");
+    if (alert) {
+        const alerts = outOfStock.map(function (item) {
+            return `${item.name} (hết hàng)`;
+        }).concat(lowStock.map(function (item) {
+            return `${item.name} (${formatQuantity(item.quantity)} ${item.unit || ""})`;
+        }));
+        alert.hidden = alerts.length === 0;
+        alert.textContent = alerts.length
+            ? `Cảnh báo tồn kho: ${alerts.join(", ")}.`
+            : "";
     }
 }
 
@@ -310,19 +226,125 @@ function createTextCell(value) {
     return cell;
 }
 
+function createInventoryIdentityCell(item) {
+    const cell = document.createElement("td");
+    cell.className = "inventory-item-identity-cell";
+    const identity = document.createElement("div");
+    identity.className = "inventory-item-identity";
+    const name = document.createElement("strong");
+    name.textContent = item.name || "—";
+    const code = document.createElement("span");
+    code.textContent = item.code || "—";
+    identity.append(name, code);
+    cell.appendChild(identity);
+    return cell;
+}
+
+function createInventoryDateCell(item) {
+    const cell = document.createElement("td");
+    cell.className = "inventory-date-cell";
+    const received = document.createElement("span");
+    received.textContent = `Nhập: ${formatDateOnly(item.received_at)}`;
+    const updated = document.createElement("span");
+    updated.textContent = `Cập nhật: ${formatDate(item.updated_at)}`;
+    cell.append(received, updated);
+    return cell;
+}
+
+function createMobileDetail(label, value) {
+    const detail = document.createElement("div");
+    detail.className = "inventory-mobile-detail";
+    const detailLabel = document.createElement("span");
+    detailLabel.textContent = label;
+    const detailValue = document.createElement("span");
+    detailValue.textContent = value == null || value === "" ? "—" : String(value);
+    detail.append(detailLabel, detailValue);
+    return detail;
+}
+
+function createMobileInventoryCell(item, quantity, minQuantity, statusText, statusClass, onEdit, onDelete) {
+    const cell = document.createElement("td");
+    cell.className = "inventory-mobile-card";
+    cell.colSpan = INVENTORY_COLUMNS;
+
+    const card = document.createElement("div");
+    card.className = "inventory-mobile-card-content";
+
+    const heading = document.createElement("div");
+    heading.className = "inventory-mobile-card-heading";
+    const identity = document.createElement("div");
+    identity.className = "inventory-mobile-card-identity";
+    const name = document.createElement("strong");
+    name.textContent = item.name || "Nguyên liệu";
+    const code = document.createElement("span");
+    code.textContent = item.code || "Chưa có mã";
+    const status = document.createElement("span");
+    status.className = `inventory-mobile-status ${statusClass}`;
+    status.textContent = statusText;
+    identity.append(name, code);
+
+    const controls = document.createElement("div");
+    controls.className = "inventory-mobile-card-controls";
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "btn-secondary";
+    editButton.textContent = "Sửa";
+    editButton.onclick = onEdit;
+    controls.append(status, editButton);
+    heading.append(identity, controls);
+
+    const stock = document.createElement("div");
+    stock.className = "inventory-mobile-stock";
+    stock.append(
+        createMobileDetail("Tồn kho", `${formatQuantity(quantity)} ${item.unit || ""}`.trim()),
+        createMobileDetail("Tối thiểu", `${formatQuantity(minQuantity)} ${item.unit || ""}`.trim())
+    );
+
+    const details = document.createElement("details");
+    details.className = "inventory-mobile-details";
+    const detailsSummary = document.createElement("summary");
+    detailsSummary.textContent = "Thông tin chi tiết";
+    const detailsGrid = document.createElement("div");
+    detailsGrid.className = "inventory-mobile-details-grid";
+    [
+        ["Danh mục", item.category || "Khác"],
+        ["Giá nhập", formatCurrency(item.price)],
+        ["Ngày nhập gần nhất", formatDateOnly(item.received_at)],
+        ["Cập nhật lần cuối", formatDate(item.updated_at)],
+        ["Nhà cung cấp", item.supplier || "—"]
+    ].forEach(function (entry) {
+        detailsGrid.appendChild(createMobileDetail(entry[0], entry[1]));
+    });
+    details.append(detailsSummary, detailsGrid);
+
+    const actions = document.createElement("div");
+    actions.className = "inventory-mobile-actions";
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "btn-logout";
+    deleteButton.textContent = "Xóa";
+    deleteButton.onclick = onDelete;
+    actions.appendChild(deleteButton);
+
+    card.append(heading, stock, details, actions);
+    cell.appendChild(card);
+    return cell;
+}
+
 function renderInventory() {
     if (!tableBody) return;
     tableBody.replaceChildren();
 
     if (inventoryItems.length === 0) {
-        showTableMessage("Chưa có nguyên liệu nào.");
+        showTableMessage("Chưa có nguyên liệu trong Firestore. Nếu kho cũ đang ở Supabase, hãy chạy bước di trú; dữ liệu nguồn vẫn được giữ nguyên.");
         updateStats();
         renderIngredientOptions();
         return;
     }
 
     const visibleItems = inventoryItems.filter(function (item) {
-        return String(item.name || "").toLocaleLowerCase("vi").includes(searchTerm);
+        const searchable = `${item.code || ""} ${item.name || ""} ${item.supplier || ""}`.toLocaleLowerCase("vi");
+        return searchable.includes(searchTerm);
     });
 
     if (visibleItems.length === 0) {
@@ -335,62 +357,58 @@ function renderInventory() {
     visibleItems.forEach(function (item) {
         const row = document.createElement("tr");
         const quantity = getQuantity(item.quantity);
-        const minQuantity = getQuantity(item.min_stock || item.minQuantity);
-        const price = Number(item.price || item.purchasePrice) || 0;
+        const minQuantity = getQuantity(item.min_stock);
+        const statusCell = document.createElement("td");
+        statusCell.style.fontWeight = "bold";
+        let statusText;
+        let statusClass;
 
-        let statusText = "Đủ hàng";
-        let statusColor = "#2e7d32";
-        if (isCatalogPreview) {
-            statusText = "Chưa nhập tồn";
-            statusColor = "#806e64";
-        } else if (quantity <= 0) {
+        if (quantity <= 0) {
             statusText = "Hết hàng";
-            statusColor = "#c62828";
+            statusClass = "is-out";
+            statusCell.style.color = "#c62828";
         } else if (quantity <= minQuantity) {
             statusText = "Sắp hết";
-            statusColor = "#ef6c00";
+            statusClass = "is-low";
+            statusCell.style.color = "#ef6c00";
+        } else {
+            statusText = "Đủ hàng";
+            statusClass = "is-good";
+            statusCell.style.color = "#2e7d32";
         }
-
-        const statusCell = document.createElement("td");
         statusCell.textContent = statusText;
-        statusCell.style.color = statusColor;
-        statusCell.style.fontWeight = "bold";
 
         const actionCell = document.createElement("td");
-        if (isCatalogPreview) {
-            actionCell.textContent = "Danh sách xem trước";
-        } else {
-            const editBtn = document.createElement("button");
-            editBtn.type = "button";
-            editBtn.className = "btn-secondary";
-            editBtn.style.marginRight = "6px";
-            editBtn.style.padding = "4px 8px";
-            editBtn.textContent = "Sửa";
-            editBtn.onclick = function () { openEditModal(item); };
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "btn-secondary";
+        editBtn.style.marginRight = "6px";
+        editBtn.style.padding = "4px 8px";
+        editBtn.textContent = "Sửa";
+        const editItem = function () { openEditModal(item); };
+        editBtn.onclick = editItem;
 
-            const deleteBtn = document.createElement("button");
-            deleteBtn.type = "button";
-            deleteBtn.className = "btn-logout";
-            deleteBtn.style.padding = "4px 8px";
-            deleteBtn.textContent = "Xóa";
-            deleteBtn.onclick = function () { deleteItem(item.id); };
-
-            actionCell.append(editBtn, deleteBtn);
-        }
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "btn-logout";
+        deleteBtn.style.padding = "4px 8px";
+        deleteBtn.textContent = "Xóa";
+        const removeItem = function () { deleteItem(item.id); };
+        deleteBtn.onclick = removeItem;
+        actionCell.append(editBtn, deleteBtn);
 
         row.append(
-            createTextCell(item.name),
+            createInventoryIdentityCell(item),
             createTextCell(item.category || "Khác"),
-            createTextCell(isCatalogPreview ? "Chưa nhập" : formatQuantity(quantity)),
-            createTextCell(isCatalogPreview ? "Chưa có" : formatCurrency(price)),
-            createTextCell(item.unit || ""),
-            createTextCell(isCatalogPreview ? "—" : formatQuantity(minQuantity)),
+            createTextCell(`${formatQuantity(quantity)} ${item.unit || ""}`.trim()),
+            createTextCell(formatCurrency(item.price)),
+            createTextCell(`${formatQuantity(minQuantity)} ${item.unit || ""}`.trim()),
             statusCell,
-            createTextCell(isCatalogPreview ? "—" : formatDate(item.updated_at || item.updatedAt)),
+            createInventoryDateCell(item),
             createTextCell(item.supplier || "—"),
-            actionCell
+            actionCell,
+            createMobileInventoryCell(item, quantity, minQuantity, statusText, statusClass, editItem, removeItem)
         );
-
         tableBody.appendChild(row);
     });
 
@@ -401,14 +419,15 @@ function renderInventory() {
 function openEditModal(item) {
     modalTitle.textContent = "Chỉnh sửa nguyên liệu";
     itemId.value = item.id;
+    if (itemCode) itemCode.value = item.code || "";
     itemName.value = item.name || "";
     itemCategory.value = item.category || "Cà phê";
     itemQuantity.value = getQuantity(item.quantity);
-    itemQuantity.disabled = true; // Sửa số lượng qua nhập/xuất kho
+    itemQuantity.disabled = true;
     itemUnit.value = item.unit || "";
-    itemMin.value = getQuantity(item.min_stock || item.minQuantity);
-    itemPrice.value = Number(item.price || item.purchasePrice) || 0;
-    if (itemSupplier) itemSupplier.value = item.supplier && item.supplier !== "—" ? item.supplier : "";
+    itemMin.value = getQuantity(item.min_stock);
+    itemPrice.value = Number(item.price) || 0;
+    if (itemSupplier) itemSupplier.value = item.supplier || "";
     modal.style.display = "flex";
 }
 
@@ -416,6 +435,7 @@ function openAddModal() {
     modalTitle.textContent = "Thêm nguyên liệu mới";
     form.reset();
     itemId.value = "";
+    if (itemCode) itemCode.value = "";
     itemQuantity.disabled = false;
     if (itemSupplier) itemSupplier.value = "";
     modal.style.display = "flex";
@@ -425,8 +445,8 @@ function closeModal() {
     modal.style.display = "none";
 }
 
-async function handleSaveItem(e) {
-    if (e && typeof e.preventDefault === "function") e.preventDefault();
+async function handleSaveItem(event) {
+    if (event && typeof event.preventDefault === "function") event.preventDefault();
 
     const name = itemName.value.trim();
     const category = itemCategory.value || "Khác";
@@ -435,244 +455,224 @@ async function handleSaveItem(e) {
     const minStock = parseDecimal(itemMin.value);
     const price = parseDecimal(itemPrice.value);
     const supplier = itemSupplier ? itemSupplier.value.trim() : "";
-    const isEditing = itemId.value !== "";
+    const editingId = itemId.value;
 
     if (!name || !unit) {
         showMessage("Vui lòng nhập tên nguyên liệu và đơn vị tính.", true);
         return;
     }
-
-    if (!isEditing && (Number.isNaN(quantity) || quantity < 0)) {
+    if (!editingId && (!Number.isFinite(quantity) || quantity < 0)) {
         showMessage("Tồn đầu kỳ phải là số không âm (>= 0).", true);
-        if (itemQuantity && typeof itemQuantity.focus === "function") itemQuantity.focus();
         return;
     }
-
-    if (Number.isNaN(minStock) || minStock < 0) {
+    if (!Number.isFinite(minStock) || minStock < 0) {
         showMessage("Mức tồn tối thiểu phải là số không âm (>= 0).", true);
-        if (itemMin && typeof itemMin.focus === "function") itemMin.focus();
+        return;
+    }
+    if (!Number.isInteger(price) || price < 0) {
+        showMessage("Giá nhập phải là số nguyên VND không âm.", true);
         return;
     }
 
-    if (Number.isNaN(price) || price < 0) {
-        showMessage("Giá nhập phải là số không âm (>= 0 VND).", true);
-        if (itemPrice && typeof itemPrice.focus === "function") itemPrice.focus();
+    const db = getFirestore();
+    if (!db) {
+        showMessage("Firebase Firestore chưa được khởi tạo.", true);
         return;
     }
-
-    const submitBtn = form.querySelector('[type="submit"]');
-    if (submitBtn) submitBtn.disabled = true;
+    const submitButton = form.querySelector('[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
 
     try {
-        const client = getSupabase();
-        let supabaseSaved = false;
-
-        if (client && typeof client.from === "function") {
-            try {
-                if (isEditing) {
-                    const { error } = await client.from("inventory").update({
-                        name,
-                        category,
-                        unit,
-                        min_stock: minStock,
-                        price: price,
-                        supplier: supplier || null
-                    }).eq("id", itemId.value);
-
-                    if (!error) supabaseSaved = true;
-                } else {
-                    const { error } = await client.from("inventory").insert([{
-                        name,
-                        category,
-                        quantity,
-                        unit,
-                        min_stock: minStock,
-                        price: price,
-                        supplier: supplier || null
-                    }]);
-
-                    if (!error) supabaseSaved = true;
-                }
-            } catch (supErr) {
-                console.warn("Lưu Supabase không thành công, lưu vào bộ nhớ cục bộ:", supErr);
-            }
-        }
-
-        const now = new Date().toISOString();
-        if (isEditing) {
-            const index = inventoryItems.findIndex(function (entry) { return entry.id === itemId.value; });
-            if (index !== -1) {
-                inventoryItems[index] = {
-                    ...inventoryItems[index],
-                    name,
-                    category,
-                    unit,
-                    min_stock: minStock,
-                    price,
-                    supplier: supplier || "—",
-                    updated_at: now
-                };
-            }
-        } else {
-            const newItem = {
-                id: "inv-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
-                name,
-                category,
-                quantity: quantity || 0,
-                unit,
+        const now = serverTimestamp();
+        if (editingId) {
+            await db.collection("inventory").doc(editingId).update({
+                name: name,
+                category: category,
+                unit: unit,
                 min_stock: minStock,
-                price: price || 0,
-                supplier: supplier || "—",
+                price: price,
+                supplier: supplier,
                 updated_at: now
-            };
-
-            if (isCatalogPreview) {
-                isCatalogPreview = false;
-                setCatalogPreview(false);
-            }
-            inventoryItems.unshift(newItem);
+            });
+        } else {
+            const reference = db.collection("inventory").doc();
+            await reference.set({
+                code: `NL-${reference.id.toUpperCase()}`,
+                name: name,
+                category: category,
+                quantity: quantity,
+                unit: unit,
+                min_stock: minStock,
+                price: price,
+                supplier: supplier,
+                received_at: todayDateInput(),
+                created_at: now,
+                updated_at: now
+            });
         }
 
-        saveToLocalStorage(inventoryItems);
         closeModal();
         form.reset();
         itemId.value = "";
+        if (itemCode) itemCode.value = "";
         itemQuantity.disabled = false;
-
-        const successMsg = isEditing
+        showMessage(editingId
             ? `Đã cập nhật nguyên liệu "${name}".`
-            : `Đã thêm mới nguyên liệu "${name}" thành công!`;
-        showMessage(supabaseSaved ? successMsg : `${successMsg} (Đã lưu vào bộ nhớ cục bộ)`);
-
-        renderInventory();
+            : `Đã thêm nguyên liệu "${name}" vào Firestore.`);
     } catch (error) {
-        console.error("Lỗi lưu kho:", error);
-        showMessage(error.message || "Không thể lưu nguyên liệu.", true);
+        console.error("Lỗi lưu nguyên liệu Firestore:", error);
+        showMessage(inventoryErrorMessage(error, "Không thể lưu nguyên liệu lên Firestore."), true);
     } finally {
-        if (submitBtn) submitBtn.disabled = false;
+        if (submitButton) submitButton.disabled = false;
     }
 }
 
 async function deleteItem(id) {
     const item = inventoryItems.find(function (entry) { return entry.id === id; });
-    if (!item || !confirm("Bạn có chắc muốn xóa “" + item.name + "”?")) return;
+    if (!item || !confirm(`Bạn có chắc muốn xóa “${item.name}”?`)) return;
 
-    const client = getSupabase();
-    if (client && typeof client.from === "function") {
-        try {
-            await client.from("inventory").delete().eq("id", id);
-        } catch (e) {
-            console.warn("Lỗi xóa trên Supabase:", e);
-        }
+    try {
+        await getFirestore().collection("inventory").doc(id).delete();
+        showMessage(`Đã xóa nguyên liệu "${item.name}" khỏi Firestore.`);
+    } catch (error) {
+        console.error("Lỗi xóa nguyên liệu Firestore:", error);
+        showMessage(inventoryErrorMessage(error, "Không thể xóa nguyên liệu khỏi Firestore."), true);
     }
-
-    inventoryItems = inventoryItems.filter(function (entry) { return entry.id !== id; });
-    saveToLocalStorage(inventoryItems);
-    showMessage(`Đã xóa nguyên liệu "${item.name}".`);
-    renderInventory();
 }
 
-async function loadInventory() {
-    const client = getSupabase();
+async function seedStarterCatalog(isManual = false) {
+    const catalog = Array.isArray(window.INVENTORY_STARTER_CATALOG)
+        ? window.INVENTORY_STARTER_CATALOG
+        : [];
+    if (!catalog.length) return;
 
-    if (client && typeof client.from === "function") {
-        try {
-            const { data, error } = await client.from("inventory").select("*").order("name");
-            if (!error && Array.isArray(data) && data.length > 0) {
-                setCatalogPreview(false);
-                inventoryItems = data;
-                saveToLocalStorage(data);
-                renderInventory();
-                return;
-            }
-        } catch (err) {
-            console.warn("Không thể tải kho từ Supabase:", err);
-        }
-    }
-
-    // In a browser with localStorage:
-    const localData = loadFromLocalStorage();
-    if (localData && localData.length > 0) {
-        setCatalogPreview(false);
-        inventoryItems = localData;
-        renderInventory();
-        showMessage("Đang sử dụng dữ liệu kho từ bộ nhớ cục bộ. Bạn có thể thêm, sửa, nhập, xuất nguyên liệu bình thường.");
+    const db = getFirestore();
+    if (!db) {
+        showMessage("Firebase Firestore chưa được khởi tạo.", true);
         return;
     }
 
-    // Browser initial load with starter catalog
-    if (typeof window !== "undefined" && window.localStorage && Array.isArray(window.INVENTORY_STARTER_CATALOG) && window.INVENTORY_STARTER_CATALOG.length > 0) {
-        await seedStarterCatalog(false);
-        return;
-    }
-
-    // Fallback for mock/test environments
-    showCatalogPreview(client && typeof client.from === "function" ? "Kho Supabase hiện chưa có nguyên liệu." : "Chưa kết nối Supabase.");
-}
-
-async function loadHistory(tableName, tbodyElement, createRowFn, columnCount) {
-    if (!tbodyElement) return;
-    const client = getSupabase();
-
-    if (client && typeof client.from === "function") {
-        try {
-            const { data, error } = await client
-                .from(tableName)
-                .select("*")
-                .order("created_at", { ascending: false })
-                .limit(20);
-
-            if (!error && Array.isArray(data)) {
-                tbodyElement.replaceChildren();
-                if (data.length === 0) {
-                    const row = document.createElement("tr");
-                    const cell = document.createElement("td");
-                    cell.colSpan = columnCount;
-                    cell.style.textAlign = "center";
-                    cell.textContent = "Chưa có giao dịch.";
-                    row.appendChild(cell);
-                    tbodyElement.appendChild(row);
-                    return;
-                }
-
-                data.forEach(function (record) {
-                    tbodyElement.appendChild(createRowFn(record));
-                });
-                return;
-            }
-        } catch (e) {
-            console.warn("Không thể tải lịch sử " + tableName + " từ Supabase:", e);
-        }
-    }
-
-    // Fallback to local history
-    const localRecords = loadLocalHistory(tableName);
-    tbodyElement.replaceChildren();
-    if (!localRecords || localRecords.length === 0) {
-        const row = document.createElement("tr");
-        const cell = document.createElement("td");
-        cell.colSpan = columnCount;
-        cell.style.textAlign = "center";
-        cell.textContent = "Chưa có giao dịch.";
-        row.appendChild(cell);
-        tbodyElement.appendChild(row);
-        return;
-    }
-
-    localRecords.slice(0, 20).forEach(function (record) {
-        tbodyElement.appendChild(createRowFn(record));
+    const seedButton = document.getElementById("seed-catalog-btn");
+    if (seedButton) seedButton.disabled = true;
+    const existingNames = new Set(inventoryItems.map(function (item) {
+        return String(item.name || "").trim().toLocaleLowerCase("vi");
+    }));
+    const missingItems = catalog.filter(function (item) {
+        return !existingNames.has(String(item.name || "").trim().toLocaleLowerCase("vi"));
     });
+
+    if (!missingItems.length) {
+        if (isManual) showMessage("Danh mục mẫu đã có trong kho; không ghi đè số lượng hiện tại.");
+        if (seedButton) seedButton.disabled = false;
+        return;
+    }
+
+    try {
+        const batch = db.batch();
+        missingItems.forEach(function (item) {
+            const reference = db.collection("inventory").doc();
+            const now = serverTimestamp();
+            batch.set(reference, {
+                code: `NL-${reference.id.toUpperCase()}`,
+                name: item.name,
+                category: item.category || "Khác",
+                quantity: Number(item.quantity) || 0,
+                unit: item.unit || "",
+                min_stock: Number(item.min_stock) || 0,
+                price: Number(item.price) || 0,
+                supplier: item.supplier || "",
+                received_at: todayDateInput(),
+                created_at: now,
+                updated_at: now
+            });
+        });
+        await batch.commit();
+        if (isManual) {
+            showMessage(`Đã thêm ${missingItems.length} nguyên liệu mẫu còn thiếu; dữ liệu đang có không bị ghi đè.`);
+        }
+    } catch (error) {
+        console.error("Lỗi nạp danh mục mẫu vào Firestore:", error);
+        showMessage(inventoryErrorMessage(error, "Không thể nạp danh mục mẫu vào Firestore."), true);
+    } finally {
+        if (seedButton) seedButton.disabled = false;
+    }
+}
+
+function listenToInventory(db) {
+    inventoryUnsubscribe = db.collection("inventory").orderBy("name", "asc").onSnapshot(function (snapshot) {
+        inventoryItems = snapshot.docs.map(function (document) {
+            return { id: document.id, ...document.data() };
+        });
+        renderInventory();
+    }, function (error) {
+        console.error("Lỗi tải nguyên liệu Firestore:", error);
+        showMessage("Không đọc được kho từ Firestore. Kiểm tra đăng nhập admin và Firestore Rules.", true);
+        showTableMessage("Không thể tải dữ liệu kho.");
+    });
+
+    importsUnsubscribe = db.collection("stock_imports")
+        .orderBy("created_at", "desc")
+        .limit(20)
+        .onSnapshot(function (snapshot) {
+            renderHistory(snapshot, document.getElementById("stock-imports-body"), createImportHistoryRow, 10);
+        }, function (error) {
+            console.error("Lỗi tải lịch sử nhập kho:", error);
+            showHistoryError(document.getElementById("stock-imports-body"), 10);
+        });
+
+    exportsUnsubscribe = db.collection("stock_exports")
+        .orderBy("created_at", "desc")
+        .limit(20)
+        .onSnapshot(function (snapshot) {
+            renderHistory(snapshot, document.getElementById("stock-exports-body"), createExportHistoryRow, 6);
+        }, function (error) {
+            console.error("Lỗi tải lịch sử xuất kho:", error);
+            showHistoryError(document.getElementById("stock-exports-body"), 6);
+        });
+}
+
+function renderHistory(snapshot, tbody, createRow, columnCount) {
+    if (!tbody) return;
+    tbody.replaceChildren();
+    if (snapshot.empty) {
+        showHistoryEmpty(tbody, columnCount);
+        return;
+    }
+    snapshot.docs.forEach(function (document) {
+        tbody.appendChild(createRow(document.data()));
+    });
+}
+
+function showHistoryEmpty(tbody, columnCount) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = columnCount;
+    cell.style.textAlign = "center";
+    cell.textContent = "Chưa có giao dịch.";
+    row.appendChild(cell);
+    tbody.replaceChildren(row);
+}
+
+function showHistoryError(tbody, columnCount) {
+    if (!tbody) return;
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = columnCount;
+    cell.style.textAlign = "center";
+    cell.textContent = "Không thể tải lịch sử từ Firestore.";
+    row.appendChild(cell);
+    tbody.replaceChildren(row);
 }
 
 function createImportHistoryRow(data) {
     const row = document.createElement("tr");
     row.append(
         createTextCell(formatDate(data.created_at)),
-        createTextCell(data.item_name || data.itemName),
+        createTextCell(data.item_name),
         createTextCell("+" + formatQuantity(data.quantity) + " " + (data.unit || "")),
         createTextCell(data.supplier || "—"),
         createTextCell(data.batch_number || "—"),
-        createTextCell(formatExpiryDate(data.expiry_date)),
+        createTextCell(formatDateOnly(data.expiry_date)),
         createTextCell(formatCurrency(data.cost_price)),
         createTextCell(formatCurrency(data.total_cost)),
         createTextCell(data.actor_name || "—"),
@@ -685,7 +685,7 @@ function createExportHistoryRow(data) {
     const row = document.createElement("tr");
     row.append(
         createTextCell(formatDate(data.created_at)),
-        createTextCell(data.item_name || data.itemName),
+        createTextCell(data.item_name),
         createTextCell("-" + formatQuantity(data.quantity) + " " + (data.unit || "")),
         createTextCell(data.reason || "—"),
         createTextCell(data.actor_name || "—"),
@@ -694,185 +694,138 @@ function createExportHistoryRow(data) {
     return row;
 }
 
+function getDateInputValue(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : "";
+}
+
 async function recordStockImport(event) {
     event.preventDefault();
-    const submitBtn = importForm.querySelector('[type="submit"]');
+    const submitButton = importForm.querySelector('[type="submit"]');
     const selectedId = document.getElementById("import-item").value;
     const quantityInput = document.getElementById("import-quantity").value;
     const unitPriceInput = document.getElementById("import-unit-price").value;
     const supplier = document.getElementById("import-supplier").value.trim();
+    const receivedAt = document.getElementById("import-date").value;
     const batchNumber = document.getElementById("import-batch").value.trim();
     const expiryDate = document.getElementById("import-expiry").value || null;
-    const note = document.getElementById("import-note") ? document.getElementById("import-note").value.trim() : "";
+    const note = document.getElementById("import-note").value.trim();
     const quantity = Number(quantityInput);
     const unitPrice = Number(unitPriceInput);
     const item = inventoryItems.find(function (entry) { return entry.id === selectedId; });
 
-    if (!item || !quantityInput || !Number.isFinite(quantity) || quantity <= 0) {
-        showMessage("Vui lòng chọn nguyên liệu và nhập số lượng hợp lệ.", true);
+    if (!item || !Number.isFinite(quantity) || quantity <= 0 || !getDateInputValue(receivedAt)) {
+        showMessage("Vui lòng chọn nguyên liệu, ngày nhập và số lượng hợp lệ.", true);
+        return;
+    }
+    if (!Number.isInteger(unitPrice) || unitPrice < 0 || !supplier) {
+        showMessage("Nhập nhà cung cấp và giá nhập là số nguyên VND không âm.", true);
         return;
     }
 
-    if (!Number.isInteger(unitPrice) || unitPrice < 0) {
-        showMessage("Giá nhập phải là số nguyên VND không âm.", true);
-        document.getElementById("import-unit-price").focus();
-        return;
-    }
-
-    if (submitBtn) submitBtn.disabled = true;
-    const client = getSupabase();
-
+    if (submitButton) submitButton.disabled = true;
     try {
-        const actor = await getActor(client);
-        const newQty = getQuantity(item.quantity) + quantity;
-        const totalCost = quantity * (unitPrice || 0);
+        const db = getFirestore();
+        const actor = getActor();
+        const itemReference = db.collection("inventory").doc(selectedId);
+        const historyReference = db.collection("stock_imports").doc();
+        const totalCost = quantity * unitPrice;
 
-        // Update in memory & localStorage
-        item.quantity = newQty;
-        item.price = unitPrice;
-        if (supplier) item.supplier = supplier;
-        item.updated_at = new Date().toISOString();
-        saveToLocalStorage(inventoryItems);
-
-        const historyRecord = {
-            id: "imp-" + Date.now(),
-            item_id: selectedId,
-            item_name: item.name,
-            quantity: quantity,
-            unit: item.unit,
-            cost_price: unitPrice,
-            total_cost: totalCost,
-            supplier: supplier,
-            batch_number: batchNumber || null,
-            expiry_date: expiryDate,
-            created_at: new Date().toISOString(),
-            ...actor,
-            note: note
-        };
-        saveLocalHistory("stock_imports", historyRecord);
-
-        // Try Supabase if available
-        if (client && typeof client.from === "function") {
-            try {
-                const { error: updateError } = await client.from("inventory").update({
-                    quantity: newQty,
-                    price: unitPrice,
-                    supplier: supplier
-                }).eq("id", selectedId);
-
-                if (updateError) console.warn("Supabase update error:", updateError);
-
-                const { error: logError } = await client.from("stock_imports").insert([{
-                    item_id: selectedId,
-                    item_name: item.name,
-                    quantity: quantity,
-                    unit: item.unit,
-                    cost_price: unitPrice,
-                    total_cost: totalCost,
-                    supplier: supplier,
-                    batch_number: batchNumber || null,
-                    expiry_date: expiryDate,
-                    ...actor,
-                    note: note
-                }]);
-
-                if (logError) console.warn("Supabase insert error:", logError);
-            } catch (err) {
-                console.warn("Lỗi đồng bộ Supabase khi nhập kho:", err);
-            }
-        }
+        await db.runTransaction(async function (transaction) {
+            const snapshot = await transaction.get(itemReference);
+            if (!snapshot.exists) throw new Error("Nguyên liệu không còn tồn tại trong kho.");
+            const currentItem = snapshot.data();
+            transaction.update(itemReference, {
+                quantity: getQuantity(currentItem.quantity) + quantity,
+                price: unitPrice,
+                supplier: supplier,
+                received_at: receivedAt,
+                updated_at: serverTimestamp()
+            });
+            transaction.set(historyReference, {
+                item_id: selectedId,
+                item_code: currentItem.code || item.code || "",
+                item_name: currentItem.name || item.name,
+                quantity: quantity,
+                unit: currentItem.unit || item.unit || "",
+                cost_price: unitPrice,
+                total_cost: totalCost,
+                supplier: supplier,
+                batch_number: batchNumber || null,
+                expiry_date: expiryDate,
+                received_at: receivedAt,
+                ...actor,
+                note: note,
+                created_at: serverTimestamp()
+            });
+        });
 
         importForm.reset();
-        showMessage("Đã nhập kho thành công.");
-        renderInventory();
-        loadHistory("stock_imports", document.getElementById("stock-imports-body"), createImportHistoryRow, 10);
+        document.getElementById("import-date").value = todayDateInput();
+        showMessage("Đã ghi phiếu nhập và cập nhật tồn kho Firestore.");
     } catch (error) {
-        console.error("Lỗi nhập kho:", error);
-        showMessage(error.message || "Không thể thực hiện nhập kho.", true);
+        console.error("Lỗi nhập kho Firestore:", error);
+        showMessage(inventoryErrorMessage(error, "Không thể thực hiện nhập kho."), true);
     } finally {
-        if (submitBtn) submitBtn.disabled = false;
+        if (submitButton) submitButton.disabled = false;
     }
 }
 
 async function recordStockExport(event) {
     event.preventDefault();
-    const submitBtn = exportForm.querySelector('[type="submit"]');
+    const submitButton = exportForm.querySelector('[type="submit"]');
     const selectedId = document.getElementById("export-item").value;
     const quantityInput = document.getElementById("export-quantity").value;
     const reason = document.getElementById("export-reason").value;
-    const note = document.getElementById("export-note") ? document.getElementById("export-note").value.trim() : "";
+    const note = document.getElementById("export-note").value.trim();
     const quantity = Number(quantityInput);
     const item = inventoryItems.find(function (entry) { return entry.id === selectedId; });
 
-    if (!item || !quantityInput || !Number.isFinite(quantity) || quantity <= 0) {
+    if (!item || !Number.isFinite(quantity) || quantity <= 0) {
         showMessage("Vui lòng chọn nguyên liệu và nhập số lượng xuất hợp lệ.", true);
         return;
     }
-
-    if (quantity > getQuantity(item.quantity)) {
-        showMessage("Số lượng xuất vượt quá số lượng tồn kho hiện tại.", true);
-        return;
-    }
-
-    if (submitBtn) submitBtn.disabled = true;
-    const client = getSupabase();
+    if (submitButton) submitButton.disabled = true;
 
     try {
-        const actor = await getActor(client);
-        const newQty = getQuantity(item.quantity) - quantity;
+        const db = getFirestore();
+        const actor = getActor();
+        const itemReference = db.collection("inventory").doc(selectedId);
+        const historyReference = db.collection("stock_exports").doc();
 
-        // Update in memory & localStorage
-        item.quantity = newQty;
-        item.updated_at = new Date().toISOString();
-        saveToLocalStorage(inventoryItems);
-
-        const historyRecord = {
-            id: "exp-" + Date.now(),
-            item_id: selectedId,
-            item_name: item.name,
-            quantity: quantity,
-            unit: item.unit,
-            reason: reason,
-            created_at: new Date().toISOString(),
-            ...actor,
-            note: note
-        };
-        saveLocalHistory("stock_exports", historyRecord);
-
-        // Try Supabase if available
-        if (client && typeof client.from === "function") {
-            try {
-                const { error: updateError } = await client.from("inventory").update({
-                    quantity: newQty
-                }).eq("id", selectedId);
-
-                if (updateError) console.warn("Supabase update error:", updateError);
-
-                const { error: logError } = await client.from("stock_exports").insert([{
-                    item_id: selectedId,
-                    item_name: item.name,
-                    quantity: quantity,
-                    unit: item.unit,
-                    reason: reason,
-                    ...actor,
-                    note: note
-                }]);
-
-                if (logError) console.warn("Supabase insert error:", logError);
-            } catch (err) {
-                console.warn("Lỗi đồng bộ Supabase khi xuất kho:", err);
+        await db.runTransaction(async function (transaction) {
+            const snapshot = await transaction.get(itemReference);
+            if (!snapshot.exists) throw new Error("Nguyên liệu không còn tồn tại trong kho.");
+            const currentItem = snapshot.data();
+            const currentQuantity = getQuantity(currentItem.quantity);
+            if (quantity > currentQuantity) {
+                throw new Error("Số lượng xuất vượt quá số lượng tồn kho hiện tại.");
             }
-        }
+            transaction.update(itemReference, {
+                quantity: currentQuantity - quantity,
+                updated_at: serverTimestamp()
+            });
+            transaction.set(historyReference, {
+                item_id: selectedId,
+                item_code: currentItem.code || item.code || "",
+                item_name: currentItem.name || item.name,
+                quantity: quantity,
+                unit: currentItem.unit || item.unit || "",
+                reason: reason,
+                ...actor,
+                note: note,
+                created_at: serverTimestamp()
+            });
+        });
 
         exportForm.reset();
-        showMessage("Đã xuất kho thành công.");
-        renderInventory();
-        loadHistory("stock_exports", document.getElementById("stock-exports-body"), createExportHistoryRow, 6);
+        showMessage("Đã ghi phiếu xuất và cập nhật tồn kho Firestore.");
     } catch (error) {
-        console.error("Lỗi xuất kho:", error);
-        showMessage(error.message || "Không thể thực hiện xuất kho.", true);
+        console.error("Lỗi xuất kho Firestore:", error);
+        showMessage(inventoryErrorMessage(error, "Không thể thực hiện xuất kho."), true);
     } finally {
-        if (submitBtn) submitBtn.disabled = false;
+        if (submitButton) submitButton.disabled = false;
     }
 }
 
@@ -880,18 +833,15 @@ function initInventory() {
     if (addItemBtn) addItemBtn.addEventListener("click", openAddModal);
     if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
     if (form) form.addEventListener("submit", handleSaveItem);
-    window.addEventListener("click", function (e) {
-        if (e.target === modal) closeModal();
+    window.addEventListener("click", function (event) {
+        if (event.target === modal) closeModal();
     });
     if (importForm) importForm.addEventListener("submit", recordStockImport);
     if (exportForm) exportForm.addEventListener("submit", recordStockExport);
 
-    const seedBtn = document.getElementById("seed-catalog-btn");
-    if (seedBtn) {
-        seedBtn.addEventListener("click", function () {
-            if (inventoryItems.length > 0 && !confirm("Bạn có muốn nạp hoặc đặt lại danh sách 46 nguyên liệu mẫu từ thực đơn không?")) {
-                return;
-            }
+    const seedButton = document.getElementById("seed-catalog-btn");
+    if (seedButton) {
+        seedButton.addEventListener("click", function () {
             seedStarterCatalog(true);
         });
     }
@@ -907,27 +857,76 @@ function initInventory() {
         });
     }
 
+    const importDate = document.getElementById("import-date");
+    if (importDate) importDate.value = todayDateInput();
+
     if (itemSearch) {
-        itemSearch.addEventListener("input", function (e) {
-            searchTerm = e.target.value.toLowerCase().trim();
+        itemSearch.addEventListener("input", function (event) {
+            searchTerm = event.target.value.toLocaleLowerCase("vi").trim();
             renderInventory();
         });
     }
 
-    const client = getSupabase();
-    if (client && client.channel) {
-        const channel = client.channel("public:inventory_changes")
-            .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, () => loadInventory())
-            .on("postgres_changes", { event: "*", schema: "public", table: "stock_imports" }, () => loadHistory("stock_imports", document.getElementById("stock-imports-body"), createImportHistoryRow, 10))
-            .on("postgres_changes", { event: "*", schema: "public", table: "stock_exports" }, () => loadHistory("stock_exports", document.getElementById("stock-exports-body"), createExportHistoryRow, 6))
-            .subscribe();
-
-        inventoryChannels.push(channel);
+    const logoutButton = document.getElementById("inventory-logout-btn");
+    if (logoutButton) {
+        logoutButton.addEventListener("click", async function () {
+            try {
+                const auth = getAuth();
+                if (!auth) throw new Error("Firebase Authentication chưa được khởi tạo.");
+                await auth.signOut();
+            } catch (error) {
+                console.error("Lỗi đăng xuất Firebase:", error);
+                showMessage(error.message || "Không thể đăng xuất.", true);
+            }
+        });
     }
 
-    loadInventory();
-    loadHistory("stock_imports", document.getElementById("stock-imports-body"), createImportHistoryRow, 10);
-    loadHistory("stock_exports", document.getElementById("stock-exports-body"), createExportHistoryRow, 6);
+    const auth = getAuth();
+    if (!auth || typeof auth.onAuthStateChanged !== "function") {
+        setAuthenticatedView(null);
+        showAuthMessage("Không thể khởi tạo Firebase Authentication. Kiểm tra cấu hình Firebase và tải lại trang.", true);
+        return;
+    }
+
+    auth.onAuthStateChanged(function (user) {
+        closeFirestoreListeners();
+        currentUser = user;
+        const activeProjectId = window.firebaseProjectId || "";
+        if (activeProjectId !== INVENTORY_FIREBASE_PROJECT_ID) {
+            setAuthenticatedView(null);
+            showAuthMessage(
+                `Cấu hình Firebase đang trỏ tới "${activeProjectId || "không xác định"}"; kho yêu cầu project "${INVENTORY_FIREBASE_PROJECT_ID}".`,
+                true
+            );
+            return;
+        }
+        if (!user) {
+            setAuthenticatedView(null);
+            showAuthMessage("Vui lòng đăng nhập bằng tài khoản quản trị tại cổng Admin trước khi quản lý kho.");
+            return;
+        }
+        if (String(user.email || "").toLowerCase() !== ADMIN_EMAIL) {
+            setAuthenticatedView(null);
+            showAuthMessage("Tài khoản hiện tại không có quyền quản trị kho.", true);
+            return;
+        }
+
+        setAuthenticatedView(user);
+        const db = getFirestore();
+        if (!db) {
+            showMessage("Firebase Firestore chưa được khởi tạo.", true);
+            return;
+        }
+        listenToInventory(db);
+    }, function (error) {
+        console.error("Lỗi xác thực Firebase:", error);
+        setAuthenticatedView(null);
+        showAuthMessage("Không thể xác minh phiên Firebase. Hãy đăng nhập lại qua cổng Admin.", true);
+    });
 }
 
-document.addEventListener("DOMContentLoaded", initInventory);
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initInventory, { once: true });
+} else {
+    initInventory();
+}

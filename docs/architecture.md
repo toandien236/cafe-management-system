@@ -1,12 +1,12 @@
 # Kiến trúc Mocha & Miso
 
-**Trạng thái:** Cổng quản trị, gọi món QR và quản lý nhân sự dùng Firebase Auth/Firestore; website đặt bàn và quản lý kho vẫn dùng Supabase.
+**Trạng thái:** Cổng quản trị, đặt bàn, gọi món QR, quản lý nhân sự và giao diện kho dùng Firebase Auth/Firestore. Kho Supabase là nguồn dữ liệu legacy cần được di trú và đối soát trước khi gỡ các thành phần cũ.
 
 **Phạm vi:** Website khách, đặt bàn, gọi món QR, quản trị, doanh thu, kho và nhân sự.
 
 ## Tổng quan
 
-Frontend là HTML/CSS/JavaScript tĩnh. Cổng quản trị, gọi món QR và HR dùng Firebase Authentication/Cloud Firestore; website đặt bàn và kho dùng Supabase JS từ CDN và cấu hình tại [`../js/supabase.js`](../js/supabase.js). Hai backend hiện chưa đồng bộ.
+Frontend là HTML/CSS/JavaScript tĩnh. Các phân hệ đang hoạt động dùng chung Firebase Authentication/Cloud Firestore. Trang kho kết nối Firebase qua cấu hình dùng chung; các file Supabase client, schema và dữ liệu nguồn vẫn được giữ lại cho đến khi migration kho được chạy và đối soát.
 
 ```mermaid
 flowchart LR
@@ -15,11 +15,11 @@ flowchart LR
   Admin[Quản trị viên] --> Portal[admin.html]
   Admin --> Inventory[inventory.html]
   Admin --> HR[hr.html]
-  Site -->|INSERT reservation| DB[(Supabase PostgreSQL)]
-  QR -->|Tạo order| Firestore[(Cloud Firestore)]
+  Site -->|Đặt bàn| Firestore[(Cloud Firestore)]
+  QR -->|Tạo order| Firestore
   Portal -->|Firebase Auth| Auth[Firebase Authentication]
   Portal -->|Firestore listeners + CRUD| Firestore
-  Inventory -->|Auth + CRUD| DB
+  Inventory -->|Auth + CRUD| Firestore
   HR -->|Firebase Auth + CRUD| Firestore
 ```
 
@@ -27,18 +27,19 @@ flowchart LR
 
 | Thành phần | Trách nhiệm | Dữ liệu/backend |
 |---|---|---|
-| [`../index.html`](../index.html), [`../js/main.js`](../js/main.js) | Nội dung khách, gửi đặt bàn, email tùy chọn | Supabase `reservations`; EmailJS |
+| [`../index.html`](../index.html), [`../js/main.js`](../js/main.js) | Nội dung khách, gửi đặt bàn, email tùy chọn | Firestore `reservations`; EmailJS |
 | [`../order.html`](../order.html), [`../js/order.js`](../js/order.js) | Menu QR, giỏ hàng và gửi đơn | Firestore `orders` |
 | [`../admin.html`](../admin.html), [`../revenue.html`](../revenue.html), [`../admin.js`](../admin.js) | Xử lý đặt bàn/đơn, doanh thu đã thanh toán | Firebase Auth, Firestore `reservations` và `orders` |
-| [`../inventory.html`](../inventory.html), [`../js/inventory.js`](../js/inventory.js) | Tồn kho và phiếu nhập/xuất | Supabase `inventory`, `stock_imports`, `stock_exports` |
+| [`../inventory.html`](../inventory.html), [`../js/inventory.js`](../js/inventory.js) | Tồn kho, cảnh báo thấp, phiếu nhập/xuất | Firebase Auth, Firestore `inventory`, `stock_imports`, `stock_exports` |
 | [`../hr.html`](../hr.html), [`../hr-auth.js`](../hr-auth.js), [`../employee-management.js`](../employee-management.js), [`../staff-operations.js`](../staff-operations.js) | Hồ sơ, ca, chấm công, bảng lương và báo cáo | Firebase Auth, Firestore `employees`, `employee_shifts`, `employee_attendance`, `employee_payroll` |
-| [`../database/supabase-schema.sql`](../database/supabase-schema.sql) | Schema khởi tạo cho project mới | Tập lệnh có `DROP TABLE`, chỉ chạy trên DB trống |
+| [`../database/supabase-schema.sql`](../database/supabase-schema.sql) | Schema legacy Supabase | Không chạy lại trên dữ liệu thật; có `DROP TABLE` |
 | [`../database/firebase-to-supabase.sql`](../database/firebase-to-supabase.sql) | Migration tăng dần cho DB hiện có | Chính sách RLS, RPC, khóa idempotency và Realtime |
 | [`../scripts/migrate-firebase-to-supabase.js`](../scripts/migrate-firebase-to-supabase.js) | Sao chép dữ liệu Firestore cũ | Chỉ import `reservations` và `orders` |
+| [`../scripts/migrate-supabase-inventory-to-firestore.js`](../scripts/migrate-supabase-inventory-to-firestore.js) | Sao chép dữ liệu kho legacy | Không xóa nguồn, không ghi đè tài liệu đích đã tồn tại |
 
 ### Đặt bàn
 
-Website khách ghi đặt bàn mới vào Supabase với trạng thái `pending`. Cổng quản trị hiện đọc và cập nhật collection Firestore `reservations`; vì vậy dữ liệu mới trên website không tự hiện trong cổng cho đến khi hai luồng được chuyển về cùng backend hoặc có cơ chế đồng bộ được cấu hình. Firestore Rules phải cấp quyền phù hợp cho tài khoản quản trị.
+Website khách ghi yêu cầu đặt bàn vào Firestore `reservations` với trạng thái `pending`; cổng quản trị đọc và xử lý cùng collection.
 
 ### Gọi món và doanh thu
 
@@ -54,8 +55,8 @@ Dashboard quản trị cập nhật `status`, `payment_status` và `paid_at`. Gi
 
 - Cổng quản trị dùng Firebase Auth và giới hạn email quản trị cấu hình trong `admin.js`; Firestore Rules vẫn phải bảo vệ quyền truy cập dữ liệu.
 - HR dùng cùng tài khoản Firebase quản trị như cổng quản trị; giao diện giới hạn email quản trị. Firestore Security Rules bắt buộc phải giới hạn đọc/ghi bốn collection HR cho đúng người dùng quản trị; kiểm tra email phía trình duyệt không thay thế Rules.
-- Kho dùng phiên Supabase Auth; quyền quản trị được kiểm tra bởi RLS bằng `auth.jwt() -> 'app_metadata' ->> 'role' = 'admin'`.
-- Khách chỉ được tạo đặt bàn trên Supabase và gửi đơn QR lên Firestore; không được đọc danh sách khách/đơn hoặc cập nhật trạng thái thanh toán.
+- Kho dùng cùng Firebase Auth với Admin; giao diện chỉ mở cho email admin đã cấu hình, và Firestore Rules giới hạn đọc/ghi `inventory`, `stock_imports`, `stock_exports` bằng `isAdmin()`. Kiểm tra phía trình duyệt không thay thế Rules.
+- Khách chỉ được tạo đặt bàn và gửi đơn QR lên Firestore; không được đọc danh sách khách/đơn hoặc cập nhật trạng thái thanh toán.
 - `menu_items` trên Supabase không phải nguồn dữ liệu gọi món QR hiện tại; danh sách món QR đang nằm tĩnh trong `js/order.js`.
 - Anon key là khóa public có giới hạn bởi RLS. Service-role key chỉ dùng trong script migration phía máy chủ, không bao giờ trong client.
 
@@ -65,6 +66,14 @@ HR dùng Firebase Auth và các collection Firestore `employees`, `employee_shif
 
 ## Chuyển dữ liệu Firestore
 
+### Di trú dữ liệu kho Supabase
+
+Giao diện kho đã chuyển sang Firestore; source Supabase vẫn được giữ nguyên và migration production chưa được chạy trong môi trường này. Không đưa giao diện mới vào vận hành với dữ liệu thật trước khi sao lưu, tạm dừng ghi vào Supabase, chạy migration và đối soát. Script [`../scripts/migrate-supabase-inventory-to-firestore.js`](../scripts/migrate-supabase-inventory-to-firestore.js) đọc ba bảng Supabase theo trang, ánh xạ mã/tồn kho/giá/nhà cung cấp và lịch sử nhập/xuất sang các collection tương ứng. ID cũ được ánh xạ xác định để chạy lại; tài liệu Firestore đã tồn tại được bỏ qua. `--dry-run` chỉ đếm bản ghi có thể sao chép. Script không cập nhật hoặc xóa dữ liệu nguồn.
+
+Trước khi chạy migration thật, sao lưu hai backend; dùng phiên Supabase admin chỉ đọc và Firebase Admin credentials cho **project đang cấu hình trong `.firebaserc`**; chạy dry-run, di trú, đối soát số lượng/trường dữ liệu và kiểm thử quyền Rules. Chỉ sau khi xác nhận thành công mới gỡ Supabase SDK/client và schema cũ. Chưa thực hiện migration live hoặc deploy Rules trong môi trường này.
+
+Collection kho dùng trường `code`, `name`, `category`, `quantity`, `unit`, `price` (VND), `min_stock`, `received_at` (ngày `YYYY-MM-DD`), `supplier`, `created_at`, `updated_at`. Mỗi phiếu nhập/xuất là một document riêng có `item_id`, chi tiết số lượng/đơn giá/người thao tác và `created_at`. Nhập/xuất dùng transaction để cập nhật tồn kho cùng lúc với ghi phiếu.
+
 [`../scripts/migrate-firebase-to-supabase.js`](../scripts/migrate-firebase-to-supabase.js) phân trang hai collection cũ, ánh xạ trường camelCase sang cột snake_case, ghi document ID vào `source_firebase_id` và upsert theo ID đó. Có thể chạy dry-run trước; script không sửa/xóa Firestore và có thể chạy lại sau lỗi giữa chừng.
 
 Mật khẩu/hash Firebase Auth không tương thích để nhập vào Supabase Auth. Tạo user Supabase mới, gán role admin qua `auth.users.raw_app_meta_data`, rồi đặt lại mật khẩu. Đối soát số bản ghi và kiểm tra dữ liệu trước khi ngừng Firebase.
@@ -72,6 +81,6 @@ Mật khẩu/hash Firebase Auth không tương thích để nhập vào Supabase
 ## Triển khai và kiểm chứng
 
 - Phục vụ các file tĩnh qua máy chủ local, GitHub Pages hoặc hosting tĩnh khác; [`../firebase.json`](../firebase.json) vẫn có thể dùng riêng cho Firebase Hosting.
-- Cấu hình Firebase web app cho cổng quản trị và URL/anon key Supabase cho các phân hệ Supabase trước khi demo tính năng cloud.
+- Cấu hình Firebase web app cho các phân hệ. Supabase client, migration và schema legacy không được gỡ cho đến khi hoàn tất đối soát dữ liệu kho.
 - Chạy `node --test tests/customer-care.test.js tests/table-orders.test.js tests/revenue.test.js tests/hr-auth.test.js tests/admin-auth.test.js tests/firebase-migration.test.js` để kiểm tra các luồng offline/mocked và ánh xạ dữ liệu migration. Kiểm thử đó không thay cho xác nhận live với Supabase.
-- Mọi migration dữ liệu thật cần backup Firestore và Supabase trước, tài khoản có quyền đọc nguồn/ghi đích, đối soát số lượng và giữ bản sao nguồn đến khi hoàn tất.
+- Mọi migration dữ liệu thật cần backup nguồn/đích, tài khoản có quyền phù hợp, đối soát số lượng và giữ bản sao nguồn đến khi hoàn tất.
