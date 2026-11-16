@@ -2172,22 +2172,25 @@ img, video, svg, iframe {
 .admin-header a.btn.btn-outline,
 .admin-header .btn-logout {
   color: var(--cream);
-  border-color: rgba(248, 245, 242, 0.45);
+  border: 1px solid rgba(248, 245, 242, 0.45);
   font-family: var(--font-sans);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 92px;
+  min-width: 92px;
+  width: auto;
   height: 40px;
   box-sizing: border-box;
-  padding: 4px 8px;
-  font-family: var(--font-sans);
+  padding: 4px 12px;
   font-size: 12px;
   font-weight: 500;
   line-height: 1.15;
   text-align: center;
+  text-transform: none;
+  text-decoration: none;
   border-radius: var(--radius-sm);
   transform: none;
+  white-space: nowrap;
 }
 
 .admin-header .admin-top-link:hover,
@@ -2198,6 +2201,7 @@ img, video, svg, iframe {
   background: rgba(248, 245, 242, 0.15);
   border-radius: var(--radius-sm);
   transform: none;
+  text-decoration: none;
 }
 
 .admin-header-inner {
@@ -2235,7 +2239,9 @@ img, video, svg, iframe {
 
 .admin-email-text {
   font-size: 13px;
-  color: rgba(248, 245, 242, 0.7);
+  font-weight: 500;
+  color: rgba(248, 245, 242, 0.88);
+  margin-right: 4px;
 }
 
 .btn-logout {
