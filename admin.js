@@ -534,6 +534,27 @@ function initAdminDashboard() {
       if (modal) modal.hidden = true;
     });
   }
+
+  const revenueSearchForm = document.getElementById('revenue-search-form');
+  if (revenueSearchForm) {
+    revenueSearchForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      applyRevenueFilter();
+    });
+  }
+
+  const revenueClearButton = document.getElementById('revenue-filter-clear');
+  if (revenueClearButton) {
+    revenueClearButton.addEventListener('click', () => {
+      const dayInput = document.getElementById('revenue-filter-day');
+      const monthInput = document.getElementById('revenue-filter-month');
+      const yearInput = document.getElementById('revenue-filter-year');
+      if (dayInput) dayInput.value = '';
+      if (monthInput) monthInput.value = '';
+      if (yearInput) yearInput.value = '';
+      applyRevenueFilter();
+    });
+  }
 }
 
 function loadReservations() {
@@ -1767,16 +1788,53 @@ function getLocalDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
+function getFilteredPaidRevenueOrders(paidOrders) {
+  const day = String(document.getElementById('revenue-filter-day')?.value || '');
+  const month = String(document.getElementById('revenue-filter-month')?.value || '');
+  const year = String(document.getElementById('revenue-filter-year')?.value || '').trim();
+
+  if (!day && !month && !year) return paidOrders;
+
+  return paidOrders.filter(order => {
+    const paidDate = getOrderPaidDate(order);
+    if (!paidDate) return false;
+    const dateKey = getLocalDateKey(paidDate);
+
+    if (day && dateKey !== day) return false;
+    if (month && dateKey.slice(0, 7) !== month) return false;
+    if (year && dateKey.slice(0, 4) !== year) return false;
+    return true;
+  });
+}
+
+function applyRevenueFilter() {
+  renderRevenue();
+}
+window.applyRevenueFilter = applyRevenueFilter;
+
 function renderRevenue() {
   const todayElement = document.getElementById('revenue-today');
   const monthElement = document.getElementById('revenue-month');
   const totalElement = document.getElementById('revenue-total');
   const tbody = document.getElementById('revenue-tbody');
+  const filterTotalElement = document.getElementById('revenue-filter-total');
+  const filterCountElement = document.getElementById('revenue-filter-count');
   const todayKey = getLocalDateKey(new Date());
   const monthKey = todayKey.slice(0, 7);
   const paidOrders = allOrders.filter(order =>
     (order.paymentStatus || order.payment_status || '').toLowerCase() === 'paid'
   );
+  const filteredOrders = getFilteredPaidRevenueOrders(paidOrders);
+  let filteredTotal = 0;
+
+  filteredOrders.forEach(order => {
+    filteredTotal += getOrderAmountVnd(order.total, order.items);
+  });
+
+  if (filterTotalElement) filterTotalElement.textContent = formatVnd(filteredTotal);
+  if (filterCountElement) {
+    filterCountElement.textContent = `${filteredOrders.length} đơn đã thanh toán`;
+  }
 
   let todayTotal = 0;
   let monthTotal = 0;
@@ -1798,14 +1856,14 @@ function renderRevenue() {
   if (totalElement) totalElement.textContent = formatVnd(totalRevenue);
   if (!tbody) return;
 
-  paidOrders.sort((left, right) => {
+  filteredOrders.sort((left, right) => {
     const leftDate = getOrderPaidDate(left);
     const rightDate = getOrderPaidDate(right);
     return (rightDate ? rightDate.getTime() : 0) - (leftDate ? leftDate.getTime() : 0);
   });
-  tbody.innerHTML = paidOrders.length === 0
+  tbody.innerHTML = filteredOrders.length === 0
     ? '<tr><td colspan="4" style="text-align:center; padding:30px;">Chưa có đơn đã thanh toán.</td></tr>'
-    : paidOrders.map(order => {
+    : filteredOrders.map(order => {
       const paidDate = getOrderPaidDate(order);
       const orderId = order.orderId || order.order_id || order.id;
       const tableNumber = order.tableNumber || order.table_number || '--';
