@@ -70,6 +70,51 @@ test('revenue totals only paid orders and groups them by payment date', () => {
   assert.doesNotMatch(elements.get('revenue-tbody').innerHTML, /unpaid/);
 });
 
+test('revenue search filters by day, month, or year and clears correctly', () => {
+  const { context, elements } = loadAdminScript();
+  const firstDay = new Date(2026, 10, 20, 12).toISOString();
+  const secondDay = new Date(2026, 10, 21, 12).toISOString();
+  context.ordersForTest = [
+    {
+      id: 'first',
+      orderId: 'ORD-FIRST',
+      tableNumber: '01',
+      total: 50000,
+      paymentStatus: 'paid',
+      paidAt: firstDay
+    },
+    {
+      id: 'second',
+      orderId: 'ORD-SECOND',
+      tableNumber: '02',
+      total: 75000,
+      paymentStatus: 'paid',
+      paidAt: secondDay
+    }
+  ];
+  vm.runInContext('allOrders = ordersForTest', context);
+
+  elements.get('revenue-filter-day').value = '2026-11-21';
+  vm.runInContext('applyRevenueFilter()', context);
+
+  const formatVnd = amount => new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0
+  }).format(amount);
+  assert.equal(elements.get('revenue-filter-total').textContent, formatVnd(75000));
+  assert.equal(elements.get('revenue-filter-count').textContent, '1 đơn đã thanh toán');
+  assert.doesNotMatch(elements.get('revenue-tbody').innerHTML, /ORD-FIRST/);
+  assert.match(elements.get('revenue-tbody').innerHTML, /ORD-SECOND/);
+
+  elements.get('revenue-filter-day').value = '';
+  elements.get('revenue-filter-month').value = '';
+  elements.get('revenue-filter-year').value = '';
+  vm.runInContext('applyRevenueFilter()', context);
+  assert.equal(elements.get('revenue-filter-total').textContent, formatVnd(125000));
+  assert.equal(elements.get('revenue-filter-count').textContent, '2 đơn đã thanh toán');
+});
+
 test('Firestore order snapshots refresh revenue totals and payment history', () => {
   const { context, elements } = loadAdminScript();
   const paidAt = new Date();
