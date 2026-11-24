@@ -1310,7 +1310,11 @@ function sendEmailJS(res, type, docId, customBody) {
     maps_link:       'https://maps.google.com/?q=124+Artisan+Alley+Craft+District'
   };
 
-  emailjs.send(cfg.serviceId, cfg.templateId, templateParams)
+  if (typeof emailjs !== 'undefined' && emailjs.init) {
+    emailjs.init({ publicKey: cfg.publicKey });
+  }
+
+  emailjs.send(cfg.serviceId, cfg.templateId, templateParams, cfg.publicKey)
     .then(() => {
       console.log('[EmailJS] Email sent to', res.email);
     })
@@ -1385,6 +1389,10 @@ function openSuccessModal(res) {
   if (dateEl) dateEl.textContent = res.date || 'Hôm nay';
   if (timeEl) timeEl.textContent = formatTime(res.time) || res.time || '';
   if (guestsEl) guestsEl.textContent = `${res.guests || 2} khách`;
+
+  if (typeof sendEmailJS === 'function' && res && res.email) {
+    sendEmailJS(res, 'confirmation', res.reservationId || res.id);
+  }
 
   modal.hidden = false;
   modal.setAttribute('aria-hidden', 'false');
