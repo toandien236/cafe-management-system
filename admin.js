@@ -2174,7 +2174,7 @@ function renderTable() {
           </span>
         </td>
         <td>
-          <span class="email-badge ${emailBadgeClass}">
+          <span class="email-badge ${emailBadgeClass}" ${emailStatusLower === 'pending' ? `onclick="markEmailSent('${escapeHtml(res.id)}')" style="cursor: pointer;" title="Nhấn để cập nhật thành Đã gửi"` : ''}>
             ${escapeHtml(getEmailStatusLabel(emailStatus))}
           </span>
         </td>
@@ -2546,8 +2546,11 @@ function initReplyModalHandlers() {
           maps_link:       'https://maps.google.com/?q=124+Artisan+Alley+Craft+District'
         };
         emailjs.send(cfg2.serviceId, cfg2.templateId, templateParams)
-          .then(() => {
+          .then(async () => {
             showToast(`Đã gửi email đến ${email} ✓`, 'success');
+            if (currentReplyResId && typeof window.markEmailSent === 'function') {
+              await window.markEmailSent(currentReplyResId);
+            }
             if (modal) modal.hidden = true;
           })
           .catch(err => {
@@ -2616,16 +2619,54 @@ window.sendEmailJS = function(reservation, type, id) {
     maps_link: 'https://maps.google.com/?q=124+Artisan+Alley+Craft+District'
   };
 
-  const db = window.firebaseDb;
-  const methods = window.firebaseFirestoreMethods;
-  const saveEmailStatus = (status, errorMessage) => {
-    if (!db || !methods?.doc || !methods?.updateDoc || !id || String(id).startsWith('local_')) {
-      return Promise.resolve();
+  const firestoreDb = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
+  const modularMethods = window.firebaseFirestoreMethods;
+  const saveEmailStatus = async (status) => {
+    // 1. Cập nhật dữ liệu trong bộ nhớ và cập nhật bảng UI ngay lập tức
+    if (reservation) {
+      reservation.emailStatus = status;
     }
-    return methods.updateDoc(methods.doc(db, 'reservations', id), {
+    if (typeof allReservations !== 'undefined' && Array.isArray(allReservations)) {
+      const match = allReservations.find(r => r.id === id || r.reservationId === id);
+      if (match) {
+        match.emailStatus = status;
+      }
+    }
+    if (typeof renderTable === 'function') {
+      renderTable();
+    }
+
+    // 2. Cập nhật localStorage nếu có
+    try {
+      const local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
+      let localUpdated = false;
+      local.forEach(record => {
+        if (record.id === id || record.reservationId === id ||
+            (reservation && record.email === reservation.email && record.date === reservation.date && record.time === reservation.time)) {
+          record.emailStatus = status;
+          localUpdated = true;
+        }
+      });
+      if (localUpdated) {
+        localStorage.setItem('mocha_reservations', JSON.stringify(local));
+      }
+    } catch (e) {}
+
+    // 3. Cập nhật lên Firestore (hỗ trợ cả Firebase Compat SDK và Modular SDK)
+    if (!id || String(id).startsWith('local_')) {
+      return;
+    }
+
+    const payload = {
       emailStatus: status,
-      ...(errorMessage ? { emailError: errorMessage } : {})
-    });
+      updatedAt: new Date().toISOString()
+    };
+
+    if (firestoreDb && typeof firestoreDb.collection === 'function') {
+      return firestoreDb.collection('reservations').doc(id).update(payload);
+    } else if (firestoreDb && modularMethods?.doc && modularMethods?.updateDoc) {
+      return modularMethods.updateDoc(modularMethods.doc(firestoreDb, 'reservations', id), payload);
+    }
   };
 
   try {
@@ -2636,7 +2677,7 @@ window.sendEmailJS = function(reservation, type, id) {
 
   return emailjs.send(config.serviceId, config.templateId, params, config.publicKey).then(async () => {
     try {
-      await saveEmailStatus('Sent', null);
+      await saveEmailStatus('Sent');
     } catch (error) {
       console.error('[Firestore] Could not save reservation email status:', error);
     }
@@ -2645,13 +2686,62 @@ window.sendEmailJS = function(reservation, type, id) {
   }).catch(async error => {
     console.error('[EmailJS] Reservation status email failed:', error);
     try {
-      await saveEmailStatus('Failed', String(error.message || error).slice(0, 1000));
+      await saveEmailStatus('Failed');
     } catch (statusError) {
       console.error('[Firestore] Could not save reservation email failure:', statusError);
     }
     showToast('Không gửi được email thông báo đặt bàn.', 'error');
     return false;
   });
+};
+
+window.markEmailSent = async function(id) {
+  const reservationId = String(id || '');
+  if (!reservationId) return;
+  const item = (typeof allReservations !== 'undefined' && Array.isArray(allReservations))
+    ? allReservations.find(r => r.id === reservationId)
+    : null;
+  if (item) {
+    item.emailStatus = 'Sent';
+  }
+  if (typeof renderTable === 'function') renderTable();
+
+  try {
+    const local = JSON.parse(localStorage.getItem('mocha_reservations') || '[]');
+    let localUpdated = false;
+    local.forEach(record => {
+      if (record.id === reservationId || record.reservationId === reservationId ||
+          (item && record.email === item.email && record.date === item.date && record.time === item.time)) {
+        record.emailStatus = 'Sent';
+        localUpdated = true;
+      }
+    });
+    if (localUpdated) {
+      localStorage.setItem('mocha_reservations', JSON.stringify(local));
+    }
+  } catch (e) {}
+
+  const firestoreDb = window.db || window.firebaseDb || (typeof db !== 'undefined' ? db : null);
+  const modularMethods = window.firebaseFirestoreMethods;
+  if (!reservationId.startsWith('local_')) {
+    try {
+      const payload = {
+        emailStatus: 'Sent',
+        updatedAt: new Date().toISOString()
+      };
+      if (firestoreDb && typeof firestoreDb.collection === 'function') {
+        await firestoreDb.collection('reservations').doc(reservationId).update(payload);
+      } else if (firestoreDb && modularMethods?.doc && modularMethods?.updateDoc) {
+        await modularMethods.updateDoc(modularMethods.doc(firestoreDb, 'reservations', reservationId), payload);
+      }
+      showToast('Đã cập nhật tình trạng email thành "Đã gửi".', 'success');
+    } catch (e) {
+      console.error('[Firestore] markEmailSent failed:', e);
+      showToast('Lỗi khi cập nhật Firestore: ' + (e.message || e), 'error');
+    }
+  } else {
+    showToast('Đã cập nhật tình trạng email thành "Đã gửi".', 'info');
+  }
 };
 
 function escapeHtml(str) {
