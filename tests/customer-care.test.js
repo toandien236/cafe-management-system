@@ -133,9 +133,9 @@ test('customer directory renders counts, supports search, and escapes table valu
   assert.match(elements.get('customers-tbody').innerHTML, /Không tìm thấy/);
 });
 
-test('customer directory paginates 5 profiles and keeps the visit count column aligned', () => {
+test('customer directory paginates 15 profiles and keeps the visit count column aligned', () => {
   const { context, elements } = loadAdminScript();
-  context.reservationsForTest = Array.from({ length: 12 }, (_, index) => ({
+  context.reservationsForTest = Array.from({ length: 32 }, (_, index) => ({
     id: `reservation-${index + 1}`,
     name: `Guest ${index + 1}`,
     email: `guest-${index + 1}@example.com`,
@@ -146,19 +146,19 @@ test('customer directory paginates 5 profiles and keeps the visit count column a
   context.renderCustomers();
 
   const rowsOnPage = () => (elements.get('customers-tbody').innerHTML.match(/<tr>/g) || []).length;
-  assert.equal(rowsOnPage(), 5);
-  assert.equal(elements.get('customer-page-label').textContent, '1–5 / 12 khách · Trang 1/3');
+  assert.equal(rowsOnPage(), 15);
+  assert.equal(elements.get('customer-page-label').textContent, '1–15 / 32 khách · Trang 1/3');
   assert.equal(elements.get('customer-previous-page').disabled, true);
   assert.equal(elements.get('customer-next-page').disabled, false);
   assert.match(elements.get('customers-tbody').innerHTML, /<td>0<\/td>\s*<td>2026-01-/);
 
   context.window.changeCustomersPage(1);
-  assert.equal(rowsOnPage(), 5);
-  assert.equal(elements.get('customer-page-label').textContent, '6–10 / 12 khách · Trang 2/3');
+  assert.equal(rowsOnPage(), 15);
+  assert.equal(elements.get('customer-page-label').textContent, '16–30 / 32 khách · Trang 2/3');
 
   context.window.changeCustomersPage(1);
   assert.equal(rowsOnPage(), 2);
-  assert.equal(elements.get('customer-page-label').textContent, '11–12 / 12 khách · Trang 3/3');
+  assert.equal(elements.get('customer-page-label').textContent, '31–32 / 32 khách · Trang 3/3');
   assert.equal(elements.get('customer-next-page').disabled, true);
 
   vm.runInContext('customerSearchQuery = "guest-1@example.com"', context);

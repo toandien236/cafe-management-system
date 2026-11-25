@@ -388,7 +388,7 @@ let allOrders       = [];
 let ordersUnsubscribe = null;
 const ORDERS_PER_PAGE = 15;
 let currentOrdersPage = 1;
-const CUSTOMERS_PER_PAGE = 5;
+const CUSTOMERS_PER_PAGE = 15;
 let currentCustomersPage = 1;
 let ordersCalendarTarget = '';
 let ordersCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -553,6 +553,109 @@ function initAdminDashboard() {
       if (monthInput) monthInput.value = '';
       if (yearInput) yearInput.value = '';
       applyRevenueFilter();
+    });
+  }
+
+  // Menu Management listeners
+  loadMenuItems();
+
+  const btnOpenAddMenu = document.getElementById('btn-open-add-menu');
+  if (btnOpenAddMenu) {
+    btnOpenAddMenu.addEventListener('click', () => openMenuModal());
+  }
+
+  const menuModalCancel = document.getElementById('menu-modal-cancel');
+  if (menuModalCancel) {
+    menuModalCancel.addEventListener('click', () => {
+      const m = document.getElementById('menu-modal');
+      if (m) m.hidden = true;
+    });
+  }
+
+  const menuItemForm = document.getElementById('menu-item-form');
+  if (menuItemForm) {
+    menuItemForm.addEventListener('submit', (e) => saveMenuItem(e));
+  }
+
+  const menuDeleteCancel = document.getElementById('menu-delete-cancel');
+  if (menuDeleteCancel) {
+    menuDeleteCancel.addEventListener('click', () => {
+      const m = document.getElementById('menu-delete-modal');
+      if (m) m.hidden = true;
+    });
+  }
+
+  const menuDeleteConfirm = document.getElementById('menu-delete-confirm');
+  if (menuDeleteConfirm) {
+    menuDeleteConfirm.addEventListener('click', () => confirmDeleteMenuItem());
+  }
+
+  const btnSeedMenu = document.getElementById('btn-seed-menu');
+  if (btnSeedMenu) {
+    btnSeedMenu.addEventListener('click', () => seedDefaultMenu());
+  }
+
+  const menuSearchInput = document.getElementById('menu-search');
+  if (menuSearchInput) {
+    menuSearchInput.addEventListener('input', (e) => {
+      menuSearchQuery = e.target.value.trim().toLowerCase();
+      renderMenuTable();
+    });
+  }
+
+  const menuCatFilter = document.getElementById('menu-category-filter');
+  if (menuCatFilter) {
+    menuCatFilter.addEventListener('change', (e) => {
+      menuCategoryFilter = e.target.value;
+      renderMenuTable();
+    });
+  }
+
+  const menuAvailFilter = document.getElementById('menu-availability-filter');
+  if (menuAvailFilter) {
+    menuAvailFilter.addEventListener('change', (e) => {
+      menuAvailabilityFilter = e.target.value;
+      renderMenuTable();
+    });
+  }
+
+  const menuImageFileInput = document.getElementById('menu-image-file');
+  if (menuImageFileInput) {
+    menuImageFileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleImageFile(e.target.files[0]);
+      }
+    });
+  }
+
+  const menuImageUploadArea = document.getElementById('menu-image-upload-area');
+  if (menuImageUploadArea) {
+    menuImageUploadArea.addEventListener('click', (e) => {
+      if (e.target.id === 'menu-image-remove') return;
+      if (menuImageFileInput) menuImageFileInput.click();
+    });
+  }
+
+  const menuImageRemoveBtn = document.getElementById('menu-image-remove');
+  if (menuImageRemoveBtn) {
+    menuImageRemoveBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menuImageBase64 = null;
+      menuImageRemoved = true;
+      const previewWrap = document.getElementById('menu-image-preview-wrap');
+      const placeholder = document.getElementById('menu-image-placeholder');
+      if (previewWrap) previewWrap.hidden = true;
+      if (placeholder) placeholder.hidden = false;
+      const urlInput = document.getElementById('menu-image-url');
+      if (urlInput) urlInput.value = '';
+    });
+  }
+
+  const btnScrollMenuMgmt = document.getElementById('btn-scroll-menu-mgmt');
+  if (btnScrollMenuMgmt) {
+    btnScrollMenuMgmt.addEventListener('click', () => {
+      const section = document.querySelector('.admin-menu-section');
+      if (section) section.scrollIntoView({ behavior: 'smooth' });
     });
   }
 }
@@ -2558,4 +2661,457 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ADMIN — QUẢN LÝ THỰC ĐƠN (Menu Management)
+   ══════════════════════════════════════════════════════════════ */
+
+let adminMenuItems = [];
+let menuItemsUnsubscribe = null;
+let editingMenuItemId = null;
+let menuImageBase64 = null;
+let deletingMenuItemId = null;
+let menuImageRemoved = false;
+let menuSearchQuery = '';
+let menuCategoryFilter = 'all';
+let menuAvailabilityFilter = 'all';
+
+const MENU_CATEGORIES = ['Cà phê', 'Đồ uống', 'Đồ ăn', 'Tráng miệng'];
+
+function moneyFormat(value) {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value) || 0);
+}
+
+function loadMenuItems() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const cached = localStorage.getItem('mocha_menu_items');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          adminMenuItems = parsed;
+          renderMenuTable();
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Admin Menu Storage Warning]', e);
+  }
+
+  if (!adminMenuItems || adminMenuItems.length === 0) {
+    if (typeof window !== 'undefined' && Array.isArray(window.CAFE_MENU_DEFAULT)) {
+      adminMenuItems = window.CAFE_MENU_DEFAULT.map(item => ({ ...item, available: true }));
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('mocha_menu_items', JSON.stringify(adminMenuItems));
+        }
+      } catch (e) {}
+    }
+  }
+  renderMenuTable();
+
+  const dbInstance = (typeof window !== 'undefined' && (window.firebaseDb || window.db)) || null;
+  if (!dbInstance) return;
+
+  function syncMenuFromDocs(docs) {
+    const cloudItems = [];
+    docs.forEach(doc => {
+      const data = typeof doc.data === 'function' ? doc.data() : doc;
+      cloudItems.push({
+        id: doc.id || data.id,
+        name: data.name || '',
+        category: data.category || 'Đồ uống',
+        price: Number(data.price) || 0,
+        image: data.image || 'assets/menu_espresso.jpg',
+        description: data.description || '',
+        available: data.available !== false,
+        createdAt: data.createdAt || '',
+        updatedAt: data.updatedAt || ''
+      });
+    });
+
+    const merged = new Map();
+    adminMenuItems.forEach(item => { if (item && item.id) merged.set(item.id, item); });
+    cloudItems.forEach(item => { if (item && item.id) merged.set(item.id, item); });
+
+    adminMenuItems = Array.from(merged.values());
+    if (adminMenuItems.length === 0 && typeof window !== 'undefined' && Array.isArray(window.CAFE_MENU_DEFAULT)) {
+      adminMenuItems = window.CAFE_MENU_DEFAULT.map(item => ({ ...item, available: true }));
+    }
+    adminMenuItems.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('mocha_menu_items', JSON.stringify(adminMenuItems));
+      }
+    } catch (e) {}
+
+    if (typeof window !== 'undefined') {
+      window.CAFE_MENU = adminMenuItems.filter(i => i.available !== false);
+      if (typeof window._notifyMenuUpdate === 'function') window._notifyMenuUpdate();
+      if (typeof window._broadcastMenuUpdate === 'function') window._broadcastMenuUpdate();
+    }
+    renderMenuTable();
+  }
+
+  if (typeof dbInstance.collection === 'function') {
+    if (menuItemsUnsubscribe) {
+      try { menuItemsUnsubscribe(); } catch (e) {}
+    }
+    menuItemsUnsubscribe = dbInstance.collection('menuItems').onSnapshot(
+      snapshot => { syncMenuFromDocs(snapshot.docs || []); },
+      err => { console.warn('[Admin Menu Firestore] Snapshot error:', err); }
+    );
+  }
+}
+
+function renderMenuTable() {
+  const tbody = document.getElementById('menu-items-tbody');
+  const summaryEl = document.getElementById('menu-summary');
+  if (!tbody) return;
+
+  const filtered = adminMenuItems.filter(item => {
+    if (!item) return false;
+    if (menuSearchQuery) {
+      const q = menuSearchQuery.toLowerCase();
+      const n = (item.name || '').toLowerCase();
+      const d = (item.description || '').toLowerCase();
+      if (!n.includes(q) && !d.includes(q)) return false;
+    }
+    if (menuCategoryFilter && menuCategoryFilter !== 'all') {
+      if (item.category !== menuCategoryFilter) return false;
+    }
+    if (menuAvailabilityFilter && menuAvailabilityFilter !== 'all') {
+      const isAvail = item.available !== false;
+      if (menuAvailabilityFilter === 'available' && !isAvail) return false;
+      if (menuAvailabilityFilter === 'unavailable' && isAvail) return false;
+    }
+    return true;
+  });
+
+  if (summaryEl) {
+    const total = adminMenuItems.length;
+    const availCount = adminMenuItems.filter(i => i && i.available !== false).length;
+    summaryEl.textContent = `Tổng cộng ${total} món (${availCount} đang phục vụ${filtered.length !== total ? `, hiển thị ${filtered.length} món lọc` : ''})`;
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--coffee-mid);">Không tìm thấy món ăn nào phù hợp.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(item => {
+    const isAvail = item.available !== false;
+    const imgUrl = item.image || 'assets/menu_espresso.jpg';
+    return `<tr data-menu-id="${escapeHtml(item.id)}">
+      <td>
+        <img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(item.name)}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid rgba(0,0,0,0.08);" onerror="this.src='assets/menu_espresso.jpg'" />
+      </td>
+      <td><strong>${escapeHtml(item.name)}</strong></td>
+      <td><span class="admin-table-badge badge-category">${escapeHtml(item.category || '—')}</span></td>
+      <td><strong>${moneyFormat(item.price)}</strong></td>
+      <td style="max-width:220px; white-space:normal; font-size:12px; color:var(--coffee-mid);">${escapeHtml(item.description || '')}</td>
+      <td>
+        <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:12px; min-width:85px; border-color:${isAvail ? 'var(--sage)' : '#c0392b'}; color:${isAvail ? 'var(--sage-dark, #4b5e40)' : '#c0392b'};" onclick="toggleMenuAvailability('${escapeHtml(item.id)}')">
+          ${isAvail ? '● Đang bán' : '○ Tạm ngưng'}
+        </button>
+      </td>
+      <td>
+        <div style="display:flex; gap:6px;">
+          <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="openMenuModal('${escapeHtml(item.id)}')">Sửa</button>
+          <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:12px; border-color:#c0392b; color:#c0392b;" onclick="openDeleteConfirm('${escapeHtml(item.id)}')">Xóa</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openMenuModal(itemId) {
+  const modal = document.getElementById('menu-modal');
+  const titleEl = document.getElementById('menu-modal-title');
+  const form = document.getElementById('menu-item-form');
+  const previewWrap = document.getElementById('menu-image-preview-wrap');
+  const previewImg = document.getElementById('menu-image-preview');
+  const placeholder = document.getElementById('menu-image-placeholder');
+
+  editingMenuItemId = itemId || null;
+  menuImageBase64 = null;
+  menuImageRemoved = false;
+
+  if (itemId) {
+    const item = adminMenuItems.find(i => i.id === itemId);
+    if (!item) return;
+    if (titleEl) titleEl.textContent = 'Chỉnh sửa món ăn';
+    const idEl = document.getElementById('menu-item-id');
+    if (idEl) idEl.value = item.id;
+    const nameEl = document.getElementById('menu-item-name');
+    if (nameEl) nameEl.value = item.name || '';
+    const catEl = document.getElementById('menu-item-category');
+    if (catEl) catEl.value = item.category || 'Cà phê';
+    const priceEl = document.getElementById('menu-item-price');
+    if (priceEl) priceEl.value = item.price || 0;
+    const descEl = document.getElementById('menu-item-description');
+    if (descEl) descEl.value = item.description || '';
+    const availEl = document.getElementById('menu-item-available');
+    if (availEl) availEl.checked = item.available !== false;
+    const urlEl = document.getElementById('menu-image-url');
+    if (urlEl) urlEl.value = (item.image && !item.image.startsWith('data:')) ? item.image : '';
+
+    if (item.image) {
+      if (previewImg) previewImg.src = item.image;
+      if (previewWrap) previewWrap.hidden = false;
+      if (placeholder) placeholder.hidden = true;
+    } else {
+      if (previewWrap) previewWrap.hidden = true;
+      if (placeholder) placeholder.hidden = false;
+    }
+  } else {
+    if (titleEl) titleEl.textContent = 'Thêm món mới';
+    if (form) form.reset();
+    const idEl = document.getElementById('menu-item-id');
+    if (idEl) idEl.value = '';
+    const availEl = document.getElementById('menu-item-available');
+    if (availEl) availEl.checked = true;
+    const urlEl = document.getElementById('menu-image-url');
+    if (urlEl) urlEl.value = '';
+    if (previewWrap) previewWrap.hidden = true;
+    if (placeholder) placeholder.hidden = false;
+  }
+
+  if (modal) modal.hidden = false;
+}
+
+function handleImageFile(file) {
+  if (!file) return;
+  if (!file.type && !file.name) return;
+  const isImage = (file.type && file.type.match(/^image\//)) || (file.name && file.name.match(/\.(jpg|jpeg|png|webp)$/i));
+  if (!isImage) {
+    showToast('Vui lòng chọn tệp hình ảnh hợp lệ (JPG, PNG, WebP).', 'error');
+    return;
+  }
+  if (file.size > 800 * 1024) {
+    showToast('Dung lượng ảnh tối đa 800KB. Vui lòng nén ảnh trước khi tải lên.', 'error');
+    return;
+  }
+
+  if (typeof FileReader !== 'undefined') {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      menuImageBase64 = e.target.result;
+      menuImageRemoved = false;
+      const previewWrap = document.getElementById('menu-image-preview-wrap');
+      const previewImg = document.getElementById('menu-image-preview');
+      const placeholder = document.getElementById('menu-image-placeholder');
+      if (previewImg) previewImg.src = menuImageBase64;
+      if (previewWrap) previewWrap.hidden = false;
+      if (placeholder) placeholder.hidden = true;
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+async function saveMenuItem(event) {
+  if (event && event.preventDefault) event.preventDefault();
+
+  const name = (document.getElementById('menu-item-name')?.value || '').trim();
+  const category = document.getElementById('menu-item-category')?.value || 'Cà phê';
+  const price = Number(document.getElementById('menu-item-price')?.value) || 0;
+  const description = (document.getElementById('menu-item-description')?.value || '').trim();
+  const available = document.getElementById('menu-item-available')?.checked !== false;
+  const urlInput = (document.getElementById('menu-image-url')?.value || '').trim();
+
+  if (!name) {
+    showToast('Vui lòng nhập tên món ăn.', 'error');
+    return;
+  }
+  if (price < 0) {
+    showToast('Giá món ăn không hợp lệ.', 'error');
+    return;
+  }
+
+  let finalImage = 'assets/menu_espresso.jpg';
+  if (menuImageBase64) {
+    finalImage = menuImageBase64;
+  } else if (urlInput) {
+    finalImage = urlInput;
+  } else if (editingMenuItemId) {
+    const existing = adminMenuItems.find(i => i.id === editingMenuItemId);
+    if (existing && existing.image && !menuImageRemoved) {
+      finalImage = existing.image;
+    }
+  }
+
+  const now = new Date().toISOString();
+  let item;
+  if (editingMenuItemId) {
+    const existingIndex = adminMenuItems.findIndex(i => i.id === editingMenuItemId);
+    const existing = existingIndex >= 0 ? adminMenuItems[existingIndex] : {};
+    item = {
+      ...existing,
+      id: editingMenuItemId,
+      name,
+      category,
+      price,
+      description,
+      available,
+      image: finalImage,
+      updatedAt: now,
+      createdAt: existing.createdAt || now
+    };
+    if (existingIndex >= 0) adminMenuItems[existingIndex] = item;
+    else adminMenuItems.push(item);
+  } else {
+    const newId = 'menu_' + Date.now();
+    item = {
+      id: newId,
+      name,
+      category,
+      price,
+      description,
+      available,
+      image: finalImage,
+      createdAt: now,
+      updatedAt: now
+    };
+    adminMenuItems.push(item);
+  }
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('mocha_menu_items', JSON.stringify(adminMenuItems));
+    }
+  } catch (err) {
+    console.warn('[Menu Save Storage Error]', err);
+  }
+
+  const dbInstance = (typeof window !== 'undefined' && (window.firebaseDb || window.db)) || null;
+  if (dbInstance && typeof dbInstance.collection === 'function') {
+    try {
+      await dbInstance.collection('menuItems').doc(item.id).set(item);
+    } catch (err) {
+      console.warn('[Firestore Menu Save Error]', err);
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.CAFE_MENU = adminMenuItems.filter(i => i.available !== false);
+    if (typeof window._notifyMenuUpdate === 'function') window._notifyMenuUpdate();
+    if (typeof window._broadcastMenuUpdate === 'function') window._broadcastMenuUpdate();
+  }
+
+  const modal = document.getElementById('menu-modal');
+  if (modal) modal.hidden = true;
+  showToast(`Đã lưu món "${name}" thành công!`, 'success');
+  renderMenuTable();
+}
+
+function openDeleteConfirm(itemId) {
+  deletingMenuItemId = itemId;
+  const item = adminMenuItems.find(i => i.id === itemId);
+  const msgEl = document.getElementById('menu-delete-message');
+  if (msgEl) msgEl.textContent = `Bạn có chắc muốn xóa món "${item ? item.name : ''}" khỏi thực đơn?`;
+  const modal = document.getElementById('menu-delete-modal');
+  if (modal) modal.hidden = false;
+}
+
+async function confirmDeleteMenuItem() {
+  if (!deletingMenuItemId) return;
+  const deletedId = deletingMenuItemId;
+  const item = adminMenuItems.find(i => i.id === deletedId);
+  const name = item ? item.name : '';
+
+  adminMenuItems = adminMenuItems.filter(i => i.id !== deletedId);
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('mocha_menu_items', JSON.stringify(adminMenuItems));
+    }
+  } catch (e) {}
+
+  const dbInstance = (typeof window !== 'undefined' && (window.firebaseDb || window.db)) || null;
+  if (dbInstance && typeof dbInstance.collection === 'function') {
+    try {
+      await dbInstance.collection('menuItems').doc(deletedId).delete();
+    } catch (err) {
+      console.warn('[Firestore Menu Delete Error]', err);
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.CAFE_MENU = adminMenuItems.filter(i => i.available !== false);
+    if (typeof window._notifyMenuUpdate === 'function') window._notifyMenuUpdate();
+    if (typeof window._broadcastMenuUpdate === 'function') window._broadcastMenuUpdate();
+  }
+
+  const modal = document.getElementById('menu-delete-modal');
+  if (modal) modal.hidden = true;
+  deletingMenuItemId = null;
+  showToast(`Đã xóa món "${name}" khỏi thực đơn.`, 'info');
+  renderMenuTable();
+}
+
+async function toggleMenuAvailability(itemId) {
+  const item = adminMenuItems.find(i => i.id === itemId);
+  if (!item) return;
+
+  item.available = item.available === false ? true : false;
+  item.updatedAt = new Date().toISOString();
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('mocha_menu_items', JSON.stringify(adminMenuItems));
+    }
+  } catch (e) {}
+
+  const dbInstance = (typeof window !== 'undefined' && (window.firebaseDb || window.db)) || null;
+  if (dbInstance && typeof dbInstance.collection === 'function') {
+    try {
+      await dbInstance.collection('menuItems').doc(itemId).update({
+        available: item.available,
+        updatedAt: item.updatedAt
+      });
+    } catch (err) {
+      console.warn('[Firestore Toggle Availability Error]', err);
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.CAFE_MENU = adminMenuItems.filter(i => i.available !== false);
+    if (typeof window._notifyMenuUpdate === 'function') window._notifyMenuUpdate();
+    if (typeof window._broadcastMenuUpdate === 'function') window._broadcastMenuUpdate();
+  }
+
+  showToast(`Món "${item.name}" chuyển sang: ${item.available ? 'Đang phục vụ' : 'Tạm ngưng'}.`, 'info');
+  renderMenuTable();
+}
+
+function seedDefaultMenu() {
+  if (typeof window === 'undefined' || !Array.isArray(window.CAFE_MENU_DEFAULT)) return;
+  adminMenuItems = window.CAFE_MENU_DEFAULT.map(item => ({ ...item, available: true }));
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('mocha_menu_items', JSON.stringify(adminMenuItems));
+    }
+  } catch (e) {}
+
+  if (typeof window !== 'undefined') {
+    window.CAFE_MENU = [...adminMenuItems];
+    if (typeof window._notifyMenuUpdate === 'function') window._notifyMenuUpdate();
+    if (typeof window._broadcastMenuUpdate === 'function') window._broadcastMenuUpdate();
+  }
+  showToast('Đã khôi phục thực đơn mẫu thành công!', 'success');
+  renderMenuTable();
+}
+
+if (typeof window !== 'undefined') {
+  window.loadMenuItems = loadMenuItems;
+  window.renderMenuTable = renderMenuTable;
+  window.openMenuModal = openMenuModal;
+  window.handleImageFile = handleImageFile;
+  window.saveMenuItem = saveMenuItem;
+  window.openDeleteConfirm = openDeleteConfirm;
+  window.confirmDeleteMenuItem = confirmDeleteMenuItem;
+  window.toggleMenuAvailability = toggleMenuAvailability;
+  window.seedDefaultMenu = seedDefaultMenu;
 }

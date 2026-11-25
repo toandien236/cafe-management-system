@@ -7,7 +7,7 @@
   <title>Gọi món tại bàn | Mocha & Miso</title>
   <link rel="stylesheet" href="css/order.css?v=mobile-fit-2" />
   <script src="js/firebase-config.js"></script>
-  <script src="js/menu-data.js"></script>
+  <script src="js/menu-data.js?v=17"></script>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getFirestore, collection, addDoc, doc, onSnapshot, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
@@ -25,6 +25,12 @@
         window.firebaseApp = app;
         window.firebaseDb = db;
         window.firebaseFirestoreMethods = methods;
+
+        // Load menu from Firestore for real-time sync
+        if (typeof window.loadMenuFromFirestore === 'function') {
+          window.loadMenuFromFirestore();
+        }
+
         return { db, methods };
       } catch (error) {
         console.error('[Firebase Order Setup Error]', error);
@@ -32,7 +38,7 @@
       }
     })();
   </script>
-  <script src="js/order.js?v=order-mobile-fit-3" defer></script>
+  <script src="js/order.js?v=17" defer></script>
 </head>
 <body>
   <main class="order-shell">

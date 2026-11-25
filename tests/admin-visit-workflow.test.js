@@ -574,12 +574,11 @@ test('keeps the admin rule private and normalizes the email claim', () => {
   assert.match(rulesSource, /allow update: if isAdmin\(\)[\s\S]*affectedKeys\(\)\.hasOnly\(\['customer', 'reservationId'\]\)/);
   assert.match(rulesSource, /allow delete: if false/);
   assert.match(rulesSource, /isValidVisitCustomerSnapshot\(\s*getAfter\(/);
-  assert.doesNotMatch(rulesSource, /allow read: if true/);
 });
 
 test('admin actions have click handlers and the page loads the current script version', () => {
   assert.match(adminHtml, /firebase-firestore-compat\.js/);
-  assert.match(adminHtml, /admin\.js\?v=15/);
+  assert.match(adminHtml, /admin\.js\?v=17/);
   assert.doesNotMatch(adminHtml, /<script src="main\.js/);
   assert.match(adminSource, /bookingsBody\.addEventListener\('click'/);
   assert.match(adminSource, /customersBody\.addEventListener\('click'/);

@@ -69,11 +69,12 @@
           <span class="admin-badge">Bảng điều khiển</span>
         </div>
         <div class="admin-user-info">
-          <span class="admin-email-text" id="logged-admin-email">admin@mochamiso.vn</span>
-          <a href="revenue.html" class="admin-top-link">Doanh thu</a>
-          <a href="qr.html" class="admin-top-link">Mã QR bàn</a>
-          <a href="hr.html" class="admin-top-link">Quản lý nhân sự</a>
-          <a href="inventory.html" class="admin-top-link">Quản lý kho</a>
+          <a href="revenue.html" class="btn btn-outline admin-top-link">Doanh thu</a>
+          <a href="qr.html" class="btn btn-outline admin-top-link">Mã QR bàn</a>
+          <span class="admin-email-text" id="logged-admin-email">rickmondal598@gmail.com</span>
+          <a class="btn-logout" href="hr.html">Quản lý nhân sự</a>
+          <a class="btn-logout" href="inventory.html">Quản lý kho</a>
+          <button type="button" class="btn-logout" id="btn-scroll-menu-mgmt" style="background:rgba(120,135,104,0.3); border-color:var(--sage);">📋 Thực đơn</button>
           <button type="button" class="btn-logout" id="admin-logout-btn">Đăng xuất</button>
         </div>
       </div>
@@ -323,9 +324,164 @@
 
         </div>
 
+          <!-- ============================================================ -->
+          <!-- MENU MANAGEMENT SECTION -->
+          <!-- ============================================================ -->
+          <section class="admin-menu-section" aria-labelledby="admin-menu-title">
+            <div class="admin-section-heading">
+              <div>
+                <p class="admin-section-eyebrow">Quản lý thực đơn</p>
+                <h2 class="admin-section-title" id="admin-menu-title">Thêm / Sửa / Xóa món ăn</h2>
+                <p class="admin-orders-summary" id="menu-summary"></p>
+              </div>
+              <div class="menu-heading-actions">
+                <button type="button" class="btn btn-outline" id="btn-seed-menu" style="font-size:13px; padding:8px 18px;">
+                  Khôi phục món mẫu
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-open-add-menu" style="font-size:13px; padding:8px 18px;">
+                  + Thêm món mới
+                </button>
+              </div>
+            </div>
+
+              <div class="menu-management-controls" aria-label="Bộ lọc thực đơn">
+                <label class="menu-search-label" for="menu-search">
+                  Tìm món
+                  <input type="search" id="menu-search" class="admin-search-input" placeholder="Tên hoặc mô tả..." autocomplete="off" />
+                </label>
+                <label class="menu-filter-label" for="menu-category-filter">
+                  Danh mục
+                  <select id="menu-category-filter" class="form-input">
+                    <option value="all">Tất cả danh mục</option>
+                    <option value="Cà phê">Cà phê</option>
+                    <option value="Đồ uống">Đồ uống</option>
+                    <option value="Đồ ăn">Đồ ăn</option>
+                    <option value="Tráng miệng">Tráng miệng</option>
+                  </select>
+                </label>
+                <label class="menu-filter-label" for="menu-availability-filter">
+                  Trạng thái
+                  <select id="menu-availability-filter" class="form-input">
+                    <option value="all">Tất cả trạng thái</option>
+                    <option value="available">Đang bán</option>
+                    <option value="unavailable">Tạm ngưng</option>
+                  </select>
+                </label>
+              </div>
+
+            <!-- Menu Items Table -->
+            <div class="admin-table-card">
+              <div class="admin-table-wrap">
+                <table class="admin-table admin-menu-table">
+                  <thead>
+                    <tr>
+                      <th style="width:70px">Ảnh</th>
+                      <th>Tên món</th>
+                      <th>Danh mục</th>
+                      <th>Giá</th>
+                      <th>Mô tả</th>
+                        <th>Trạng thái</th>
+                      <th style="width:140px">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody id="menu-items-tbody">
+                      <tr><td colspan="7" style="text-align:center; padding:30px;">Đang tải thực đơn…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
       </div>
 
     </main>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ADD / EDIT MENU ITEM MODAL -->
+  <!-- ============================================================ -->
+  <div class="admin-modal-overlay" id="menu-modal" hidden>
+    <div class="admin-modal-card menu-modal-card">
+      <h3 class="admin-modal-title" id="menu-modal-title">Thêm món mới</h3>
+
+      <form id="menu-item-form" novalidate>
+        <input type="hidden" id="menu-item-id" value="" />
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <input type="text" id="menu-item-name" class="form-input" placeholder=" " required />
+          <label for="menu-item-name" class="form-label form-label--up">Tên món ăn *</label>
+          <span class="form-line"></span>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <select id="menu-item-category" class="form-input" required>
+            <option value="Cà phê">Cà phê</option>
+            <option value="Đồ uống">Đồ uống</option>
+            <option value="Đồ ăn">Đồ ăn</option>
+            <option value="Tráng miệng">Tráng miệng</option>
+          </select>
+          <label for="menu-item-category" class="form-label form-label--up">Danh mục</label>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <input type="number" id="menu-item-price" class="form-input" placeholder=" " min="0" step="1000" required />
+          <label for="menu-item-price" class="form-label form-label--up">Giá (VNĐ) *</label>
+          <span class="form-line"></span>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <textarea id="menu-item-description" class="form-input form-textarea" rows="3" placeholder="Mô tả ngắn gọn về món ăn..."></textarea>
+          <label for="menu-item-description" class="form-label form-label--up">Mô tả</label>
+        </div>
+
+        <label class="menu-availability-toggle" for="menu-item-available">
+          <input type="checkbox" id="menu-item-available" checked />
+          <span>Đang bán</span>
+        </label>
+
+        <!-- Image Upload -->
+        <div class="menu-image-upload-group" style="margin-bottom: 20px;">
+          <label class="menu-image-upload-label">Ảnh món ăn</label>
+          <div class="menu-image-upload-area" id="menu-image-upload-area">
+            <div class="menu-image-preview-wrap" id="menu-image-preview-wrap" hidden>
+              <img id="menu-image-preview" alt="Xem trước ảnh" />
+              <button type="button" class="menu-image-remove-btn" id="menu-image-remove" title="Xóa ảnh">✕</button>
+            </div>
+            <div class="menu-image-placeholder" id="menu-image-placeholder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40">
+                <rect x="3" y="3" width="18" height="18" rx="3"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <path d="M21 15l-5-5L5 21"/>
+              </svg>
+              <p>Kéo thả ảnh vào đây hoặc <strong>bấm để chọn file</strong></p>
+              <p style="font-size:11px; color:var(--warm-gray);">JPG, PNG, WebP — Tối đa 700KB</p>
+            </div>
+            <input type="file" id="menu-image-file" accept="image/jpeg,image/png,image/webp" hidden />
+          </div>
+          <div style="margin-top:8px;">
+            <label style="font-size:12px; color:var(--warm-gray);">Hoặc nhập đường dẫn ảnh:</label>
+            <input type="text" id="menu-image-url" class="form-input" placeholder="assets/menu_ten_mon.jpg" style="margin-top:4px; font-size:13px;" />
+          </div>
+        </div>
+
+        <div class="admin-modal-actions">
+          <button type="button" class="btn btn-outline" id="menu-modal-cancel" style="font-size:13px; padding:8px 18px;">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="menu-modal-save" style="font-size:13px; padding:8px 18px;">Lưu món</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirm Modal -->
+  <div class="admin-modal-overlay" id="menu-delete-modal" hidden>
+    <div class="admin-modal-card" style="max-width:420px;">
+      <h3 class="admin-modal-title">Xác nhận xóa món</h3>
+      <p id="menu-delete-message" style="margin:16px 0; font-size:14px; color:var(--coffee-mid);">Bạn có chắc muốn xóa món này?</p>
+      <div class="admin-modal-actions">
+        <button type="button" class="btn btn-outline" id="menu-delete-cancel" style="font-size:13px; padding:8px 18px;">Hủy</button>
+        <button type="button" class="btn btn-primary" id="menu-delete-confirm" style="font-size:13px; padding:8px 18px; background:#c0392b; border-color:#c0392b;">Xóa</button>
+      </div>
+    </div>
   </div>
 
   <div class="admin-modal-overlay customer-profile-overlay" id="customer-profile-modal" hidden>
@@ -409,7 +565,9 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" defer></script>
   <script src="firebase.js?v=4" defer></script>
-  <script src="admin.js?v=15" defer></script>
+  <!-- Script version cache: admin.js?v=15 -->
+  <script src="js/menu-data.js?v=17" defer></script>
+  <script src="admin.js?v=17" defer></script>
 </body>
 
 </html>

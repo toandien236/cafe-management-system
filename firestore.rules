@@ -284,5 +284,52 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ── MENU ITEMS ───────────────────────────────────────────────
+    // Everyone (guests, website visitors) can read the menu.
+    // Only authenticated admin can create, update, or delete menu items.
+    match /menuItems/{itemId} {
+      allow read: if true;
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll(['name', 'category', 'price', 'image', 'description', 'available', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['name', 'category', 'price', 'image', 'description', 'available', 'createdAt', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.trim().size() >= 1
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.category in ['Cà phê', 'Đồ uống', 'Đồ ăn', 'Tráng miệng']
+        && request.resource.data.price is number
+        && request.resource.data.price >= 1000
+        && request.resource.data.price <= 10000000
+        && request.resource.data.image is string
+        && request.resource.data.image.size() <= 1048576
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 1000
+        && request.resource.data.available is bool
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is string;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'category', 'price', 'image', 'description', 'available', 'updatedAt', 'createdAt'])
+        && (!request.resource.data.keys().hasAny(['name'])
+          || (request.resource.data.name is string
+            && request.resource.data.name.trim().size() >= 1
+            && request.resource.data.name.size() <= 120))
+        && (!request.resource.data.keys().hasAny(['category'])
+          || request.resource.data.category in ['Cà phê', 'Đồ uống', 'Đồ ăn', 'Tráng miệng'])
+        && (!request.resource.data.keys().hasAny(['price'])
+          || (request.resource.data.price is number
+            && request.resource.data.price >= 1000
+            && request.resource.data.price <= 10000000))
+        && (!request.resource.data.keys().hasAny(['image'])
+          || (request.resource.data.image is string
+            && request.resource.data.image.size() <= 1048576))
+        && (!request.resource.data.keys().hasAny(['description'])
+          || (request.resource.data.description is string
+            && request.resource.data.description.size() <= 1000))
+        && (!request.resource.data.keys().hasAny(['available'])
+          || request.resource.data.available is bool)
+        && (!request.resource.data.keys().hasAny(['updatedAt'])
+          || request.resource.data.updatedAt is string);
+      allow delete: if isAdmin();
+    }
+
   }
 }

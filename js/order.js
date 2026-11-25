@@ -1,6 +1,37 @@
 const ORDER_MENU = window.CAFE_MENU;
 if (!Array.isArray(ORDER_MENU)) throw new Error('Shared cafe menu data is unavailable.');
 
+// Listen for dynamic menu updates from Firestore & local storage
+if (typeof window.onMenuUpdate === 'function') {
+  window.onMenuUpdate(function(newMenu) {
+    if (Array.isArray(newMenu) && newMenu.length > 0) {
+      const copy = [...newMenu];
+      ORDER_MENU.length = 0;
+      copy.forEach(function(item) { ORDER_MENU.push(item); });
+      renderCategories();
+      renderMenu();
+      renderCart();
+    }
+  });
+}
+
+// Re-check menu whenever tab regains focus
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('focus', function() {
+    if (typeof window.getInitialMenu === 'function') {
+      const fresh = window.getInitialMenu();
+      if (Array.isArray(fresh) && fresh.length > 0) {
+        const copy = [...fresh];
+        ORDER_MENU.length = 0;
+        copy.forEach(function(item) { ORDER_MENU.push(item); });
+        renderCategories();
+        renderMenu();
+        renderCart();
+      }
+    }
+  });
+}
+
 const money = value => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value) || 0);
 const tableNumber = new URLSearchParams(window.location.search).get('table');
 const normalizedTableNumber = String(tableNumber || '').trim().padStart(2, '0');
@@ -135,7 +166,7 @@ function renderMenu() {
 
   gridEl.innerHTML = visible.map(item => `
     <article class="menu-item">
-      <img src="${item.image}" alt="${item.name}" loading="lazy" />
+      <img src="${item.image || 'assets/menu_espresso.jpg'}" alt="${item.name}" loading="lazy" onerror="this.src='assets/menu_espresso.jpg'" />
       <div class="menu-item-content">
         <h3>${item.name}</h3>
         <p>${item.description}</p>

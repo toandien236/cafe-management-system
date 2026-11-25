@@ -12,9 +12,20 @@
 function initCore() {
   initNav();            // Navigation scroll + mobile menu
   syncMenuPrices();
+  renderDynamicMenuGrid(); // Build menu cards from Firestore data
   initMenuFilter();     // Menu category tabs
   initGuestsSelector(); // Guests +/- buttons
   initReservationForm();// Reservation form submission
+
+  // Listen for menu updates from Firestore (real-time sync)
+  if (typeof window.onMenuUpdate === 'function') {
+    window.onMenuUpdate(function() {
+      renderDynamicMenuGrid();
+      syncMenuPrices();
+      initMenuFilter();
+      initMenuCardsReveal();
+    });
+  }
 }
 
 function syncMenuPrices() {
@@ -30,6 +41,51 @@ function syncMenuPrices() {
       }).format(item.price);
     }
   });
+}
+
+/**
+ * Dynamically build the menu grid on index.html from CAFE_MENU data.
+ * This replaces hardcoded menu cards with Firestore-synced data.
+ */
+function renderDynamicMenuGrid() {
+  const menuData = window.CAFE_MENU;
+  if (!Array.isArray(menuData) || menuData.length === 0) return;
+
+  const grid = document.getElementById('menu-grid');
+  if (!grid) return;
+
+  // Map category names to filter slugs for the tab system
+  const categoryFilterMap = {
+    'Cà phê': 'drinks',
+    'Đồ uống': 'drinks',
+    'Đồ ăn': 'food',
+    'Tráng miệng': 'desserts'
+  };
+
+  const money = function(value) {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value) || 0);
+  };
+
+  grid.innerHTML = menuData.map(function(item, idx) {
+    const filterCategory = categoryFilterMap[item.category] || 'food';
+    const imgSrc = item.image || 'assets/menu_espresso.jpg';
+    const safeName = (item.name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const safeDesc = (item.description || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    return `<article class="menu-card magnetic-card" data-category="${filterCategory}" data-menu-id="${item.id}" data-index="${idx}">
+      <div class="menu-card-image-wrap">
+        <img src="${imgSrc}" alt="${safeName}" class="menu-card-img" loading="lazy" decoding="async" onerror="this.src='assets/menu_espresso.jpg'" />
+        <div class="menu-card-overlay"><span class="menu-card-view">Xem món</span></div>
+      </div>
+      <div class="menu-card-body">
+        <div class="menu-card-top">
+          <span class="menu-card-category">${item.category || ''}</span>
+          <span class="menu-card-price">${money(item.price)}</span>
+        </div>
+        <h3 class="menu-card-title">${safeName}</h3>
+        <p class="menu-card-desc">${safeDesc}</p>
+      </div>
+    </article>`;
+  }).join('');
 }
 
 function initAnimationsWhenReady() {
