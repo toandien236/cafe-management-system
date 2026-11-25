@@ -3075,12 +3075,16 @@ async function saveMenuItem(event) {
     console.warn('[Menu Save Storage Error]', err);
   }
 
+  let firestoreSaved = false;
   const dbInstance = (typeof window !== 'undefined' && (window.firebaseDb || window.db)) || null;
   if (dbInstance && typeof dbInstance.collection === 'function') {
     try {
-      await dbInstance.collection('menuItems').doc(item.id).set(item);
+      const { id: _ignoreId, ...firestorePayload } = item;
+      await dbInstance.collection('menuItems').doc(item.id).set(firestorePayload);
+      firestoreSaved = true;
     } catch (err) {
       console.warn('[Firestore Menu Save Error]', err);
+      showToast('Lưu cục bộ thành công nhưng chưa đồng bộ lên Firestore (kiểm tra giá 1.000đ - 10.000.000đ hoặc quyền admin).', 'warning');
     }
   }
 
@@ -3092,7 +3096,9 @@ async function saveMenuItem(event) {
 
   const modal = document.getElementById('menu-modal');
   if (modal) modal.hidden = true;
-  showToast(`Đã lưu món "${name}" thành công!`, 'success');
+  if (firestoreSaved || !dbInstance) {
+    showToast(`Đã lưu món "${name}" thành công!`, 'success');
+  }
   renderMenuTable();
 }
 

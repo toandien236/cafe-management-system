@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * MOCHA & MISO â€” MENU DATA (Dynamic Firestore + Hardcoded Fallback)
+ * MOCHA & MISO — MENU DATA (Dynamic Firestore + Hardcoded Fallback)
  * ============================================================
  * Menu items are loaded from Firestore collection 'menuItems'.
  * If Firestore is unavailable, falls back to the hardcoded default list.
@@ -8,23 +8,23 @@
  * ============================================================
  */
 
-// Hardcoded fallback menu â€” used when Firestore is unavailable
+// Hardcoded fallback menu — used when Firestore is unavailable
 window.CAFE_MENU_DEFAULT = Object.freeze([
-  { id: 'espresso', name: 'Espresso háº¡t tuyá»ƒn chá»n', category: 'CÃ  phÃª', price: 35000, image: 'assets/menu_espresso.jpg', description: 'HÆ°Æ¡ng anh Ä‘Ã o Ä‘en, cacao vÃ  háº­u vá»‹ caramel.' },
-  { id: 'cappuccino', name: 'Cappuccino má»‹n mÃ ng', category: 'CÃ  phÃª', price: 45000, image: 'assets/menu_cappuccino.jpg', description: 'Hai shot espresso, sá»¯a bÃ©o ngáº­y vÃ  latte art.' },
-  { id: 'coldbrew', name: 'Cold brew á»§ 18 giá»', category: 'CÃ  phÃª', price: 50000, image: 'assets/menu_coldbrew.jpg', description: 'MÆ°á»£t mÃ , ngá»t dá»‹u tá»± nhiÃªn cÃ¹ng cacao Ä‘en.' },
-  { id: 'matcha', name: 'Matcha latte Uji', category: 'Äá»“ uá»‘ng', price: 55000, image: 'assets/menu_matcha.jpg', description: 'Matcha Uji Ä‘Ã¡nh cÃ¹ng sá»¯a yáº¿n máº¡ch thÆ¡m lÃ nh.' },
-  { id: 'mocha', name: 'Mocha Ä‘Ã¡ cacao Ä‘áº­m', category: 'Äá»“ uá»‘ng', price: 55000, image: 'assets/menu_icedmocha.jpg', description: 'Espresso, cacao Ä‘en, sá»¯a láº¡nh vÃ  kem tÆ°Æ¡i.' },
-  { id: 'croissant', name: 'Croissant bÆ¡ ngÃ n lá»›p', category: 'Äá»“ Äƒn', price: 40000, image: 'assets/menu_croissant.jpg', description: 'Croissant bÆ¡ kiá»ƒu PhÃ¡p, dÃ¹ng nÃ³ng cÃ¹ng má»©t nhÃ  lÃ m.' },
-  { id: 'pancake', name: 'Pancake soufflÃ© bÃ´ng xá»‘p', category: 'Äá»“ Äƒn', price: 65000, image: 'assets/menu_pancakes.jpg', description: 'Quáº£ má»ng, mascarpone vÃ  si-rÃ´ lÃ¡ phong.' },
-  { id: 'brioche', name: 'Brioche gÃ  hun khÃ³i', category: 'Äá»“ Äƒn', price: 75000, image: 'assets/menu_sandwich.jpg', description: 'GÃ  hun khÃ³i, bÆ¡ quáº£, cÃ  chua vÃ  aioli náº¥m truffle.' },
-  { id: 'cheesecake', name: 'Cheesecake chÃ¡y kiá»ƒu Basque', category: 'TrÃ¡ng miá»‡ng', price: 55000, image: 'assets/menu_cheesecake.jpg', description: 'Máº·t bÃ¡nh caramel, ruá»™t má»m mÆ°á»£t vÃ  xá»‘t quáº£ má»ng.' },
-  { id: 'linguine', name: 'Linguine háº£i sáº£n miá»n biá»ƒn', category: 'Äá»“ Äƒn', price: 95000, image: 'assets/matteophotopro2020-mussels-5342679_1920.jpg', description: 'Váº¹m, tÃ´m, nghÃªu vÃ  sÃ² Ä‘iá»‡p cÃ¹ng xá»‘t kem nghá»‡ tÃ¢y.' },
-  { id: 'rose-coldbrew', name: 'Cold brew hoa há»“ng báº¡ch Ä‘áº­u kháº¥u', category: 'CÃ  phÃª', price: 55000, image: 'assets/menu_rosecoldbrew.png', description: 'Ethiopia Yirgacheffe, hoa há»“ng, báº¡ch Ä‘áº­u kháº¥u vÃ  cam.' },
-  { id: 'avocado-toast', name: 'Sourdough bÆ¡ quáº£ náº¥m truffle', category: 'Äá»“ Äƒn', price: 70000, image: 'assets/menu_avocadotoast.png', description: 'BÆ¡ Hass, trá»©ng cháº§n, rau máº§m vÃ  náº¥m truffle.' },
-  { id: 'katsu-sando', name: 'Sandwich gÃ  katsu giÃ²n', category: 'Äá»“ Äƒn', price: 80000, image: 'assets/menu_katsusando.png', description: 'GÃ  panko, báº¯p cáº£i, tonkatsu vÃ  mayonnaise Nháº­t.' },
-  { id: 'matcha-opera', name: 'BÃ¡nh opera matcha lÃ¡ vÃ ng', category: 'TrÃ¡ng miá»‡ng', price: 60000, image: 'assets/menu_matchaopera.png', description: 'Háº¡nh nhÃ¢n, kem bÆ¡ matcha Uji vÃ  ganache chocolate.' },
-  { id: 'raspberry-tart', name: 'Tart há»“ trÄƒn mÃ¢m xÃ´i', category: 'TrÃ¡ng miá»‡ng', price: 60000, image: 'assets/menu_raspberrytart.png', description: 'Frangipane há»“ trÄƒn, mÃ¢m xÃ´i tÆ°Æ¡i vÃ  kem vani.' }
+  { id: 'espresso', name: 'Espresso hạt tuyển chọn', category: 'Cà phê', price: 35000, image: 'assets/menu_espresso.jpg', description: 'Hương anh đào đen, cacao và hậu vị caramel.' },
+  { id: 'cappuccino', name: 'Cappuccino mịn màng', category: 'Cà phê', price: 45000, image: 'assets/menu_cappuccino.jpg', description: 'Hai shot espresso, sữa béo ngậy và latte art.' },
+  { id: 'coldbrew', name: 'Cold brew ủ 18 giờ', category: 'Cà phê', price: 50000, image: 'assets/menu_coldbrew.jpg', description: 'Mượt mà, ngọt dịu tự nhiên cùng cacao đen.' },
+  { id: 'matcha', name: 'Matcha latte Uji', category: 'Đồ uống', price: 55000, image: 'assets/menu_matcha.jpg', description: 'Matcha Uji đánh cùng sữa yến mạch thơm lành.' },
+  { id: 'mocha', name: 'Mocha đá cacao đậm', category: 'Đồ uống', price: 55000, image: 'assets/menu_icedmocha.jpg', description: 'Espresso, cacao đen, sữa lạnh và kem tươi.' },
+  { id: 'croissant', name: 'Croissant bơ ngàn lớp', category: 'Đồ ăn', price: 40000, image: 'assets/menu_croissant.jpg', description: 'Croissant bơ kiểu Pháp, dùng nóng cùng mứt nhà làm.' },
+  { id: 'pancake', name: 'Pancake soufflé bông xốp', category: 'Đồ ăn', price: 65000, image: 'assets/menu_pancakes.jpg', description: 'Quả mọng, mascarpone và si-rô lá phong.' },
+  { id: 'brioche', name: 'Brioche gà hun khói', category: 'Đồ ăn', price: 75000, image: 'assets/menu_sandwich.jpg', description: 'Gà hun khói, bơ quả, cà chua và aioli nấm truffle.' },
+  { id: 'cheesecake', name: 'Cheesecake cháy kiểu Basque', category: 'Tráng miệng', price: 55000, image: 'assets/menu_cheesecake.jpg', description: 'Mặt bánh caramel, ruột mềm mượt và xốt quả mọng.' },
+  { id: 'linguine', name: 'Linguine hải sản miền biển', category: 'Đồ ăn', price: 95000, image: 'assets/matteophotopro2020-mussels-5342679_1920.jpg', description: 'Vẹm, tôm, nghêu và sò điệp cùng xốt kem nghệ tây.' },
+  { id: 'rose-coldbrew', name: 'Cold brew hoa hồng bạch đậu khấu', category: 'Cà phê', price: 55000, image: 'assets/menu_rosecoldbrew.png', description: 'Ethiopia Yirgacheffe, hoa hồng, bạch đậu khấu và cam.' },
+  { id: 'avocado-toast', name: 'Sourdough bơ quả nấm truffle', category: 'Đồ ăn', price: 70000, image: 'assets/menu_avocadotoast.png', description: 'Bơ Hass, trứng chần, rau mầm và nấm truffle.' },
+  { id: 'katsu-sando', name: 'Sandwich gà katsu giòn', category: 'Đồ ăn', price: 80000, image: 'assets/menu_katsusando.png', description: 'Gà panko, bắp cải, tonkatsu và mayonnaise Nhật.' },
+  { id: 'matcha-opera', name: 'Bánh opera matcha lá vàng', category: 'Tráng miệng', price: 60000, image: 'assets/menu_matchaopera.png', description: 'Hạnh nhân, kem bơ matcha Uji và ganache chocolate.' },
+  { id: 'raspberry-tart', name: 'Tart hồ trăn mâm xôi', category: 'Tráng miệng', price: 60000, image: 'assets/menu_raspberrytart.png', description: 'Frangipane hồ trăn, mâm xôi tươi và kem vani.' }
 ].map(item => Object.freeze(item)));
 
 // Helper to read cached menu from localStorage (available items only for customer views)
@@ -89,7 +89,6 @@ if (typeof window !== 'undefined' && window.addEventListener) {
         if (Array.isArray(parsed)) {
           const available = parsed.filter(item => item && item.available !== false);
           const next = available.length > 0 ? available : [...window.CAFE_MENU_DEFAULT];
-          // Mutate in-place so ORDER_MENU (const reference in order.js) stays in sync
           window.CAFE_MENU.length = 0;
           next.forEach(function(item) { window.CAFE_MENU.push(item); });
           window._notifyMenuUpdate();
@@ -119,10 +118,9 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
         const parsed = JSON.parse(current);
         if (Array.isArray(parsed)) {
           const available = parsed.filter(item => item && item.available !== false);
-          const next2 = available.length > 0 ? available : [...window.CAFE_MENU_DEFAULT];
-          // Mutate in-place so ORDER_MENU (const ref in order.js) stays linked
+          const next = available.length > 0 ? available : [...window.CAFE_MENU_DEFAULT];
           window.CAFE_MENU.length = 0;
-          next2.forEach(function(item) { window.CAFE_MENU.push(item); });
+          next.forEach(function(item) { window.CAFE_MENU.push(item); });
           window._notifyMenuUpdate();
         }
       }
@@ -145,7 +143,7 @@ window.loadMenuFromFirestore = function() {
       rawItems.push({
         id: doc.id || data.id,
         name: data.name || '',
-        category: data.category || 'Äá»“ uá»‘ng',
+        category: data.category || 'Đồ uống',
         price: Number(data.price) || 0,
         image: data.image || 'assets/menu_espresso.jpg',
         description: data.description || '',
