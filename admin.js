@@ -2822,7 +2822,11 @@ function loadMenuItems() {
     });
 
     const merged = new Map();
-    adminMenuItems.forEach(item => { if (item && item.id) merged.set(item.id, item); });
+    if (typeof window !== 'undefined' && Array.isArray(window.CAFE_MENU_DEFAULT)) {
+      window.CAFE_MENU_DEFAULT.forEach(item => {
+        if (item && item.id) merged.set(item.id, { ...item, available: true });
+      });
+    }
     cloudItems.forEach(item => { if (item && item.id) merged.set(item.id, item); });
 
     adminMenuItems = Array.from(merged.values());

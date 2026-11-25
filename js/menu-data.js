@@ -152,33 +152,17 @@ window.loadMenuFromFirestore = function() {
       });
     });
 
-    // Read current local items from localStorage
-    let localItems = [];
-    try {
-      if (typeof localStorage !== 'undefined') {
-        const stored = localStorage.getItem('mocha_menu_items');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) localItems = parsed;
-        }
-      }
-    } catch (e) {}
-
-    // Merge: never lose locally added dishes if Firestore collection is empty or partially populated
+    // Merge default menu with Firestore documents (Firestore is cloud truth for custom/edited items,
+    // so items deleted from Firestore are not resurrected from stale localStorage).
     const mergedMap = new Map();
-    // 1. Keep all valid local items
-    localItems.forEach(function(item) {
-      if (item && item.id) mergedMap.set(item.id, item);
+    window.CAFE_MENU_DEFAULT.forEach(function(item) {
+      if (item && item.id) mergedMap.set(item.id, { ...item, available: true });
     });
-    // 2. Overlay Firestore documents (cloud truth)
     rawItems.forEach(function(item) {
       if (item && item.id) mergedMap.set(item.id, item);
     });
 
     let allItems = Array.from(mergedMap.values());
-    if (allItems.length === 0) {
-      allItems = window.CAFE_MENU_DEFAULT.map(function(item) { return { ...item, available: true }; });
-    }
 
     // Sort in JavaScript (avoids Firestore missing-index / missing-field filtering)
     allItems.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
@@ -195,7 +179,9 @@ window.loadMenuFromFirestore = function() {
       .filter(data => data.available !== false)
       .map(item => ({ ...item, available: true }));
 
-    window.CAFE_MENU = availableItems.length > 0 ? availableItems : [...window.CAFE_MENU_DEFAULT];
+    const nextMenu = availableItems.length > 0 ? availableItems : [...window.CAFE_MENU_DEFAULT];
+    window.CAFE_MENU.length = 0;
+    nextMenu.forEach(function(item) { window.CAFE_MENU.push(item); });
     window._menuFirestoreLoaded = true;
     window._notifyMenuUpdate();
   }
